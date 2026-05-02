@@ -1,0 +1,25 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    container_name: case-db
+    environment:
+      POSTGRES_USER: case
+      POSTGRES_PASSWORD: case
+      POSTGRES_DB: case
+    ports:
+      - "5432:5432"
+    volumes:
+      - case_data:/var/lib/postgresql/data
+
+  api:
+    build: ./api
+    container_name: case-api
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+volumes:
+  case_data:
