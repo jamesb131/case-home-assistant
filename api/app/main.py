@@ -4,10 +4,13 @@ from app.services.db import get_connection
 
 import threading
 import time
+import os
 
 from app.services.sigenergy_client import get_energy_snapshot
 from app.services.decision_service import get_decision_summary
 from app.services.energy_repository import insert_energy_reading
+
+LOG_INTERVAL_SECONDS = int(os.getenv("LOG_INTERVAL", 30))
 
 app = FastAPI()
 
@@ -47,6 +50,8 @@ def log_energy_now():
     }
 
 def energy_logger_loop():
+    print(f"Energy logger running every {LOG_INTERVAL_SECONDS}s")
+
     while True:
         try:
             snapshot = get_energy_snapshot()
@@ -55,7 +60,7 @@ def energy_logger_loop():
         except Exception as e:
             print(f"Logging error: {e}")
 
-        time.sleep(5)  # every 5 seconds
+        time.sleep(LOG_INTERVAL_SECONDS)
 
 @app.on_event("startup")
 def start_background_logger():

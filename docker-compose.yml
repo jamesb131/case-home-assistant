@@ -20,6 +20,8 @@ services:
       - "8000:8000"
     depends_on:
       - db
+    environment:
+      - LOG_INTERVAL=30
 
 volumes:
   case_data:
