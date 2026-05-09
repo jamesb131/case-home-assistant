@@ -1,16 +1,3 @@
-CREATE TABLE IF NOT EXISTS sigenergy_raw_registers (
-    id SERIAL PRIMARY KEY,
-    captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    device_id INTEGER NOT NULL,
-    register_address INTEGER NOT NULL,
-    register_count INTEGER NOT NULL,
-    register_type TEXT NOT NULL,
-    raw_registers INTEGER[] NOT NULL,
-    decoded_value DOUBLE PRECISION,
-    unit TEXT,
-    label TEXT
-);
-
 CREATE TABLE IF NOT EXISTS energy_readings (
     id SERIAL PRIMARY KEY,
     captured_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
