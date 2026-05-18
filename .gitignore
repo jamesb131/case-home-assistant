@@ -1,9 +1,48 @@
-.env
+# Python
 __pycache__/
 *.pyc
-.venv/
+*.pyo
+*.pyd
+*.sqlite3
+*.log
+
+# Node
 node_modules/
 dist/
-.next/
+build/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Mac
 .DS_Store
-*.log
+
+# IDE
+.vscode/
+.idea/
+
+# Docker
+postgres_data/
+ollama_data/
+
+# Local uploads
+uploads/
+
+# Python virtual envs
+venv/
+.venv/
+
+# React
+frontend/node_modules/
+
+# Logs
+logs/
+
+# Temporary
+tmp/
+temp/
+
+# Secrets
+secrets/

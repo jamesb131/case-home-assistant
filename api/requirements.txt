@@ -2,3 +2,8 @@ fastapi
 uvicorn[standard]
 psycopg2-binary
 pymodbus
+requests
+
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib

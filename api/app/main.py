@@ -2,6 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.db import get_connection
 
+from pydantic import BaseModel
+from app.services.case_assistant import ask_case
+
+from app.services.google_calendar_client import get_upcoming_events
+from app.services.google_calendar_client import get_calendar_service
+
+from app.routers.lists_router import router as lists_router
+
 import threading
 import time
 import os
@@ -10,9 +18,19 @@ from app.services.sigenergy_client import get_energy_snapshot
 from app.services.decision_service import get_decision_summary
 from app.services.energy_repository import insert_energy_reading
 
+from app.routers.task_templates_router import router as task_templates_router
+
+from app.routers.tasks_router import router as tasks_router
+
 LOG_INTERVAL_SECONDS = int(os.getenv("LOG_INTERVAL", 30))
 
 app = FastAPI()
+
+app.include_router(lists_router)
+
+app.include_router(task_templates_router)
+
+app.include_router(tasks_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -74,15 +92,29 @@ def get_recent_energy():
     try:
         with conn.cursor() as cur:
             cur.execute("""
+                WITH bucketed AS (
+                    SELECT
+                        date_bin('5 minutes', captured_at, TIMESTAMPTZ '2000-01-01') AS bucket,
+                        AVG(solar_kw) AS solar_kw,
+                        AVG(house_load_kw) AS house_load_kw,
+                        AVG(grid_kw) AS grid_kw,
+                        AVG(battery_soc) AS battery_soc,
+                        MAX(house_load_kw) AS house_load_kw_max
+                    FROM energy_readings
+                    WHERE captured_at >= date_trunc('day', NOW() AT TIME ZONE 'Australia/Perth') AT TIME ZONE 'Australia/Perth'
+                    GROUP BY bucket
+                )
                 SELECT
-                    captured_at,
+                    bucket,
                     solar_kw,
-                    battery_soc,
+                    house_load_kw,
+                    -house_load_kw AS consumption_kw,
                     grid_kw,
-                    house_load_kw
-                FROM energy_readings
-                WHERE captured_at > NOW() - INTERVAL '24 hours'
-                ORDER BY captured_at ASC
+                    solar_kw - house_load_kw AS net_kw,
+                    battery_soc,
+                    house_load_kw_max
+                FROM bucketed
+                ORDER BY bucket ASC;
             """)
 
             rows = cur.fetchall()
@@ -90,13 +122,87 @@ def get_recent_energy():
             return [
                 {
                     "time": r[0].isoformat(),
-                    "solar_kw": r[1],
-                    "battery_soc": r[2],
-                    "grid_kw": r[3],
-                    "house_load_kw": r[4],
+                    "solar_kw": float(r[1] or 0),
+                    "house_load_kw": float(r[2] or 0),
+                    "consumption_kw": float(r[3] or 0),
+                    "grid_kw": float(r[4] or 0),
+                    "net_kw": float(r[5] or 0),
+                    "battery_soc": float(r[6] or 0),
+                    "house_load_kw_max": float(r[7] or 0),
                 }
                 for r in rows
             ]
 
     finally:
         conn.close()
+
+from app.services.weather_client import get_weather_summary
+
+@app.get("/weather/summary")
+def weather_summary():
+    return get_weather_summary()
+
+@app.get("/energy/today-summary")
+def get_energy_today_summary():
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                WITH readings AS (
+                    SELECT
+                        captured_at,
+                        grid_kw,
+                        LEAD(captured_at) OVER (ORDER BY captured_at) AS next_at
+                    FROM energy_readings
+                    WHERE captured_at >= date_trunc('day', NOW() AT TIME ZONE 'Australia/Perth') AT TIME ZONE 'Australia/Perth'
+                )
+                SELECT
+                    COALESCE(SUM(
+                        CASE
+                            WHEN grid_kw > 0 AND next_at IS NOT NULL
+                            THEN grid_kw * EXTRACT(EPOCH FROM (next_at - captured_at)) / 3600
+                            ELSE 0
+                        END
+                    ), 0) AS grid_import_kwh
+                FROM readings;
+            """)
+
+            row = cur.fetchone()
+
+            return {
+                "grid_import_kwh": round(float(row[0]), 2)
+            }
+
+    finally:
+        conn.close()
+
+class CaseAskRequest(BaseModel):
+    message: str
+
+@app.post("/case/ask")
+def case_ask(request: CaseAskRequest):
+    return ask_case(request.message)
+
+@app.get("/calendar/upcoming")
+def calendar_upcoming():
+    return {
+        "events": get_upcoming_events(days=30, max_results=50)
+    }
+
+@app.get("/calendar/list")
+def calendar_list():
+    service = get_calendar_service()
+
+    result = service.calendarList().list().execute()
+
+    return {
+        "calendars": [
+            {
+                "id": calendar.get("id"),
+                "summary": calendar.get("summary"),
+                "primary": calendar.get("primary", False),
+            }
+            for calendar in result.get("items", [])
+        ]
+    }

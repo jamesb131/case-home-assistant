@@ -1,0 +1,322 @@
+[
+    {
+      "input": "How full is the battery?",
+      "severity": "important",
+      "expected": { "domain": "energy", "operation": "read", "metric": "battery_soc" }
+    },
+    {
+      "input": "What's the battery at?",
+      "severity": "important",
+      "expected": { "domain": "energy", "operation": "read", "metric": "battery_soc" }
+    },
+    {
+      "input": "Is the battery full?",
+      "severity": "important",
+      "expected": { "domain": "energy", "operation": "read", "metric": "battery_soc" }
+    },
+    {
+      "input": "How much charge is left in the battery?",
+      "severity": "important",
+      "expected": { "domain": "energy", "operation": "read", "metric": "battery_soc" }
+    },
+    {
+      "input": "How much solar are we producing?",
+      "severity": "important",
+      "expected": { "domain": "energy", "operation": "read", "metric": "solar_kw" }
+    },
+    {
+      "input": "What's the solar doing?",
+      "severity": "important",
+      "expected": { "domain": "energy", "operation": "read", "metric": "solar_kw" }
+    },
+    {
+      "input": "Are we making much solar?",
+      "severity": "important",
+      "expected": { "domain": "energy", "operation": "read", "metric": "solar_kw" }
+    },
+    {
+      "input": "Are we exporting to the grid?",
+      "severity": "important",
+      "expected": { "domain": "energy", "operation": "read", "metric": "grid_import_export" }
+    },
+    {
+      "input": "Are we importing power?",
+      "severity": "important",
+      "expected": { "domain": "energy", "operation": "read", "metric": "grid_import_export" }
+    },
+    {
+      "input": "How much power is the house using?",
+      "severity": "important",
+      "expected": { "domain": "energy", "operation": "read", "metric": "house_load" }
+    },
+    {
+      "input": "Give me an energy summary",
+      "severity": "important",
+      "expected": { "domain": "energy", "operation": "read", "metric": "summary" }
+    },
+  
+    {
+      "input": "What's the weather tomorrow?",
+      "severity": "important",
+      "expected": { "domain": "weather", "operation": "read", "timeframe": "tomorrow" }
+    },
+    {
+      "input": "Will it rain today?",
+      "severity": "important",
+      "expected": { "domain": "weather", "operation": "read", "timeframe": "today" }
+    },
+    {
+      "input": "Is it going to be hot this weekend?",
+      "severity": "important",
+      "expected": { "domain": "weather", "operation": "read", "timeframe": "this_weekend" }
+    },
+    {
+      "input": "What's the forecast for tomorrow?",
+      "severity": "important",
+      "expected": { "domain": "weather", "operation": "read", "timeframe": "tomorrow" }
+    },
+  
+    {
+      "input": "What's on the shopping list?",
+      "severity": "critical",
+      "expected": { "domain": "lists", "operation": "read", "list_name": "Groceries" }
+    },
+    {
+      "input": "What's on the grocery list?",
+      "severity": "critical",
+      "expected": { "domain": "lists", "operation": "read", "list_name": "Groceries" }
+    },
+    {
+      "input": "Read me the Woolies list",
+      "severity": "critical",
+      "expected": { "domain": "lists", "operation": "read", "list_name": "Groceries" }
+    },
+    {
+      "input": "What's on the Bunnings list?",
+      "severity": "critical",
+      "expected": { "domain": "lists", "operation": "read", "list_name": "Bunnings" }
+    },
+    {
+      "input": "Add milk and bananas to shopping",
+      "severity": "critical",
+      "expected": { "domain": "lists", "operation": "create", "list_name": "Groceries" }
+    },
+    {
+      "input": "Add bread, eggs and cheese to the grocery list",
+      "severity": "critical",
+      "expected": { "domain": "lists", "operation": "create", "list_name": "Groceries" }
+    },
+    {
+      "input": "Put nappies and wipes on the Woolies list",
+      "severity": "critical",
+      "expected": { "domain": "lists", "operation": "create", "list_name": "Groceries" }
+    },
+    {
+      "input": "Add drippers to the Bunnings list",
+      "severity": "critical",
+      "expected": { "domain": "lists", "operation": "create", "list_name": "Bunnings" }
+    },
+    {
+      "input": "Put screws and wall plugs on the hardware list",
+      "severity": "critical",
+      "expected": { "domain": "lists", "operation": "create", "list_name": "Bunnings" }
+    },
+    {
+      "input": "Add bathers and towels to the Albany list",
+      "severity": "critical",
+      "expected": { "domain": "lists", "operation": "create", "list_name": "Albany" }
+    },
+  
+    {
+      "input": "Remind me to pick up sand tomorrow",
+      "severity": "critical",
+      "expected": { "domain": "tasks", "operation": "create", "assigned_to": "James", "timeframe": "tomorrow" }
+    },
+    {
+      "input": "Add task install trellis due today assigned to James",
+      "severity": "critical",
+      "expected": { "domain": "tasks", "operation": "create", "assigned_to": "James", "timeframe": "today" }
+    },
+    {
+      "input": "Task for Chris to call the plumber tomorrow",
+      "severity": "critical",
+      "expected": { "domain": "tasks", "operation": "create", "assigned_to": "Chris", "timeframe": "tomorrow" }
+    },
+    {
+      "input": "Leo needs to pack his library bag tomorrow",
+      "severity": "critical",
+      "expected": { "domain": "tasks", "operation": "create", "assigned_to": "Leo", "timeframe": "tomorrow" }
+    },
+    {
+      "input": "Benny needs to take his water bottle Monday",
+      "severity": "critical",
+      "expected": { "domain": "tasks", "operation": "create", "assigned_to": "Benny" }
+    },
+    {
+      "input": "What tasks have I got today?",
+      "severity": "important",
+      "expected": { "domain": "tasks", "operation": "read", "person": "James", "timeframe": "today" }
+    },
+    {
+      "input": "What tasks are coming up?",
+      "severity": "important",
+      "expected": { "domain": "tasks", "operation": "read", "timeframe": "upcoming" }
+    },
+    {
+      "input": "What jobs does Chris have?",
+      "severity": "important",
+      "expected": { "domain": "tasks", "operation": "read", "person": "Chris" }
+    },
+    {
+      "input": "Mark pick up sand as done",
+      "severity": "critical",
+      "expected": { "domain": "tasks", "operation": "complete" }
+    },
+  
+    {
+      "input": "What do we have planned this weekend?",
+      "severity": "important",
+      "expected": { "domain": "calendar", "operation": "read", "timeframe": "this_weekend" }
+    },
+    {
+      "input": "What's on tomorrow?",
+      "severity": "important",
+      "expected": { "domain": "calendar", "operation": "read", "timeframe": "tomorrow" }
+    },
+    {
+      "input": "Are we busy Saturday?",
+      "severity": "important",
+      "expected": { "domain": "calendar", "operation": "read" }
+    },
+    {
+      "input": "Create an event for Mia's party on the 16th July at 2pm at Crocs Butler",
+      "severity": "critical",
+      "expected": { "domain": "calendar", "operation": "create", "category": "kids_party" }
+    },
+    {
+      "input": "Leo has a birthday party Sunday at 10am",
+      "severity": "enrichment",
+      "expected": { "domain": "calendar", "operation": "create", "person": "Leo", "category": "kids_party" }
+    },
+    {
+      "input": "Add swimming lessons for Benny next Tuesday at 4pm",
+      "severity": "critical",
+      "expected": { "domain": "calendar", "operation": "create", "person": "Benny" }
+    },
+    {
+      "input": "Book dentist for James",
+      "severity": "important",
+      "expected": { "domain": "calendar", "operation": "clarify" }
+    },
+  
+    {
+      "input": "Does Benny have kindy Wednesday?",
+      "severity": "important",
+      "expected": { "domain": "kids", "operation": "read", "person": "Benny" }
+    },
+    {
+      "input": "Does Benny have daycare Friday?",
+      "severity": "important",
+      "expected": { "domain": "kids", "operation": "read", "person": "Benny" }
+    },
+    {
+      "input": "Is Leo at school tomorrow?",
+      "severity": "important",
+      "expected": { "domain": "kids", "operation": "read", "person": "Leo", "timeframe": "tomorrow" }
+    },
+    {
+      "input": "What are the boys doing this week?",
+      "severity": "enrichment",
+      "expected": { "domain": "kids", "operation": "read", "timeframe": "this_week" }
+    },
+    {
+      "input": "Did the kids finish their tasks this week?",
+      "severity": "important",
+      "expected": { "domain": "kids", "operation": "read", "timeframe": "this_week" }
+    },
+    {
+      "input": "Has Leo done his responsibilities?",
+      "severity": "important",
+      "expected": { "domain": "kids", "operation": "read", "person": "Leo" }
+    },
+  
+    {
+      "input": "Is it green or yellow bin this week?",
+      "severity": "important",
+      "expected": { "domain": "household", "operation": "read", "category": "bins" }
+    },
+    {
+      "input": "Which bins go out tonight?",
+      "severity": "important",
+      "expected": { "domain": "household", "operation": "read", "category": "bins" }
+    },
+    {
+      "input": "Do bins go out tomorrow?",
+      "severity": "important",
+      "expected": { "domain": "household", "operation": "read", "category": "bins", "timeframe": "tomorrow" }
+    },
+  
+    {
+      "input": "When is Mia's birthday?",
+      "severity": "important",
+      "expected": { "domain": "birthdays", "operation": "read" }
+    },
+    {
+      "input": "Whose birthdays are coming up?",
+      "severity": "enrichment",
+      "expected": { "domain": "birthdays", "operation": "read", "timeframe": "upcoming" }
+    },
+    {
+      "input": "Remind me to buy Mia a birthday present",
+      "severity": "critical",
+      "expected": { "domain": "tasks", "operation": "create" }
+    },
+  
+    {
+      "input": "What time is it?",
+      "severity": "important",
+      "expected": { "domain": "time", "operation": "read" }
+    },
+    {
+      "input": "What's the time now?",
+      "severity": "important",
+      "expected": { "domain": "time", "operation": "read" }
+    },
+  
+    {
+      "input": "Should I run the dishwasher now?",
+      "severity": "important",
+      "expected": { "domain": "energy", "operation": "read", "metric": "summary" }
+    },
+    {
+      "input": "Is now a good time to use the washing machine?",
+      "severity": "important",
+      "expected": { "domain": "energy", "operation": "read", "metric": "summary" }
+    },
+    {
+      "input": "Can I charge the car?",
+      "severity": "important",
+      "expected": { "domain": "energy", "operation": "read", "metric": "summary" }
+    },
+    {
+      "input": "Should I wait to run the dryer?",
+      "severity": "important",
+      "expected": { "domain": "energy", "operation": "read", "metric": "summary" }
+    },
+  
+    {
+      "input": "I need to remember swimming forms",
+      "severity": "critical",
+      "expected": { "domain": "tasks", "operation": "create" }
+    },
+    {
+      "input": "Can you remind Chris about the school photos?",
+      "severity": "critical",
+      "expected": { "domain": "tasks", "operation": "create", "assigned_to": "Chris" }
+    },
+    {
+      "input": "Put sunscreen on the packing list",
+      "severity": "critical",
+      "expected": { "domain": "lists", "operation": "create" }
+    }
+  ]

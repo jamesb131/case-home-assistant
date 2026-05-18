@@ -18,10 +18,14 @@ services:
     container_name: case-api
     ports:
       - "8000:8000"
+      - "8085:8085"
     depends_on:
       - db
     environment:
       - LOG_INTERVAL=30
+      - GOOGLE_CALENDAR_ID=08d8bae9a07144d268a0e3d89f8bb525d49565c664142f4d97fcca1c78dd010f@group.calendar.google.com
+    volumes:
+      - ./api/app/google:/app/app/google
 
 volumes:
   case_data:

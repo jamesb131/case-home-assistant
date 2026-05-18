@@ -14,9 +14,11 @@ def get_decision_summary():
 
     messages = []
 
-    # Battery critical check (highest priority)
-    if state["battery_soc"] < 10:
-        messages.append(message("Battery critically low", "warning"))
+    # Battery SoC logic
+    if state.get("battery_usable_kwh", 0) <= 0.2:
+        messages.append(message("Battery empty", "warning"))
+    elif state.get("battery_usable_kwh", 0) <= 1.0:
+        messages.append(message("Battery low", "warning"))
 
     # Dishwasher logic
     if state["grid_kw"] < -2.0:
