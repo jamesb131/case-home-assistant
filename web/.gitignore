@@ -23,12 +23,3 @@ dist-ssr
 *.sln
 *.sw?
 
-# Python virtual envs
-.venv/
-api/.venv/
-
-# Google auth
-token.json
-credentials.json
-api/app/google/token.json
-api/app/google/credentials.json

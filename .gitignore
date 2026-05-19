@@ -46,3 +46,12 @@ temp/
 
 # Secrets
 secrets/
+
+
+# Python virtual envs
+.venv/
+api/.venv/
+
+# Google auth
+/api/app/google/token.json
+/api/app/google/credentials.json
