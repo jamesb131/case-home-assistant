@@ -1561,6 +1561,10 @@ function buildSystemStatusItems(status) {
       label: "Energy",
       status: status.sigenergy?.status || "unknown",
     },
+    {
+      label: "Recurring",
+      status: status.recurring_tasks?.status || "unknown",
+    },
   ];
 }
 

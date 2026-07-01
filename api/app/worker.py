@@ -8,6 +8,7 @@ from app.repositories.system_snapshots_repository import (
     record_heartbeat,
     upsert_snapshot,
 )
+from app.repositories.task_templates_repository import generate_recurring_tasks
 from app.services.energy_repository import (
     insert_energy_reading,
     prune_energy_readings,
@@ -24,6 +25,8 @@ CALENDAR_INTERVAL_SECONDS = int(os.getenv("CALENDAR_POLL_INTERVAL", "900"))
 BINS_INTERVAL_SECONDS = int(os.getenv("BINS_POLL_INTERVAL", "3600"))
 STATUS_INTERVAL_SECONDS = int(os.getenv("STATUS_POLL_INTERVAL", "60"))
 RETENTION_INTERVAL_SECONDS = int(os.getenv("RETENTION_INTERVAL", "86400"))
+RECURRING_TASK_INTERVAL_SECONDS = int(os.getenv("RECURRING_TASK_INTERVAL", "3600"))
+RECURRING_TASK_DAYS_AHEAD = int(os.getenv("RECURRING_TASK_DAYS_AHEAD", "21"))
 ENERGY_RETENTION_DAYS = int(os.getenv("ENERGY_RETENTION_DAYS", "0"))
 PERTH_TZ = ZoneInfo("Australia/Perth")
 
@@ -104,7 +107,26 @@ def poll_worker_status():
             "weather_interval_seconds": WEATHER_INTERVAL_SECONDS,
             "calendar_interval_seconds": CALENDAR_INTERVAL_SECONDS,
             "bins_interval_seconds": BINS_INTERVAL_SECONDS,
+            "recurring_task_interval_seconds": RECURRING_TASK_INTERVAL_SECONDS,
+            "recurring_task_days_ahead": RECURRING_TASK_DAYS_AHEAD,
         },
+    )
+
+
+def poll_recurring_tasks():
+    result = generate_recurring_tasks(days_ahead=RECURRING_TASK_DAYS_AHEAD)
+
+    return upsert_snapshot(
+        "tasks.recurring",
+        {
+            "days_ahead": RECURRING_TASK_DAYS_AHEAD,
+            "created_count": result["created_count"],
+            "created_task_ids": [
+                task["id"]
+                for task in result["created"]
+            ],
+        },
+        ttl_seconds=RECURRING_TASK_INTERVAL_SECONDS * 3,
     )
 
 
@@ -183,6 +205,12 @@ def worker_loop():
             "name": "status",
             "interval": STATUS_INTERVAL_SECONDS,
             "job": poll_worker_status,
+            "next_run": 0,
+        },
+        {
+            "name": "recurring_tasks",
+            "interval": RECURRING_TASK_INTERVAL_SECONDS,
+            "job": poll_recurring_tasks,
             "next_run": 0,
         },
         {

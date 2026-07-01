@@ -131,6 +131,7 @@ energy.latest
 weather.summary
 calendar.upcoming
 household.bins
+tasks.recurring
 retention.energy
 ```
 
@@ -145,6 +146,8 @@ CALENDAR_POLL_INTERVAL=900
 BINS_POLL_INTERVAL=3600
 STATUS_POLL_INTERVAL=60
 RETENTION_INTERVAL=86400
+RECURRING_TASK_INTERVAL=3600
+RECURRING_TASK_DAYS_AHEAD=21
 ENERGY_RETENTION_DAYS=0
 ```
 
@@ -225,8 +228,7 @@ Leave `CASE_API_TOKEN` unset for local development. Set it before using a VPN ho
 ## Near-term technical steps
 
 1. Add proper database migrations/schema setup.
-2. Move recurring task generation into `case-worker`.
-3. Add device-specific `.env` templates for local, Green and desktop LLM.
-4. Add sensor/device-specific snapshot tables only where generic snapshots stop being enough.
-5. Package for the Green using a controlled compose/add-on approach.
-6. Add a proper authenticated remote-access path after choosing VPN/proxy approach.
+2. Add device-specific `.env` templates for local, Green and desktop LLM.
+3. Add sensor/device-specific snapshot tables only where generic snapshots stop being enough.
+4. Package for the Green using a controlled compose/add-on approach.
+5. Add a proper authenticated remote-access path after choosing VPN/proxy approach.

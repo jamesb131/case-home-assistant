@@ -24,6 +24,7 @@ def get_system_status():
         "weather": get_snapshot_status(snapshots.get("weather.summary")),
         "sigenergy": get_snapshot_status(snapshots.get("energy.latest")),
         "bins": get_snapshot_status(snapshots.get("household.bins")),
+        "recurring_tasks": get_snapshot_status(snapshots.get("tasks.recurring")),
         "snapshots": snapshots,
     }
 
