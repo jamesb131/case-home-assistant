@@ -86,6 +86,12 @@ For the Green-like deployment profile, use the override file:
 docker compose -f docker-compose.yml -f docker-compose.green.yml up -d
 ```
 
+For the first Green/core trial, follow:
+
+```text
+docs/green-trial-runbook.md
+```
+
 Keep device-specific values in `.env`, especially:
 
 ```text
@@ -158,6 +164,7 @@ Short term:
 - develop on the local machine
 - push to GitHub
 - pull/rebuild on the target device manually or with a small script
+- use `env/local.env.example`, `env/green.env.example` and `env/desktop.env.example` as starting points
 
 Long term:
 
@@ -228,7 +235,7 @@ Leave `CASE_API_TOKEN` unset for local development. Set it before using a VPN ho
 ## Near-term technical steps
 
 1. Add proper database migrations/schema setup.
-2. Add device-specific `.env` templates for local, Green and desktop LLM.
+2. Run the first Green/core deployment trial.
 3. Add sensor/device-specific snapshot tables only where generic snapshots stop being enough.
 4. Package for the Green using a controlled compose/add-on approach.
 5. Add a proper authenticated remote-access path after choosing VPN/proxy approach.

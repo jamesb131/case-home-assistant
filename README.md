@@ -27,3 +27,11 @@ docker compose up --build -d
 Secrets are not committed. Copy `.env.example` to `.env` and add local values.
 
 Google auth files such as `token.json` and `credentials.json` are local only and ignored by git.
+
+Device-specific env templates live in `env/`:
+
+- `env/local.env.example`
+- `env/green.env.example`
+- `env/desktop.env.example`
+
+For the first Green/core deployment trial, follow `docs/green-trial-runbook.md`.
