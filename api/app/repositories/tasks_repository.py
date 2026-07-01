@@ -54,7 +54,7 @@ def get_tasks(include_completed: bool = False):
                 source
             FROM household_tasks
             WHERE
-                status != 'completed'
+                status NOT IN ('completed', 'expired')
                 AND (
                     source != 'recurring'
                     OR visible_at <= (NOW() AT TIME ZONE 'Australia/Perth')

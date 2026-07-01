@@ -7,6 +7,7 @@ from app.services.case_assistant import ask_case
 
 from app.services.google_calendar_client import get_upcoming_events
 from app.services.google_calendar_client import get_calendar_service
+from app.services.google_calendar_client import get_calendar_error
 
 from app.routers.lists_router import router as lists_router
 
@@ -186,17 +187,42 @@ def case_ask(request: CaseAskRequest):
 
 @app.get("/calendar/upcoming")
 def calendar_upcoming():
+    events = get_upcoming_events(days=30, max_results=50)
+
+    if events is None:
+        return {
+            "events": [],
+            "calendar_available": False,
+            "error": get_calendar_error(),
+        }
+
     return {
-        "events": get_upcoming_events(days=30, max_results=50)
+        "events": events,
+        "calendar_available": True,
     }
 
 @app.get("/calendar/list")
 def calendar_list():
     service = get_calendar_service()
 
-    result = service.calendarList().list().execute()
+    if not service:
+        return {
+            "calendars": [],
+            "calendar_available": False,
+            "error": get_calendar_error(),
+        }
+
+    try:
+        result = service.calendarList().list().execute()
+    except Exception as exc:
+        return {
+            "calendars": [],
+            "calendar_available": False,
+            "error": f"Google calendar list failed: {exc}",
+        }
 
     return {
+        "calendar_available": True,
         "calendars": [
             {
                 "id": calendar.get("id"),

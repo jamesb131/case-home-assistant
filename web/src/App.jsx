@@ -375,7 +375,7 @@ function App() {
           },
         ]);
 
-    } catch (err) {
+    } catch {
       setAssistantMessages((prev) => [
         ...prev,
         {
@@ -497,31 +497,35 @@ function App() {
   }
 
   useEffect(() => {
-    loadData();
-    loadRecentEnergy();
-    loadWeather();
-    loadTodaySummary();
-    loadCalendarEvents();
-    loadTasks();
-    loadLists();
+    const initialLoad = setTimeout(() => {
+      loadData();
+      loadRecentEnergy();
+      loadWeather();
+      loadTodaySummary();
+      loadCalendarEvents();
+      loadTasks();
+      loadLists();
+    }, 0);
 
-    const interval = // Energy
-    setInterval(() => {
+    const energyInterval = setInterval(() => {
       loadData();
       loadRecentEnergy();
     }, 5000);
-    
-    // Weather
-    setInterval(() => {
+
+    const weatherInterval = setInterval(() => {
       loadWeather();
     }, 300000);
-    
-    // Calendar
-    setInterval(() => {
+
+    const calendarInterval = setInterval(() => {
       loadCalendarEvents();
     }, 900000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(initialLoad);
+      clearInterval(energyInterval);
+      clearInterval(weatherInterval);
+      clearInterval(calendarInterval);
+    };
   }, []);
 
   if (error) {
@@ -879,26 +883,62 @@ function App() {
                 top: "20px",
               }}
             >
-              <button
-                onClick={() => setAssistantOpen(!assistantOpen)}
+              <section
                 style={{
-                  border: "none",
                   borderRadius: "22px",
                   background: "#111827",
                   color: "white",
-                  padding: "18px 22px",
-                  fontWeight: 900,
-                  fontSize: "16px",
-                  cursor: "pointer",
+                  padding: "18px",
                   boxShadow: "0 14px 40px rgba(15, 23, 42, 0.16)",
-                  textAlign: "left",
                 }}
               >
-                🎙 Ask CASE
-                <div style={{ fontSize: "12px", opacity: 0.72, marginTop: "4px" }}>
-                  Energy, tasks, events and household planning
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "14px",
+                  }}
+                >
+                  <button
+                    onClick={() => setAssistantOpen(!assistantOpen)}
+                    style={{
+                      flex: 1,
+                      border: "none",
+                      background: "transparent",
+                      color: "inherit",
+                      padding: 0,
+                      fontWeight: 900,
+                      fontSize: "16px",
+                      cursor: "pointer",
+                      textAlign: "left",
+                    }}
+                  >
+                    Ask CASE
+                    <div style={{ fontSize: "12px", opacity: 0.72, marginTop: "4px" }}>
+                      Energy, tasks, events and household planning
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={startVoiceRecognition}
+                    style={{
+                      width: "44px",
+                      height: "44px",
+                      flex: "0 0 44px",
+                      borderRadius: "999px",
+                      border: "none",
+                      cursor: "pointer",
+                      background: isListening ? "#ef4444" : "rgba(255, 255, 255, 0.14)",
+                      color: "white",
+                      fontSize: "18px",
+                    }}
+                    title={isListening ? "Listening..." : "Speak to CASE"}
+                  >
+                    🎤
+                  </button>
                 </div>
-              </button>
+              </section>
 
               <section className="card">
               <div style={{ marginBottom: "18px" }}>
@@ -911,26 +951,6 @@ function App() {
                   }}
                 >
                   <div className="muted">Tasks</div>
-                  
-                  <button
-                    onClick={startVoiceRecognition}
-                    style={{
-                      width: "42px",
-                      height: "42px",
-                      borderRadius: "999px",
-                      border: "none",
-                      cursor: "pointer",
-                      background: isListening
-                        ? "#ef4444"
-                        : "#e2e8f0",
-                      color: isListening
-                        ? "white"
-                        : "#0f172a",
-                      fontSize: "18px",
-                    }}
-                  >
-                    🎤
-                  </button>
 
                   <button
                     onClick={() => {
@@ -1796,20 +1816,25 @@ function LegendLine({ color, label }) {
 }
 
 function EventList({ events }) {
-  let lastDay = null;
-
   return (
     <div>
-      {events.map((event) => {
+      {events.map((event, index) => {
         const start = new Date(event.start);
         const dayLabel = start.toLocaleDateString([], {
           weekday: "long",
           day: "numeric",
           month: "short",
         });
+        const previousEvent = events[index - 1];
+        const previousDayLabel = previousEvent
+          ? new Date(previousEvent.start).toLocaleDateString([], {
+              weekday: "long",
+              day: "numeric",
+              month: "short",
+            })
+          : null;
 
-        const showDay = dayLabel !== lastDay;
-        lastDay = dayLabel;
+        const showDay = dayLabel !== previousDayLabel;
 
         return (
           <div key={event.id}>

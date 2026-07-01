@@ -2,10 +2,11 @@ import os
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
@@ -16,61 +17,95 @@ TOKEN_PATH = os.path.join(GOOGLE_DIR, "token.json")
 
 CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID", "primary")
 PERTH_TZ = ZoneInfo("Australia/Perth")
+_last_calendar_error = None
 
 
 def get_calendar_service():
+    global _last_calendar_error
     creds = None
 
-    if os.path.exists(TOKEN_PATH):
-        creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+    try:
+        if os.path.exists(TOKEN_PATH):
+            creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
 
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                CREDENTIALS_PATH,
-                SCOPES,
-            )
-            creds = flow.run_local_server(
-                host="127.0.0.1",
-                bind_addr="0.0.0.0",
-                port=8085,
-                open_browser=False,
-                timeout_seconds=300,
-            )
+        if not creds or not creds.valid:
+            if creds and creds.expired and creds.refresh_token:
+                try:
+                    creds.refresh(Request())
+                except RefreshError as exc:
+                    clear_stale_token()
+                    return calendar_unavailable(
+                        f"Google calendar token could not be refreshed: {exc}"
+                    )
+            else:
+                return calendar_unavailable(
+                    "Google calendar is not authorised. Run auth_google_calendar.py."
+                )
 
-        os.makedirs(GOOGLE_DIR, exist_ok=True)
+            os.makedirs(GOOGLE_DIR, exist_ok=True)
 
-        with open(TOKEN_PATH, "w") as token:
-            token.write(creds.to_json())
+            with open(TOKEN_PATH, "w") as token:
+                token.write(creds.to_json())
 
-    return build("calendar", "v3", credentials=creds)
+        _last_calendar_error = None
+        return build("calendar", "v3", credentials=creds)
+
+    except Exception as exc:
+        return calendar_unavailable(f"Google calendar unavailable: {exc}")
 
 
 def get_upcoming_events(days: int = 7, max_results: int = 20):
     service = get_calendar_service()
 
+    if not service:
+        return None
+
     now = datetime.now(PERTH_TZ)
     time_min = now.isoformat()
     time_max = (now + timedelta(days=days)).isoformat()
 
-    result = (
-        service.events()
-        .list(
-            calendarId=CALENDAR_ID,
-            timeMin=time_min,
-            timeMax=time_max,
-            maxResults=max_results,
-            singleEvents=True,
-            orderBy="startTime",
+    try:
+        result = (
+            service.events()
+            .list(
+                calendarId=CALENDAR_ID,
+                timeMin=time_min,
+                timeMax=time_max,
+                maxResults=max_results,
+                singleEvents=True,
+                orderBy="startTime",
+            )
+            .execute()
         )
-        .execute()
-    )
+    except HttpError as exc:
+        calendar_unavailable(f"Google calendar API error: {exc}")
+        return None
+    except Exception as exc:
+        calendar_unavailable(f"Google calendar read failed: {exc}")
+        return None
 
     events = result.get("items", [])
 
     return [normalise_event(event) for event in events]
+
+
+def get_calendar_error():
+    return _last_calendar_error
+
+
+def calendar_unavailable(message):
+    global _last_calendar_error
+    _last_calendar_error = message
+    print(message)
+    return None
+
+
+def clear_stale_token():
+    try:
+        if os.path.exists(TOKEN_PATH):
+            os.remove(TOKEN_PATH)
+    except OSError as exc:
+        print(f"Could not remove stale Google token: {exc}")
 
 
 def normalise_event(event):
