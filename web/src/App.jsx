@@ -1126,12 +1126,12 @@ function App() {
                   <div className="tiny">No household tasks yet.</div>
                 ) : (
                   <div>
-                    {tasks.slice(0, 6).map((task) => {
+                    {tasks.slice(0, 6).map((task, index) => {
                       const theme = getPersonTheme(task.assigned_to);
 
                       return (
                       <div
-                        key={task.id}
+                        key={task.id || `${task.title}-${index}`}
                         style={{
                           display: "flex",
                           alignItems: "flex-start",

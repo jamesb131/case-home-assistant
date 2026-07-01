@@ -10,6 +10,18 @@ Local-first household assistant for tasks, lists, recurring chores, energy insig
 - Ollama/local LLM
 - Docker Compose
 
+## Local URLs
+
+Run the production-style local stack with:
+
+```bash
+docker compose up --build -d
+```
+
+- Web UI: http://localhost:8080
+- API: http://localhost:8000
+- Vite dev UI, when running `npm run dev` in `web/`: http://localhost:5173
+
 ## Notes
 
 Secrets are not committed. Copy `.env.example` to `.env` and add local values.

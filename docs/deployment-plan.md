@@ -54,7 +54,7 @@ Current first split:
 - `api`: FastAPI request/response service
 - `worker`: always-on polling/logging/snapshot process using `python -m app.worker`
 - `db`: PostgreSQL
-- `web`: Vite/React during development, static build later
+- `web`: production React static bundle served by Nginx
 - `ollama`: external service, likely on the desktop PC
 
 Future split:
@@ -66,17 +66,19 @@ Future split:
 
 ## Local-network behavior
 
-The frontend reads `VITE_API_BASE_URL` when provided. Without it, it uses the current browser hostname with port `8000`.
+The frontend reads runtime `CASE_WEB_API_BASE_URL` in the static web container, or `VITE_API_BASE_URL` during Vite development. Without either, it uses the current browser hostname with port `8000`.
 
 Examples:
 
 ```text
+http://localhost:8080       # production web container
+http://localhost:5173       # Vite development server
 http://localhost:8000
 http://case.local:8000
 http://homeassistant.local:8000
 ```
 
-The API CORS policy is still development-open and should be tightened before wider LAN use.
+The production web UI runs on port `8080` and talks to the API on port `8000`.
 
 For the Green-like deployment profile, use the override file:
 
@@ -87,7 +89,8 @@ docker compose -f docker-compose.yml -f docker-compose.green.yml up -d
 Keep device-specific values in `.env`, especially:
 
 ```text
-CASE_CORS_ORIGINS=http://case.local:5173,http://homeassistant.local:5173
+CASE_CORS_ORIGINS=http://case.local:8080,http://homeassistant.local:8080
+CASE_WEB_API_BASE_URL=http://case.local:8000
 OLLAMA_URL=http://desktop-pc.local:11434/api/chat
 ```
 
@@ -211,9 +214,11 @@ Preferred options:
 Preparation already in place:
 
 - frontend API base URL is configurable with `VITE_API_BASE_URL`
+- static web API base URL is configurable with `CASE_WEB_API_BASE_URL`
 - API CORS origins are configurable with `CASE_CORS_ORIGINS`
 - optional token auth can be enabled with `CASE_API_TOKEN`
 - frontend can send that token with `VITE_CASE_API_TOKEN`
+- static web can send that token with `CASE_WEB_API_TOKEN`
 
 Leave `CASE_API_TOKEN` unset for local development. Set it before using a VPN hostname, reverse proxy or tunnel.
 
@@ -221,6 +226,7 @@ Leave `CASE_API_TOKEN` unset for local development. Set it before using a VPN ho
 
 1. Add proper database migrations/schema setup.
 2. Move recurring task generation into `case-worker`.
-3. Add sensor/device-specific snapshot tables only where generic snapshots stop being enough.
-4. Package for the Green using a controlled compose/add-on approach.
-5. Add a proper authenticated remote-access path after choosing VPN/proxy approach.
+3. Add device-specific `.env` templates for local, Green and desktop LLM.
+4. Add sensor/device-specific snapshot tables only where generic snapshots stop being enough.
+5. Package for the Green using a controlled compose/add-on approach.
+6. Add a proper authenticated remote-access path after choosing VPN/proxy approach.

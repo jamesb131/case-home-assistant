@@ -2,8 +2,13 @@ services:
   api:
     restart: unless-stopped
     environment:
-      CASE_CORS_ORIGINS: ${CASE_CORS_ORIGINS:-http://case.local:5173,http://homeassistant.local:5173}
+      CASE_CORS_ORIGINS: ${CASE_CORS_ORIGINS:-http://case.local:8080,http://homeassistant.local:8080}
       OLLAMA_URL: ${OLLAMA_URL:-http://desktop-pc.local:11434/api/chat}
+
+  web:
+    restart: unless-stopped
+    environment:
+      CASE_WEB_API_BASE_URL: ${CASE_WEB_API_BASE_URL:-http://case.local:8000}
 
   worker:
     restart: unless-stopped

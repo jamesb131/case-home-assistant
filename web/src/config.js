@@ -1,8 +1,12 @@
 export const API_BASE =
+  window.CASE_CONFIG?.API_BASE ||
   import.meta.env.VITE_API_BASE_URL ||
   `${window.location.protocol}//${window.location.hostname}:8000`;
 
-export const API_TOKEN = import.meta.env.VITE_CASE_API_TOKEN || "";
+export const API_TOKEN =
+  window.CASE_CONFIG?.API_TOKEN ||
+  import.meta.env.VITE_CASE_API_TOKEN ||
+  "";
 
 export function apiFetch(url, options = {}) {
   const headers = {
