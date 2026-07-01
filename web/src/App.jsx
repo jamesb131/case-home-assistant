@@ -151,6 +151,7 @@ function App() {
   ]);
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [assistantStatus, setAssistantStatus] = useState(null);
 
   async function loadTasks() {
     try {
@@ -331,10 +332,42 @@ function App() {
     }
   }
 
+  async function loadAssistantStatus() {
+    try {
+      const res = await fetch(`${API_BASE}/assistant/status`);
+      if (!res.ok) throw new Error(`Assistant status API returned ${res.status}`);
+
+      const json = await res.json();
+      setAssistantStatus(json);
+    } catch (err) {
+      console.error(err);
+      setAssistantStatus({
+        available: false,
+        voice_available: false,
+        llm: {
+          message: err.message,
+        },
+      });
+    }
+  }
+
   async function sendAssistantMessage(messageOverride = null) {
     const userMessage = messageOverride || assistantInput;
 
     if (!userMessage.trim()) return;
+
+    if (assistantStatus && !assistantStatus.available) {
+      setAssistantMessages((prev) => [
+        ...prev,
+        { role: "user", text: userMessage },
+        {
+          role: "assistant",
+          text: "CASE assistant is unavailable because the LLM service is offline.",
+        },
+      ]);
+      setAssistantInput("");
+      return;
+    }
 
     setAssistantMessages((prev) => [
       ...prev,
@@ -356,6 +389,18 @@ function App() {
       });
 
       const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.detail || `Assistant API returned ${res.status}`);
+      }
+
+      if (json.assistant_available === false) {
+        setAssistantStatus({
+          available: false,
+          voice_available: false,
+          llm: json.llm_status,
+        });
+      }
 
       speakCase(json.reply);
 
@@ -402,6 +447,18 @@ function App() {
   }
 
   function startVoiceRecognition() {
+    if (assistantStatus && !assistantStatus.voice_available) {
+      setAssistantOpen(true);
+      setAssistantMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: "Voice is unavailable because the LLM service is offline.",
+        },
+      ]);
+      return;
+    }
+
     const SpeechRecognition =
       window.SpeechRecognition ||
       window.webkitSpeechRecognition;
@@ -505,6 +562,7 @@ function App() {
       loadCalendarEvents();
       loadTasks();
       loadLists();
+      loadAssistantStatus();
     }, 0);
 
     const energyInterval = setInterval(() => {
@@ -520,11 +578,16 @@ function App() {
       loadCalendarEvents();
     }, 900000);
 
+    const assistantStatusInterval = setInterval(() => {
+      loadAssistantStatus();
+    }, 30000);
+
     return () => {
       clearTimeout(initialLoad);
       clearInterval(energyInterval);
       clearInterval(weatherInterval);
       clearInterval(calendarInterval);
+      clearInterval(assistantStatusInterval);
     };
   }, []);
 
@@ -546,6 +609,13 @@ function App() {
 
   const gridValue = state.grid_kw;
   const gridIsExporting = gridValue < 0;
+  const assistantAvailable = assistantStatus?.available !== false;
+  const voiceAvailable = assistantStatus?.voice_available !== false;
+  const assistantStatusText = assistantStatus
+    ? assistantAvailable
+      ? "Assistant online"
+      : "Assistant unavailable"
+    : "Checking assistant";
 
   return (
     <div
@@ -918,22 +988,59 @@ function App() {
                     <div style={{ fontSize: "12px", opacity: 0.72, marginTop: "4px" }}>
                       Energy, tasks, events and household planning
                     </div>
+                    <div
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        marginTop: "10px",
+                        padding: "5px 8px",
+                        borderRadius: "999px",
+                        background: assistantAvailable
+                          ? "rgba(34, 197, 94, 0.16)"
+                          : "rgba(248, 113, 113, 0.18)",
+                        color: assistantAvailable ? "#bbf7d0" : "#fecaca",
+                        fontSize: "11px",
+                        fontWeight: 800,
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: "7px",
+                          height: "7px",
+                          borderRadius: "999px",
+                          background: assistantAvailable ? "#22c55e" : "#ef4444",
+                        }}
+                      />
+                      {assistantStatusText}
+                    </div>
                   </button>
 
                   <button
                     onClick={startVoiceRecognition}
+                    disabled={!voiceAvailable}
                     style={{
                       width: "44px",
                       height: "44px",
                       flex: "0 0 44px",
                       borderRadius: "999px",
                       border: "none",
-                      cursor: "pointer",
-                      background: isListening ? "#ef4444" : "rgba(255, 255, 255, 0.14)",
-                      color: "white",
+                      cursor: voiceAvailable ? "pointer" : "not-allowed",
+                      background: !voiceAvailable
+                        ? "rgba(255, 255, 255, 0.08)"
+                        : isListening
+                          ? "#ef4444"
+                          : "rgba(255, 255, 255, 0.14)",
+                      color: voiceAvailable ? "white" : "rgba(255, 255, 255, 0.45)",
                       fontSize: "18px",
                     }}
-                    title={isListening ? "Listening..." : "Speak to CASE"}
+                    title={
+                      !voiceAvailable
+                        ? "Voice unavailable"
+                        : isListening
+                          ? "Listening..."
+                          : "Speak to CASE"
+                    }
                   >
                     🎤
                   </button>
@@ -1149,7 +1256,28 @@ function App() {
               fontSize: "18px",
             }}
           >
-            CASE Assistant
+            <div>CASE Assistant</div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                marginTop: "6px",
+                color: assistantAvailable ? "#15803d" : "#b91c1c",
+                fontSize: "12px",
+                fontWeight: 800,
+              }}
+            >
+              <span
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "999px",
+                  background: assistantAvailable ? "#22c55e" : "#ef4444",
+                }}
+              />
+              {assistantStatusText}
+            </div>
           </div>
 
           <div
@@ -1189,6 +1317,11 @@ function App() {
             ))}
 
             {assistantLoading && <div style={{ color: "#667085" }}>CASE is thinking...</div>}
+            {!assistantAvailable && (
+              <div style={{ color: "#b91c1c", fontSize: "13px", fontWeight: 700 }}>
+                The rest of CASE is online. Assistant and voice are waiting for the LLM service.
+              </div>
+            )}
           </div>
 
           <div
@@ -1203,47 +1336,69 @@ function App() {
               value={assistantInput}
               onChange={(e) => setAssistantInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
+                if (e.key === "Enter" && assistantAvailable) {
                   sendAssistantMessage();
                 }
               }}
-              placeholder="Ask CASE something..."
+              placeholder={
+                assistantAvailable
+                  ? "Ask CASE something..."
+                  : "Assistant unavailable"
+              }
+              disabled={!assistantAvailable}
               style={{
                 flex: 1,
                 border: "1px solid #d1d5db",
                 borderRadius: "14px",
                 padding: "12px 14px",
                 fontSize: "14px",
+                background: assistantAvailable ? "white" : "#f3f4f6",
               }}
             />
 
             <button
               onClick={startVoiceRecognition}
+              disabled={!voiceAvailable}
               style={{
                 width: "42px",
                 height: "42px",
                 borderRadius: "999px",
                 border: "none",
-                cursor: "pointer",
-                background: isListening ? "#ef4444" : "#e2e8f0",
-                color: isListening ? "white" : "#0f172a",
+                cursor: voiceAvailable ? "pointer" : "not-allowed",
+                background: !voiceAvailable
+                  ? "#f3f4f6"
+                  : isListening
+                    ? "#ef4444"
+                    : "#e2e8f0",
+                color: !voiceAvailable
+                  ? "#9ca3af"
+                  : isListening
+                    ? "white"
+                    : "#0f172a",
                 fontSize: "18px",
               }}
-              title={isListening ? "Listening..." : "Speak to CASE"}
+              title={
+                !voiceAvailable
+                  ? "Voice unavailable"
+                  : isListening
+                    ? "Listening..."
+                    : "Speak to CASE"
+              }
             >
               🎤
             </button>
 
             <button
               onClick={sendAssistantMessage}
+              disabled={!assistantAvailable || assistantLoading}
               style={{
                 border: "none",
                 borderRadius: "14px",
                 padding: "12px 16px",
-                background: "#111827",
+                background: assistantAvailable ? "#111827" : "#d1d5db",
                 color: "white",
                 fontWeight: 800,
-                cursor: "pointer",
+                cursor: assistantAvailable ? "pointer" : "not-allowed",
               }}
             >
               Send

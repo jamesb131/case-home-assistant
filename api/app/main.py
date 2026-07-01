@@ -3,6 +3,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.db import get_connection
+from app.services.ollama_client import get_ollama_status
 
 from pydantic import BaseModel
 from app.services.case_assistant import ask_case
@@ -50,6 +51,20 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.get("/assistant/status")
+def assistant_status():
+    llm = get_ollama_status()
+
+    return {
+        "available": llm["available"],
+        "voice_available": llm["available"],
+        "llm": llm,
+    }
+
+@app.get("/llm/status")
+def llm_status():
+    return get_ollama_status()
 
 @app.get("/energy/current")
 def energy_current():

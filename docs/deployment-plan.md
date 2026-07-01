@@ -88,6 +88,21 @@ When Ollama is unavailable:
 - deterministic tasks/lists/energy/calendar UI should still work
 - the API should not return 500 for normal household operations
 
+The API exposes:
+
+```text
+GET /assistant/status
+GET /llm/status
+```
+
+For a split LAN deployment, set the Green's `OLLAMA_URL` to the desktop PC's Ollama endpoint:
+
+```text
+OLLAMA_URL=http://desktop-pc.local:11434/api/chat
+```
+
+If the desktop is asleep or off, the dashboard should keep working and the Ask CASE/voice controls should show unavailable.
+
 ## Deployment approach
 
 Short term:
@@ -134,7 +149,7 @@ For sensor and energy data:
 ## Near-term technical steps
 
 1. Add proper database migrations/schema setup.
-2. Add `/health` checks for API, DB, calendar, Sigenergy and Ollama.
+2. Add `/health` checks for DB, calendar and Sigenergy.
 3. Tighten CORS for LAN origins.
 4. Move weather/calendar sync and recurring task generation into `case-worker`.
 5. Add frontend display for LLM unavailable.

@@ -2,7 +2,7 @@ import json
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from app.services.ollama_client import ask_ollama
+from app.services.ollama_client import OllamaUnavailable, ask_ollama
 
 
 def extract_case_intent(message: str):
@@ -202,6 +202,9 @@ User message:
     try:
         raw = ask_ollama(system_prompt, user_prompt)
         return json.loads(raw)
+
+    except OllamaUnavailable:
+        raise
 
     except Exception:
         return {
