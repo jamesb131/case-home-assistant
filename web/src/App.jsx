@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { API_BASE } from "./config";
+import { API_BASE, apiFetch } from "./config";
 
 const PERSON_THEMES = {
   James: {
@@ -152,10 +152,11 @@ function App() {
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [assistantStatus, setAssistantStatus] = useState(null);
+  const [systemStatus, setSystemStatus] = useState(null);
 
   async function loadTasks() {
     try {
-      const res = await fetch(`${API_BASE}/tasks`);
+      const res = await apiFetch(`${API_BASE}/tasks`);
   
       if (!res.ok) {
         throw new Error(`Tasks API returned ${res.status}`);
@@ -173,7 +174,7 @@ function App() {
     if (!newTaskTitle.trim()) return;
   
     try {
-      const res = await fetch(`${API_BASE}/tasks`, {
+      const res = await apiFetch(`${API_BASE}/tasks`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -197,7 +198,7 @@ function App() {
 
   async function completeTask(taskId) {
     try {
-      const res = await fetch(`${API_BASE}/tasks/${taskId}/complete`, {
+      const res = await apiFetch(`${API_BASE}/tasks/${taskId}/complete`, {
         method: "POST",
       });
   
@@ -229,7 +230,7 @@ function App() {
       status: task.status || "pending",
     };
 
-    const res = await fetch(url, {
+    const res = await apiFetch(url, {
       method,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -244,7 +245,7 @@ function App() {
 
   async function loadLists() {
     try {
-      const res = await fetch(`${API_BASE}/lists`);
+      const res = await apiFetch(`${API_BASE}/lists`);
       if (!res.ok) throw new Error(`Lists API returned ${res.status}`);
 
       const json = await res.json();
@@ -260,7 +261,7 @@ function App() {
     if (!text || !text.trim()) return;
 
     try {
-      const res = await fetch(`${API_BASE}/lists/${listId}/items`, {
+      const res = await apiFetch(`${API_BASE}/lists/${listId}/items`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -285,7 +286,7 @@ function App() {
 
   async function completeListItem(itemId) {
     try {
-      const res = await fetch(`${API_BASE}/lists/items/${itemId}/complete`, {
+      const res = await apiFetch(`${API_BASE}/lists/items/${itemId}/complete`, {
         method: "POST",
       });
 
@@ -301,7 +302,7 @@ function App() {
     if (!newListName.trim()) return;
 
     try {
-      const res = await fetch(`${API_BASE}/lists`, {
+      const res = await apiFetch(`${API_BASE}/lists`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -322,7 +323,7 @@ function App() {
 
   async function loadCalendarEvents() {
     try {
-      const res = await fetch(`${API_BASE}/calendar/upcoming`);
+      const res = await apiFetch(`${API_BASE}/calendar/upcoming`);
       if (!res.ok) throw new Error(`Calendar API returned ${res.status}`);
 
       const json = await res.json();
@@ -334,7 +335,7 @@ function App() {
 
   async function loadAssistantStatus() {
     try {
-      const res = await fetch(`${API_BASE}/assistant/status`);
+      const res = await apiFetch(`${API_BASE}/assistant/status`);
       if (!res.ok) throw new Error(`Assistant status API returned ${res.status}`);
 
       const json = await res.json();
@@ -347,6 +348,21 @@ function App() {
         llm: {
           message: err.message,
         },
+      });
+    }
+  }
+
+  async function loadSystemStatus() {
+    try {
+      const res = await apiFetch(`${API_BASE}/system/status`);
+      if (!res.ok) throw new Error(`System status API returned ${res.status}`);
+
+      const json = await res.json();
+      setSystemStatus(json);
+    } catch (err) {
+      console.error(err);
+      setSystemStatus({
+        api: { status: "error", error: err.message },
       });
     }
   }
@@ -378,7 +394,7 @@ function App() {
     setAssistantLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/case/ask`, {
+      const res = await apiFetch(`${API_BASE}/case/ask`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -501,7 +517,7 @@ function App() {
 
   async function loadData() {
     try {
-      const res = await fetch(`${API_BASE}/decisions/summary`);
+      const res = await apiFetch(`${API_BASE}/decisions/summary`);
       if (!res.ok) throw new Error(`API returned ${res.status}`);
       const json = await res.json();
       setData(json);
@@ -513,7 +529,7 @@ function App() {
 
   async function loadRecentEnergy() {
     try {
-      const res = await fetch(`${API_BASE}/energy/recent`);
+      const res = await apiFetch(`${API_BASE}/energy/recent`);
       if (!res.ok) throw new Error(`Recent energy API returned ${res.status}`);
       const json = await res.json();
 
@@ -533,7 +549,7 @@ function App() {
 
   async function loadTodaySummary() {
     try {
-      const res = await fetch(`${API_BASE}/energy/today-summary`);
+      const res = await apiFetch(`${API_BASE}/energy/today-summary`);
       if (!res.ok) throw new Error(`Today summary API returned ${res.status}`);
       const json = await res.json();
       setTodaySummary(json);
@@ -544,7 +560,7 @@ function App() {
 
   async function loadWeather() {
     try {
-      const res = await fetch(`${API_BASE}/weather/summary`);
+      const res = await apiFetch(`${API_BASE}/weather/summary`);
       if (!res.ok) throw new Error(`Weather API returned ${res.status}`);
       const json = await res.json();
       setWeather(json);
@@ -563,6 +579,7 @@ function App() {
       loadTasks();
       loadLists();
       loadAssistantStatus();
+      loadSystemStatus();
     }, 0);
 
     const energyInterval = setInterval(() => {
@@ -582,12 +599,17 @@ function App() {
       loadAssistantStatus();
     }, 30000);
 
+    const systemStatusInterval = setInterval(() => {
+      loadSystemStatus();
+    }, 60000);
+
     return () => {
       clearTimeout(initialLoad);
       clearInterval(energyInterval);
       clearInterval(weatherInterval);
       clearInterval(calendarInterval);
       clearInterval(assistantStatusInterval);
+      clearInterval(systemStatusInterval);
     };
   }, []);
 
@@ -616,6 +638,7 @@ function App() {
       ? "Assistant online"
       : "Assistant unavailable"
     : "Checking assistant";
+  const systemStatusItems = buildSystemStatusItems(systemStatus);
 
   return (
     <div
@@ -1185,6 +1208,10 @@ function App() {
                     <EventList events={calendarEvents.slice(0, 8)} />
                   )}
                 </div>
+
+                <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
+
+                <SystemStatusPanel items={systemStatusItems} compact />
               </section>
             </aside>
           </div>
@@ -1501,6 +1528,132 @@ function App() {
 
       `}</style>
     </div>
+  );
+}
+
+function buildSystemStatusItems(status) {
+  if (!status) {
+    return [
+      { label: "API", status: "checking" },
+      { label: "DB", status: "checking" },
+      { label: "Worker", status: "checking" },
+      { label: "LLM", status: "checking" },
+    ];
+  }
+
+  return [
+    { label: "API", status: status.api?.status || "unknown" },
+    { label: "DB", status: status.db?.status || "unknown" },
+    { label: "Worker", status: status.worker?.status || "unknown" },
+    {
+      label: "LLM",
+      status: status.llm?.available ? "ok" : "offline",
+    },
+    {
+      label: "Calendar",
+      status: status.calendar?.status || "unknown",
+    },
+    {
+      label: "Weather",
+      status: status.weather?.status || "unknown",
+    },
+    {
+      label: "Energy",
+      status: status.sigenergy?.status || "unknown",
+    },
+  ];
+}
+
+function statusTone(status) {
+  if (status === "ok") {
+    return {
+      text: "#15803d",
+      background: "#dcfce7",
+      dot: "#22c55e",
+    };
+  }
+
+  if (status === "checking" || status === "unknown" || status === "stale") {
+    return {
+      text: "#92400e",
+      background: "#fef3c7",
+      dot: "#f59e0b",
+    };
+  }
+
+  return {
+    text: "#b91c1c",
+    background: "#fee2e2",
+    dot: "#ef4444",
+  };
+}
+
+function SystemStatusPanel({ items, compact = false }) {
+  const content = (
+    <>
+      <div className="muted" style={{ marginBottom: "12px" }}>
+        System
+      </div>
+
+      <div style={{ display: "grid", gap: "8px" }}>
+        {items.map((item) => {
+          const tone = statusTone(item.status);
+
+          return (
+            <div
+              key={item.label}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "10px",
+                fontSize: "13px",
+              }}
+            >
+              <span style={{ fontWeight: 800 }}>{item.label}</span>
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  borderRadius: "999px",
+                  background: tone.background,
+                  color: tone.text,
+                  padding: "5px 8px",
+                  fontSize: "11px",
+                  fontWeight: 900,
+                  textTransform: "capitalize",
+                }}
+              >
+                <span
+                  style={{
+                    width: "7px",
+                    height: "7px",
+                    borderRadius: "999px",
+                    background: tone.dot,
+                  }}
+                />
+                {item.status}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+
+  if (compact) {
+    return (
+      <div style={{ marginTop: "18px" }}>
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <section className="card" style={{ padding: "18px" }}>
+      {content}
+    </section>
   );
 }
 

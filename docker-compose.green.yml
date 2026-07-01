@@ -1,0 +1,12 @@
+services:
+  api:
+    restart: unless-stopped
+    environment:
+      CASE_CORS_ORIGINS: ${CASE_CORS_ORIGINS:-http://case.local:5173,http://homeassistant.local:5173}
+      OLLAMA_URL: ${OLLAMA_URL:-http://desktop-pc.local:11434/api/chat}
+
+  worker:
+    restart: unless-stopped
+
+  db:
+    restart: unless-stopped

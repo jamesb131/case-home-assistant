@@ -1,6 +1,7 @@
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.db import get_connection
 from app.services.ollama_client import get_ollama_status
@@ -16,17 +17,21 @@ from app.routers.lists_router import router as lists_router
 
 from app.services.sigenergy_client import get_energy_snapshot
 from app.services.decision_service import get_decision_summary
+from app.services.system_status import get_system_status
 from app.worker import log_energy_snapshot
 
 from app.routers.task_templates_router import router as task_templates_router
 
 from app.routers.tasks_router import router as tasks_router
+from app.repositories.system_snapshots_repository import get_snapshot, record_heartbeat
 
 cors_origins = [
     origin.strip()
     for origin in os.getenv("CASE_CORS_ORIGINS", "*").split(",")
     if origin.strip()
 ]
+api_token = os.getenv("CASE_API_TOKEN")
+auth_exempt_paths = {"/", "/health"}
 
 app = FastAPI()
 
@@ -44,6 +49,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.middleware("http")
+async def require_api_token(request: Request, call_next):
+    if not api_token or request.url.path in auth_exempt_paths:
+        return await call_next(request)
+
+    auth_header = request.headers.get("authorization", "")
+    bearer_token = (
+        auth_header.removeprefix("Bearer ").strip()
+        if auth_header.startswith("Bearer ")
+        else None
+    )
+    header_token = request.headers.get("x-case-token")
+
+    if bearer_token != api_token and header_token != api_token:
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "CASE API token required"},
+        )
+
+    return await call_next(request)
+
 @app.get("/")
 def root():
     return {"message": "CASE is online"}
@@ -51,6 +77,11 @@ def root():
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+@app.get("/system/status")
+def system_status():
+    record_heartbeat("api")
+    return get_system_status()
 
 @app.get("/assistant/status")
 def assistant_status():
@@ -68,6 +99,15 @@ def llm_status():
 
 @app.get("/energy/current")
 def energy_current():
+    snapshot = get_snapshot("energy.latest")
+
+    if snapshot and snapshot["status"] == "ok":
+        return {
+            **snapshot["payload"]["snapshot"],
+            "cached": True,
+            "captured_at": snapshot["captured_at"],
+        }
+
     return get_energy_snapshot()
 
 @app.get("/decisions/summary")
@@ -139,6 +179,15 @@ from app.services.weather_client import get_weather_summary
 
 @app.get("/weather/summary")
 def weather_summary():
+    snapshot = get_snapshot("weather.summary")
+
+    if snapshot and snapshot["status"] == "ok":
+        return {
+            **snapshot["payload"],
+            "cached": True,
+            "captured_at": snapshot["captured_at"],
+        }
+
     return get_weather_summary()
 
 @app.get("/energy/today-summary")
@@ -185,6 +234,18 @@ def case_ask(request: CaseAskRequest):
 
 @app.get("/calendar/upcoming")
 def calendar_upcoming():
+    snapshot = get_snapshot("calendar.upcoming")
+
+    if snapshot:
+        payload = snapshot["payload"]
+
+        return {
+            **payload,
+            "cached": True,
+            "captured_at": snapshot["captured_at"],
+            "error": snapshot["error"],
+        }
+
     events = get_upcoming_events(days=30, max_results=50)
 
     if events is None:

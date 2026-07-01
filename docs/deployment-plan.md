@@ -52,7 +52,7 @@ Responsibilities:
 Current first split:
 
 - `api`: FastAPI request/response service
-- `worker`: always-on polling/logging process using `python -m app.worker`
+- `worker`: always-on polling/logging/snapshot process using `python -m app.worker`
 - `db`: PostgreSQL
 - `web`: Vite/React during development, static build later
 - `ollama`: external service, likely on the desktop PC
@@ -78,6 +78,19 @@ http://homeassistant.local:8000
 
 The API CORS policy is still development-open and should be tightened before wider LAN use.
 
+For the Green-like deployment profile, use the override file:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.green.yml up -d
+```
+
+Keep device-specific values in `.env`, especially:
+
+```text
+CASE_CORS_ORIGINS=http://case.local:5173,http://homeassistant.local:5173
+OLLAMA_URL=http://desktop-pc.local:11434/api/chat
+```
+
 ## LLM availability
 
 CASE should expose LLM status separately from API status.
@@ -93,6 +106,7 @@ The API exposes:
 ```text
 GET /assistant/status
 GET /llm/status
+GET /system/status
 ```
 
 For a split LAN deployment, set the Green's `OLLAMA_URL` to the desktop PC's Ollama endpoint:
@@ -102,6 +116,34 @@ OLLAMA_URL=http://desktop-pc.local:11434/api/chat
 ```
 
 If the desktop is asleep or off, the dashboard should keep working and the Ask CASE/voice controls should show unavailable.
+
+## Worker snapshots
+
+The worker now polls and stores local Postgres snapshots in `system_snapshots`.
+
+Current snapshot keys:
+
+```text
+energy.latest
+weather.summary
+calendar.upcoming
+household.bins
+retention.energy
+```
+
+The API reads cached weather, calendar and current-energy state first, then falls back to live calls if the worker has not warmed up yet. This is the pattern to follow for future Zigbee sensors, garage doors, HWS controllers and local weather stations.
+
+Polling intervals are controlled by:
+
+```text
+LOG_INTERVAL=30
+WEATHER_POLL_INTERVAL=900
+CALENDAR_POLL_INTERVAL=900
+BINS_POLL_INTERVAL=3600
+STATUS_POLL_INTERVAL=60
+RETENTION_INTERVAL=86400
+ENERGY_RETENTION_DAYS=0
+```
 
 ## Deployment approach
 
@@ -146,11 +188,39 @@ For sensor and energy data:
 - roll up daily/monthly summaries for long-term history
 - add retention jobs to `case-worker`
 
+Energy rollups are stored in `energy_daily_rollups`. The worker refreshes recent rollups automatically. Raw reading pruning is disabled when `ENERGY_RETENTION_DAYS=0`; set it above zero only after backup/retention expectations are settled.
+
+Run a manual Postgres backup with:
+
+```bash
+scripts/db-backup.sh
+```
+
+The script writes timestamped dumps under `backups/`, which is ignored by Git.
+
+## Remote smartphone access
+
+Do not expose FastAPI directly to the public internet.
+
+Preferred options:
+
+- Tailscale or WireGuard VPN for phone access to the private LAN.
+- Home Assistant/Nabu Casa proxy path if CASE becomes an HA add-on or supervised adjacent service.
+- Cloudflare Tunnel only with authentication in front of CASE.
+
+Preparation already in place:
+
+- frontend API base URL is configurable with `VITE_API_BASE_URL`
+- API CORS origins are configurable with `CASE_CORS_ORIGINS`
+- optional token auth can be enabled with `CASE_API_TOKEN`
+- frontend can send that token with `VITE_CASE_API_TOKEN`
+
+Leave `CASE_API_TOKEN` unset for local development. Set it before using a VPN hostname, reverse proxy or tunnel.
+
 ## Near-term technical steps
 
 1. Add proper database migrations/schema setup.
-2. Add `/health` checks for DB, calendar and Sigenergy.
-3. Tighten CORS for LAN origins.
-4. Move weather/calendar sync and recurring task generation into `case-worker`.
-5. Add frontend display for LLM unavailable.
-6. Package for the Green using a controlled compose/add-on approach.
+2. Move recurring task generation into `case-worker`.
+3. Add sensor/device-specific snapshot tables only where generic snapshots stop being enough.
+4. Package for the Green using a controlled compose/add-on approach.
+5. Add a proper authenticated remote-access path after choosing VPN/proxy approach.

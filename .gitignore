@@ -39,6 +39,7 @@ frontend/node_modules/
 
 # Logs
 logs/
+backups/
 
 # Temporary
 tmp/

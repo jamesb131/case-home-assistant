@@ -3,9 +3,9 @@ services:
     image: postgres:15
     container_name: case-db
     environment:
-      POSTGRES_USER: case
-      POSTGRES_PASSWORD: case
-      POSTGRES_DB: case
+      POSTGRES_USER: ${POSTGRES_USER:-case}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-case}
+      POSTGRES_DB: ${POSTGRES_DB:-case}
     ports:
       - "5432:5432"
     volumes:
@@ -20,8 +20,16 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      - GOOGLE_CALENDAR_ID=08d8bae9a07144d268a0e3d89f8bb525d49565c664142f4d97fcca1c78dd010f@group.calendar.google.com
-      - CASE_CORS_ORIGINS=*
+      POSTGRES_USER: ${POSTGRES_USER:-case}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-case}
+      POSTGRES_DB: ${POSTGRES_DB:-case}
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-08d8bae9a07144d268a0e3d89f8bb525d49565c664142f4d97fcca1c78dd010f@group.calendar.google.com}
+      OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434/api/chat}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+      CASE_CORS_ORIGINS: ${CASE_CORS_ORIGINS:-http://localhost:5173}
+      CASE_API_TOKEN: ${CASE_API_TOKEN:-}
     volumes:
       - ./api/app/google:/app/app/google
 
@@ -33,9 +41,20 @@ services:
       migrate:
         condition: service_completed_successfully
     environment:
-      - LOG_INTERVAL=30
-      - GOOGLE_CALENDAR_ID=08d8bae9a07144d268a0e3d89f8bb525d49565c664142f4d97fcca1c78dd010f@group.calendar.google.com
-      - PYTHONUNBUFFERED=1
+      POSTGRES_USER: ${POSTGRES_USER:-case}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-case}
+      POSTGRES_DB: ${POSTGRES_DB:-case}
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      LOG_INTERVAL: ${LOG_INTERVAL:-30}
+      WEATHER_POLL_INTERVAL: ${WEATHER_POLL_INTERVAL:-900}
+      CALENDAR_POLL_INTERVAL: ${CALENDAR_POLL_INTERVAL:-900}
+      BINS_POLL_INTERVAL: ${BINS_POLL_INTERVAL:-3600}
+      STATUS_POLL_INTERVAL: ${STATUS_POLL_INTERVAL:-60}
+      RETENTION_INTERVAL: ${RETENTION_INTERVAL:-86400}
+      ENERGY_RETENTION_DAYS: ${ENERGY_RETENTION_DAYS:-0}
+      GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-08d8bae9a07144d268a0e3d89f8bb525d49565c664142f4d97fcca1c78dd010f@group.calendar.google.com}
+      PYTHONUNBUFFERED: 1
     volumes:
       - ./api/app/google:/app/app/google
 
@@ -45,6 +64,12 @@ services:
     command: ["python", "-m", "app.migrations"]
     depends_on:
       - db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-case}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-case}
+      POSTGRES_DB: ${POSTGRES_DB:-case}
+      POSTGRES_HOST: ${POSTGRES_HOST:-db}
+      POSTGRES_PORT: ${POSTGRES_PORT:-5432}
 
 volumes:
   case_data:
