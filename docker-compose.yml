@@ -1,5 +1,3 @@
-version: "3.9"
-
 services:
   db:
     image: postgres:15
@@ -18,14 +16,35 @@ services:
     container_name: case-api
     ports:
       - "8000:8000"
-      - "8085:8085"
     depends_on:
-      - db
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      - GOOGLE_CALENDAR_ID=08d8bae9a07144d268a0e3d89f8bb525d49565c664142f4d97fcca1c78dd010f@group.calendar.google.com
+      - CASE_CORS_ORIGINS=*
+    volumes:
+      - ./api/app/google:/app/app/google
+
+  worker:
+    build: ./api
+    container_name: case-worker
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
     environment:
       - LOG_INTERVAL=30
       - GOOGLE_CALENDAR_ID=08d8bae9a07144d268a0e3d89f8bb525d49565c664142f4d97fcca1c78dd010f@group.calendar.google.com
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./api/app/google:/app/app/google
+
+  migrate:
+    build: ./api
+    container_name: case-migrate
+    command: ["python", "-m", "app.migrations"]
+    depends_on:
+      - db
 
 volumes:
   case_data:

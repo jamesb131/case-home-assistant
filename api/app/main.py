@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.db import get_connection
@@ -11,19 +13,19 @@ from app.services.google_calendar_client import get_calendar_error
 
 from app.routers.lists_router import router as lists_router
 
-import threading
-import time
-import os
-
 from app.services.sigenergy_client import get_energy_snapshot
 from app.services.decision_service import get_decision_summary
-from app.services.energy_repository import insert_energy_reading
+from app.worker import log_energy_snapshot
 
 from app.routers.task_templates_router import router as task_templates_router
 
 from app.routers.tasks_router import router as tasks_router
 
-LOG_INTERVAL_SECONDS = int(os.getenv("LOG_INTERVAL", 30))
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv("CASE_CORS_ORIGINS", "*").split(",")
+    if origin.strip()
+]
 
 app = FastAPI()
 
@@ -35,7 +37,7 @@ app.include_router(tasks_router)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # dev only
+    allow_origins=cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -59,32 +61,13 @@ def decisions_summary():
 
 @app.post("/energy/log-now")
 def log_energy_now():
-    snapshot = get_energy_snapshot()
-    result = insert_energy_reading(snapshot)
+    logged = log_energy_snapshot()
 
     return {
         "logged": True,
-        "result": result,
-        "snapshot": snapshot,
+        "result": logged["result"],
+        "snapshot": logged["snapshot"],
     }
-
-def energy_logger_loop():
-    print(f"Energy logger running every {LOG_INTERVAL_SECONDS}s")
-
-    while True:
-        try:
-            snapshot = get_energy_snapshot()
-            insert_energy_reading(snapshot)
-            print("Logged energy snapshot")
-        except Exception as e:
-            print(f"Logging error: {e}")
-
-        time.sleep(LOG_INTERVAL_SECONDS)
-
-@app.on_event("startup")
-def start_background_logger():
-    thread = threading.Thread(target=energy_logger_loop, daemon=True)
-    thread.start()
 
 @app.get("/energy/recent")
 def get_recent_energy():
