@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from psycopg2.extras import Json
 
@@ -15,7 +15,7 @@ def json_default(value):
 
 def upsert_snapshot(key, payload, status="ok", ttl_seconds=None, error=None):
     expires_at = (
-        datetime.utcnow() + timedelta(seconds=ttl_seconds)
+        datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
         if ttl_seconds
         else None
     )
