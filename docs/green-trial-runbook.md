@@ -69,7 +69,9 @@ If the desktop is off, CASE should still run and the UI should show assistant/vo
 The Home Assistant app/add-on scaffold lives in:
 
 ```text
-addons/
+repository.yaml
+case_postgres/
+case_core/
 ```
 
 Packaging details and image requirements live in:

@@ -7,19 +7,20 @@ containers.
 ## Repository layout
 
 ```text
-addons/
-  repository.yaml
-  case_postgres/
-    config.yaml
-    README.md
-    DOCS.md
-    translations/en.yaml
-  case_core/
-    config.yaml
-    README.md
-    DOCS.md
-    translations/en.yaml
+repository.yaml
+case_postgres/
+  config.yaml
+  README.md
+  DOCS.md
+  translations/en.yaml
+case_core/
+  config.yaml
+  README.md
+  DOCS.md
+  translations/en.yaml
 ```
+
+Home Assistant requires `repository.yaml` at the Git repository root.
 
 The add-on definitions point at prebuilt images:
 
