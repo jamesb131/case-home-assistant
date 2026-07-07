@@ -28,6 +28,13 @@ First-trial packaging split:
 - CASE Postgres internal hostname: `2e435b46-case-postgres`
 - Desktop Ollama: `http://desktop-pc.local:11434`
 
+Google calendar auth files should be uploaded to:
+
+```text
+/share/case/google/credentials.json
+/share/case/google/token.json
+```
+
 If hostnames are not ready yet, use the device IP addresses for the first trial.
 
 On HA OS, the web UI may also be exposed through HA app `webui` or ingress once

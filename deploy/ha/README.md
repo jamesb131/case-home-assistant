@@ -25,6 +25,6 @@ scripts/build-ha-images.sh push
 The pushed image names match the add-on manifests:
 
 ```text
-ghcr.io/jamesb131/case-home-assistant/case-postgres:0.1.0
-ghcr.io/jamesb131/case-home-assistant/case-core:0.1.0
+ghcr.io/jamesb131/case-home-assistant/case-postgres:0.1.1
+ghcr.io/jamesb131/case-home-assistant/case-core:0.1.1
 ```

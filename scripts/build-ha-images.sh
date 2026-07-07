@@ -2,7 +2,7 @@
 set -eu
 
 MODE="${1:-local}"
-VERSION="${CASE_HA_IMAGE_VERSION:-0.1.0}"
+VERSION="${CASE_HA_IMAGE_VERSION:-0.1.1}"
 REGISTRY="${CASE_HA_IMAGE_REGISTRY:-ghcr.io/jamesb131/case-home-assistant}"
 PLATFORMS="${CASE_HA_IMAGE_PLATFORMS:-linux/arm64,linux/amd64}"
 

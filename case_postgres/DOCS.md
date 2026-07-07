@@ -13,7 +13,7 @@ Use the same database credentials in CASE Core's options.
 The image is expected to be built and published separately as:
 
 ```text
-ghcr.io/jamesb131/case-home-assistant/case-postgres:0.1.0
+ghcr.io/jamesb131/case-home-assistant/case-postgres:0.1.1
 ```
 
 Postgres data should live in:

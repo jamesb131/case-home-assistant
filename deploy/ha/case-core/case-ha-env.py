@@ -13,6 +13,7 @@ OPTION_ENV_MAP = {
     "postgres_password": "POSTGRES_PASSWORD",
     "postgres_db": "POSTGRES_DB",
     "google_calendar_id": "GOOGLE_CALENDAR_ID",
+    "google_import_dir": "GOOGLE_IMPORT_DIR",
     "ollama_url": "OLLAMA_URL",
     "ollama_model": "OLLAMA_MODEL",
     "case_cors_origins": "CASE_CORS_ORIGINS",

@@ -5,6 +5,31 @@ eval "$(python /usr/local/bin/case-ha-env.py)"
 
 mkdir -p "${GOOGLE_DIR:-/data/google}" /run/nginx /var/log/nginx
 
+import_google_auth() {
+    import_dir="${GOOGLE_IMPORT_DIR:-/share/case/google}"
+    google_dir="${GOOGLE_DIR:-/data/google}"
+
+    if [ ! -d "$import_dir" ]; then
+        echo "Google auth import directory not found: $import_dir"
+        return
+    fi
+
+    mkdir -p "$google_dir"
+
+    for filename in credentials.json token.json; do
+        source_file="$import_dir/$filename"
+        target_file="$google_dir/$filename"
+
+        if [ -f "$source_file" ]; then
+            cp -u "$source_file" "$target_file"
+            chmod 600 "$target_file"
+            echo "Google auth file available: $target_file"
+        fi
+    done
+}
+
+import_google_auth
+
 python - <<'PY'
 import json
 import os

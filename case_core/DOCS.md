@@ -12,7 +12,7 @@ CASE Core is the HA-managed wrapper for:
 The app image is expected to be built and published separately as:
 
 ```text
-ghcr.io/jamesb131/case-home-assistant/case-core:0.1.0
+ghcr.io/jamesb131/case-home-assistant/case-core:0.1.1
 ```
 
 ## Database
@@ -42,8 +42,20 @@ At runtime the image should expose that directory to the application as:
 /app/app/google
 ```
 
-Copy `credentials.json` and `token.json` there through the add-on data/share
-path before relying on calendar reads.
+Upload Google auth files to the Home Assistant share path:
+
+```text
+/share/case/google/credentials.json
+/share/case/google/token.json
+```
+
+On startup, CASE Core imports those files into:
+
+```text
+/data/google
+```
+
+The default import directory is configurable with `google_import_dir`.
 
 ## Desktop LLM
 

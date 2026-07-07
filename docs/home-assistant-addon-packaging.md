@@ -25,8 +25,8 @@ Home Assistant requires `repository.yaml` at the Git repository root.
 The add-on definitions point at prebuilt images:
 
 ```text
-ghcr.io/jamesb131/case-home-assistant/case-postgres:0.1.0
-ghcr.io/jamesb131/case-home-assistant/case-core:0.1.0
+ghcr.io/jamesb131/case-home-assistant/case-postgres:0.1.1
+ghcr.io/jamesb131/case-home-assistant/case-core:0.1.1
 ```
 
 The image Dockerfiles live in:
@@ -84,9 +84,10 @@ CASE Core image:
 4. Start `python -m app.worker`.
 5. Translate HA app options from `/data/options.json` into CASE environment
    variables.
-6. Keep Google auth files in `/data/google` and expose them to the app at
+6. Import Google auth files from `/share/case/google` into `/data/google`.
+7. Keep Google auth files in `/data/google` and expose them to the app at
    `/app/app/google`.
-7. Generate `/usr/share/nginx/html/case-config.js` from the web API options.
+8. Generate `/usr/share/nginx/html/case-config.js` from the web API options.
 
 CASE Postgres image:
 
