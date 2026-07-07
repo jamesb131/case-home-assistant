@@ -1,12 +1,23 @@
-# Green trial runbook
+# Home Assistant Green trial runbook
 
-This is the first local-network trial path for running CASE core on the always-on Green/core device while the desktop PC remains the optional Ollama host.
+This is the first local-network trial path for running CASE core on the always-on
+Home Assistant Green while the desktop PC remains the optional Ollama host.
+
+The Green is currently treated as a Home Assistant OS appliance. Do not plan on
+running this repo's raw Docker Compose stack directly on the Green host while it
+is on Home Assistant OS. The first supported trial path is to package CASE as
+Home Assistant apps/add-ons and let Supervisor manage the containers.
 
 ## Target shape
 
-- Green/core device: `db`, `migrate`, `api`, `worker`, `web`
+- Green/core device: HA-managed CASE app/add-on containers for DB, API, worker and web
 - Desktop PC: Ollama only
 - Development Mac: edits, commits and pushes
+
+First-trial packaging split:
+
+- CASE Postgres app: persistent database, stored under HA-managed `/data`
+- CASE Core app: API, worker, migrations and web UI
 
 ## Ports and URLs
 
@@ -18,13 +29,18 @@ This is the first local-network trial path for running CASE core on the always-o
 
 If hostnames are not ready yet, use the device IP addresses for the first trial.
 
+On HA OS, the web UI may also be exposed through HA app `webui` or ingress once
+the app wrapper exists. Direct LAN ports are acceptable for the first smoke test.
+
 ## Pre-flight
 
-1. Confirm the Green/core device can run Docker and Docker Compose or the supported equivalent.
-2. Confirm persistent storage is available for the Postgres Docker volume.
-3. Confirm the desktop PC can run Ollama and is reachable from the Green.
-4. Confirm the shared Google calendar ID is correct.
-5. Keep NVR/video storage outside CASE.
+1. Confirm the Green is reachable at `http://192.168.0.154:8123` or `http://homeassistant.local:8123`.
+2. Confirm the Green remains on Home Assistant OS and has Supervisor available.
+3. Confirm persistent app data will live under HA-managed `/data` storage.
+4. Confirm the desktop PC can run Ollama and is reachable from the Green.
+5. Confirm the shared Google calendar ID is correct.
+6. Keep NVR/video storage outside CASE.
+7. Keep a Home Assistant backup before installing experimental CASE apps.
 
 ## Desktop PC
 
@@ -50,7 +66,40 @@ If the desktop is off, CASE should still run and the UI should show assistant/vo
 
 ## Green/core setup
 
-Clone the repo:
+The Home Assistant app/add-on scaffold lives in:
+
+```text
+addons/
+```
+
+Packaging details and image requirements live in:
+
+```text
+docs/home-assistant-addon-packaging.md
+```
+
+Buildable image definitions live in:
+
+```text
+deploy/ha/
+```
+
+Build local smoke-test images with:
+
+```bash
+scripts/build-ha-images.sh local
+```
+
+Build and push multi-arch images for the Green with:
+
+```bash
+scripts/build-ha-images.sh push
+```
+
+The raw Compose flow below is retained for local development and future generic
+Linux hosts only.
+
+Clone the repo on a generic Linux host:
 
 ```bash
 git clone https://github.com/jamesb131/case-home-assistant.git
@@ -89,13 +138,16 @@ api/app/google/token.json
 
 Do not commit those files.
 
-## Start CASE
+## Start CASE on a generic Linux host
 
 Run:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.green.yml up --build -d
 ```
+
+Do not run this directly on the Home Assistant Green while it remains on HA OS.
+For the Green, install/start the CASE HA app/add-on once the wrapper exists.
 
 Check services:
 
@@ -176,14 +228,17 @@ Copy backups off the Green before relying on it as the source of truth.
 
 ## Update
 
-From the Green/core device:
+From a generic Linux core host:
 
 ```bash
 git pull
 docker compose -f docker-compose.yml -f docker-compose.green.yml up --build -d
 ```
 
-## Rollback
+For Home Assistant Green, update through the CASE HA app/add-on image/version
+once packaging exists. Avoid live Git working trees on the appliance.
+
+## Rollback on a generic Linux host
 
 Find the previous known-good commit:
 
@@ -205,7 +260,7 @@ git checkout main
 git pull
 ```
 
-## Stop
+## Stop on a generic Linux host
 
 Stop services without deleting data:
 

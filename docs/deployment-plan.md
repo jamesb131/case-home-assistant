@@ -23,6 +23,12 @@ Responsibilities:
 
 The Green should be the source of truth for household state. It should not depend on the desktop PC for ordinary dashboards, lists, tasks, energy history, or automations.
 
+Current constraint: the Green is a Home Assistant OS appliance, not a generic
+Linux server. It has Docker under Supervisor control, but the supported path is
+Home Assistant apps/add-ons rather than running this repo's raw Docker Compose
+stack directly on the host. Keep the device recoverable and package CASE into
+HA-managed containers for the first Green deployment.
+
 ### Desktop PC
 
 Runs only when available.
@@ -80,11 +86,15 @@ http://homeassistant.local:8000
 
 The production web UI runs on port `8080` and talks to the API on port `8000`.
 
-For the Green-like deployment profile, use the override file:
+For a generic Linux core host, use the Green-like Compose override file:
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.green.yml up -d
 ```
+
+This is appropriate for a future mini PC, NUC-style machine, Raspberry Pi, or
+other normal Linux Docker host. It is not the first path for the Home Assistant
+Green while it remains on Home Assistant OS.
 
 For the first Green/core trial, follow:
 
@@ -92,7 +102,15 @@ For the first Green/core trial, follow:
 docs/green-trial-runbook.md
 ```
 
-Keep device-specific values in `.env`, especially:
+For Home Assistant Green, package CASE as HA apps/add-ons. The target shape is:
+
+- CASE Postgres app/add-on with persistent database data
+- CASE API/worker/web app/add-on containers built for `aarch64`
+- desktop Ollama URL configured as an optional external dependency
+- UI exposed through HA app `webui`/ingress or direct LAN ports during the first
+  trial
+
+Keep device-specific values in app options or `.env`-style config, especially:
 
 ```text
 CASE_CORS_ORIGINS=http://case.local:8080,http://homeassistant.local:8080
@@ -163,13 +181,14 @@ Short term:
 
 - develop on the local machine
 - push to GitHub
-- pull/rebuild on the target device manually or with a small script
+- build/test a Home Assistant app/add-on wrapper for the Green
+- use raw Compose only on local development and future generic Linux hosts
 - use `env/local.env.example`, `env/green.env.example` and `env/desktop.env.example` as starting points
 
 Long term:
 
 - build container images from GitHub
-- deploy tagged images to the Green
+- deploy tagged `aarch64` images to the Green through HA apps/add-ons
 - keep local secrets and device-specific config outside Git
 - keep database files on persistent storage managed by the target device
 
@@ -234,8 +253,9 @@ Leave `CASE_API_TOKEN` unset for local development. Set it before using a VPN ho
 
 ## Near-term technical steps
 
-1. Add proper database migrations/schema setup.
-2. Run the first Green/core deployment trial.
-3. Add sensor/device-specific snapshot tables only where generic snapshots stop being enough.
-4. Package for the Green using a controlled compose/add-on approach.
-5. Add a proper authenticated remote-access path after choosing VPN/proxy approach.
+1. Scaffold the CASE HA app/add-on structure and document DB lifecycle.
+2. Add buildable `aarch64` images for CASE Core and CASE Postgres.
+3. Build/test `aarch64` images locally or via CI.
+4. Install the CASE app/add-on on the Green and verify API, worker, web, DB persistence and desktop Ollama availability.
+5. Add sensor/device-specific snapshot tables only where generic snapshots stop being enough.
+6. Add a proper authenticated remote-access path after choosing VPN/proxy approach.

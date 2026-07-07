@@ -34,4 +34,7 @@ Device-specific env templates live in `env/`:
 - `env/green.env.example`
 - `env/desktop.env.example`
 
-For the first Green/core deployment trial, follow `docs/green-trial-runbook.md`.
+For the Home Assistant Green path, start with `docs/green-trial-runbook.md`.
+The Green is currently treated as a Home Assistant OS appliance. Raw Docker
+Compose on the Green remains a future generic-Linux-host path, not the first
+trial path.

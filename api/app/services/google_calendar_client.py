@@ -11,7 +11,7 @@ from googleapiclient.errors import HttpError
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
-GOOGLE_DIR = "/app/app/google"
+GOOGLE_DIR = os.getenv("GOOGLE_DIR", "/app/app/google")
 CREDENTIALS_PATH = os.path.join(GOOGLE_DIR, "credentials.json")
 TOKEN_PATH = os.path.join(GOOGLE_DIR, "token.json")
 

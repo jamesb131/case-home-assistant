@@ -1,0 +1,40 @@
+configuration:
+  postgres_host:
+    name: Postgres host
+    description: Internal hostname for the CASE Postgres app.
+  postgres_port:
+    name: Postgres port
+    description: Internal Postgres port.
+  postgres_user:
+    name: Postgres user
+    description: Database user for CASE.
+  postgres_password:
+    name: Postgres password
+    description: Database password for CASE.
+  postgres_db:
+    name: Postgres database
+    description: Database name for CASE.
+  google_calendar_id:
+    name: Google calendar ID
+    description: Calendar ID used for household event reads.
+  ollama_url:
+    name: Ollama URL
+    description: Desktop PC Ollama chat endpoint.
+  ollama_model:
+    name: Ollama model
+    description: Model name requested from Ollama.
+  case_cors_origins:
+    name: CORS origins
+    description: Comma-separated browser origins allowed to call the API.
+  case_api_token:
+    name: API token
+    description: Optional token required by the CASE API.
+  case_web_api_base_url:
+    name: Web API base URL
+    description: API URL used by the static web UI.
+  case_web_api_token:
+    name: Web API token
+    description: Optional token sent by the web UI to the API.
+network:
+  80/TCP: CASE web UI
+  8000/TCP: CASE API

@@ -1,0 +1,68 @@
+name: CASE Core
+version: "0.1.0"
+slug: case_core
+description: Local-first household assistant API, worker and web UI.
+url: https://github.com/jamesb131/case-home-assistant
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: auto
+stage: experimental
+init: false
+image: ghcr.io/jamesb131/case-home-assistant/case-core
+webui: http://[HOST]:[PORT:80]
+watchdog: http://[HOST]:[PORT:8000]/health
+ports:
+  80/tcp: 8080
+  8000/tcp: 8000
+ports_description:
+  80/tcp: CASE web UI
+  8000/tcp: CASE API
+map:
+  - type: share
+    read_only: false
+options:
+  postgres_host: local-case-postgres
+  postgres_port: 5432
+  postgres_user: case
+  postgres_password: change-this-before-deploying
+  postgres_db: case
+  google_calendar_id: 08d8bae9a07144d268a0e3d89f8bb525d49565c664142f4d97fcca1c78dd010f@group.calendar.google.com
+  ollama_url: http://desktop-pc.local:11434/api/chat
+  ollama_model: llama3.1:8b
+  case_cors_origins: http://case.local:8080,http://homeassistant.local:8080,http://192.168.0.154:8080
+  case_api_token: ""
+  case_web_api_base_url: http://case.local:8000
+  case_web_api_token: ""
+  log_interval: 30
+  weather_poll_interval: 900
+  calendar_poll_interval: 900
+  bins_poll_interval: 3600
+  status_poll_interval: 60
+  retention_interval: 86400
+  recurring_task_interval: 3600
+  recurring_task_days_ahead: 21
+  energy_retention_days: 0
+schema:
+  postgres_host: str
+  postgres_port: port
+  postgres_user: str
+  postgres_password: password
+  postgres_db: str
+  google_calendar_id: str
+  ollama_url: url
+  ollama_model: str
+  case_cors_origins: str
+  case_api_token: password?
+  case_web_api_base_url: url
+  case_web_api_token: password?
+  log_interval: int(5,)
+  weather_poll_interval: int(60,)
+  calendar_poll_interval: int(60,)
+  bins_poll_interval: int(60,)
+  status_poll_interval: int(10,)
+  retention_interval: int(3600,)
+  recurring_task_interval: int(60,)
+  recurring_task_days_ahead: int(1,90)
+  energy_retention_days: int(0,)

@@ -1,0 +1,12 @@
+configuration:
+  postgres_user:
+    name: Postgres user
+    description: Database user for CASE.
+  postgres_password:
+    name: Postgres password
+    description: Database password for CASE.
+  postgres_db:
+    name: Postgres database
+    description: Database name for CASE.
+network:
+  5432/TCP: Internal Postgres port

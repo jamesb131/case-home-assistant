@@ -1,0 +1,26 @@
+name: CASE Postgres
+version: "0.1.0"
+slug: case_postgres
+description: Persistent Postgres database for CASE.
+url: https://github.com/jamesb131/case-home-assistant
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+stage: experimental
+init: false
+image: ghcr.io/jamesb131/case-home-assistant/case-postgres
+ports:
+  5432/tcp: null
+ports_description:
+  5432/tcp: Internal Postgres port
+backup: cold
+options:
+  postgres_user: case
+  postgres_password: change-this-before-deploying
+  postgres_db: case
+schema:
+  postgres_user: str
+  postgres_password: password
+  postgres_db: str
