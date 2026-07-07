@@ -10,11 +10,13 @@ case "$MODE" in
     local)
         docker build \
             -f deploy/ha/case-postgres/Dockerfile \
+            --build-arg BUILD_VERSION="$VERSION" \
             -t "$REGISTRY/case-postgres:$VERSION" \
             .
 
         docker build \
             -f deploy/ha/case-core/Dockerfile \
+            --build-arg BUILD_VERSION="$VERSION" \
             -t "$REGISTRY/case-core:$VERSION" \
             .
         ;;
@@ -22,6 +24,7 @@ case "$MODE" in
         docker buildx build \
             --platform "$PLATFORMS" \
             -f deploy/ha/case-postgres/Dockerfile \
+            --build-arg BUILD_VERSION="$VERSION" \
             -t "$REGISTRY/case-postgres:$VERSION" \
             --push \
             .
@@ -29,6 +32,7 @@ case "$MODE" in
         docker buildx build \
             --platform "$PLATFORMS" \
             -f deploy/ha/case-core/Dockerfile \
+            --build-arg BUILD_VERSION="$VERSION" \
             -t "$REGISTRY/case-core:$VERSION" \
             --push \
             .

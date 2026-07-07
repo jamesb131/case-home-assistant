@@ -1,5 +1,15 @@
 FROM postgres:15-alpine
 
+ARG BUILD_VERSION=0.1.0
+ARG BUILD_ARCH=aarch64
+
+LABEL \
+    io.hass.version="${BUILD_VERSION}" \
+    io.hass.type="app" \
+    io.hass.arch="${BUILD_ARCH}" \
+    org.opencontainers.image.source="https://github.com/jamesb131/case-home-assistant" \
+    org.opencontainers.image.description="CASE Postgres Home Assistant app"
+
 RUN apk add --no-cache jq
 
 ENV PGDATA=/data/postgres

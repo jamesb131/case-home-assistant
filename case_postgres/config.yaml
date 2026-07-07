@@ -8,7 +8,7 @@ arch:
   - amd64
 startup: services
 boot: auto
-stage: experimental
+stage: stable
 init: false
 image: ghcr.io/jamesb131/case-home-assistant/case-postgres
 ports:
