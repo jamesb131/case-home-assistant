@@ -56,6 +56,10 @@ Actions tab:
 .github/workflows/publish-ha-images.yml
 ```
 
+If existing GHCR packages deny `GITHUB_TOKEN` with `write_package`, add a
+repository secret named `GHCR_PAT` with `write:packages`. The workflow uses that
+secret when present and falls back to `GITHUB_TOKEN` otherwise.
+
 The image build pipeline is separate from HA installation. This avoids relying
 on Home Assistant building images from the whole monorepo as a Docker context.
 
