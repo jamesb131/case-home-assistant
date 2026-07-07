@@ -10,6 +10,7 @@ startup: application
 boot: auto
 stage: stable
 init: false
+legacy: true
 image: ghcr.io/jamesb131/case-home-assistant/case-core
 webui: http://[HOST]:[PORT:80]
 watchdog: http://[HOST]:[PORT:8000]/health

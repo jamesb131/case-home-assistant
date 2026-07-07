@@ -10,6 +10,7 @@ startup: services
 boot: auto
 stage: stable
 init: false
+legacy: true
 image: ghcr.io/jamesb131/case-home-assistant/case-postgres
 ports:
   5432/tcp: null
