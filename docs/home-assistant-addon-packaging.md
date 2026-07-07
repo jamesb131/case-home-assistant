@@ -48,6 +48,14 @@ Build and push multi-arch images with:
 scripts/build-ha-images.sh push
 ```
 
+In normal use, GitHub Actions publishes the images automatically when relevant
+files are pushed to `main`. The workflow can also be run manually from GitHub's
+Actions tab:
+
+```text
+.github/workflows/publish-ha-images.yml
+```
+
 The image build pipeline is separate from HA installation. This avoids relying
 on Home Assistant building images from the whole monorepo as a Docker context.
 

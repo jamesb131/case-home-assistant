@@ -22,6 +22,12 @@ scripts/build-ha-images.sh local
 scripts/build-ha-images.sh push
 ```
 
+Routine publishes should use GitHub Actions instead of local GHCR tokens:
+
+```text
+.github/workflows/publish-ha-images.yml
+```
+
 The pushed image names match the add-on manifests:
 
 ```text
