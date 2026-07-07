@@ -1,5 +1,5 @@
 name: CASE Core
-version: "0.1.2"
+version: "0.1.3"
 slug: case_core
 description: Local-first household assistant API, worker and web UI.
 url: https://github.com/jamesb131/case-home-assistant
@@ -31,8 +31,10 @@ options:
   postgres_db: case
   google_calendar_id: 08d8bae9a07144d268a0e3d89f8bb525d49565c664142f4d97fcca1c78dd010f@group.calendar.google.com
   google_import_dir: /share/case/google
-  ollama_url: http://desktop-pc.local:11434/api/chat
+  ollama_url: http://desktop-pc.local:11435/api/chat
   ollama_model: llama3.1:8b
+  ollama_status_timeout: 2
+  ollama_chat_timeout: 60
   case_cors_origins: http://case.local:8080,http://homeassistant.local:8080,http://192.168.0.154:8080
   case_api_token: ""
   case_web_api_base_url: http://case.local:8000
@@ -56,6 +58,8 @@ schema:
   google_import_dir: str
   ollama_url: url
   ollama_model: str
+  ollama_status_timeout: int(1,30)
+  ollama_chat_timeout: int(5,300)
   case_cors_origins: str
   case_api_token: password?
   case_web_api_base_url: url

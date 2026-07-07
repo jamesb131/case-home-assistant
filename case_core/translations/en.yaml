@@ -23,6 +23,12 @@ configuration:
   ollama_model:
     name: Ollama model
     description: Model name requested from Ollama.
+  ollama_status_timeout:
+    name: Ollama status timeout
+    description: Seconds to wait when checking whether the desktop LLM is online.
+  ollama_chat_timeout:
+    name: Ollama chat timeout
+    description: Seconds to wait for a desktop LLM chat response.
   case_cors_origins:
     name: CORS origins
     description: Comma-separated browser origins allowed to call the API.

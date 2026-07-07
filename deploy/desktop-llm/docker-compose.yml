@@ -1,0 +1,14 @@
+services:
+  case-llm-bridge:
+    build:
+      context: ../..
+      dockerfile: deploy/desktop-llm/Dockerfile
+    container_name: case-llm-bridge
+    restart: unless-stopped
+    ports:
+      - "11435:11435"
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+      OLLAMA_STATUS_TIMEOUT: ${OLLAMA_STATUS_TIMEOUT:-2}
+      OLLAMA_CHAT_TIMEOUT: ${OLLAMA_CHAT_TIMEOUT:-60}

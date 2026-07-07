@@ -12,7 +12,7 @@ CASE Core is the HA-managed wrapper for:
 The app image is expected to be built and published separately as:
 
 ```text
-ghcr.io/jamesb131/case-home-assistant/case-core:0.1.1
+ghcr.io/jamesb131/case-home-assistant/case-core:<config version>
 ```
 
 ## Database
@@ -59,10 +59,10 @@ The default import directory is configurable with `google_import_dir`.
 
 ## Desktop LLM
 
-Set `ollama_url` to the desktop PC endpoint:
+Set `ollama_url` to the desktop PC LLM bridge endpoint:
 
 ```text
-http://desktop-pc.local:11434/api/chat
+http://desktop-pc.local:11435/api/chat
 ```
 
 CASE should continue to run when the desktop is off; the UI should show

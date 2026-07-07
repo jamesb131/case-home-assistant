@@ -25,8 +25,8 @@ Home Assistant requires `repository.yaml` at the Git repository root.
 The add-on definitions point at prebuilt images:
 
 ```text
-ghcr.io/jamesb131/case-home-assistant/case-postgres:0.1.1
-ghcr.io/jamesb131/case-home-assistant/case-core:0.1.1
+ghcr.io/jamesb131/case-home-assistant/case-postgres:<config version>
+ghcr.io/jamesb131/case-home-assistant/case-core:<config version>
 ```
 
 The image Dockerfiles live in:

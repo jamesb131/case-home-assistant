@@ -31,6 +31,9 @@ Routine publishes should use GitHub Actions instead of local GHCR tokens:
 The pushed image names match the add-on manifests:
 
 ```text
-ghcr.io/jamesb131/case-home-assistant/case-postgres:0.1.1
-ghcr.io/jamesb131/case-home-assistant/case-core:0.1.1
+ghcr.io/jamesb131/case-home-assistant/case-postgres:<config version>
+ghcr.io/jamesb131/case-home-assistant/case-core:<config version>
 ```
+
+The tag is derived from `case_core/config.yaml` unless
+`CASE_HA_IMAGE_VERSION` is explicitly set.

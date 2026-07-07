@@ -115,7 +115,7 @@ Keep device-specific values in app options or `.env`-style config, especially:
 ```text
 CASE_CORS_ORIGINS=http://case.local:8080,http://homeassistant.local:8080
 CASE_WEB_API_BASE_URL=http://case.local:8000
-OLLAMA_URL=http://desktop-pc.local:11434/api/chat
+OLLAMA_URL=http://desktop-pc.local:11435/api/chat
 ```
 
 ## LLM availability
@@ -136,10 +136,11 @@ GET /llm/status
 GET /system/status
 ```
 
-For a split LAN deployment, set the Green's `OLLAMA_URL` to the desktop PC's Ollama endpoint:
+For a split LAN deployment, run the CASE LLM bridge on the desktop PC and set
+the Green's `OLLAMA_URL` to the bridge endpoint:
 
 ```text
-OLLAMA_URL=http://desktop-pc.local:11434/api/chat
+OLLAMA_URL=http://desktop-pc.local:11435/api/chat
 ```
 
 If the desktop is asleep or off, the dashboard should keep working and the Ask CASE/voice controls should show unavailable.

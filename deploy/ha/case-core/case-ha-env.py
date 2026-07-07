@@ -16,6 +16,8 @@ OPTION_ENV_MAP = {
     "google_import_dir": "GOOGLE_IMPORT_DIR",
     "ollama_url": "OLLAMA_URL",
     "ollama_model": "OLLAMA_MODEL",
+    "ollama_status_timeout": "OLLAMA_STATUS_TIMEOUT",
+    "ollama_chat_timeout": "OLLAMA_CHAT_TIMEOUT",
     "case_cors_origins": "CASE_CORS_ORIGINS",
     "case_api_token": "CASE_API_TOKEN",
     "case_web_api_base_url": "CASE_WEB_API_BASE_URL",

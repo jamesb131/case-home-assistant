@@ -10,6 +10,8 @@ OLLAMA_URL = os.getenv(
 )
 
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+OLLAMA_STATUS_TIMEOUT = float(os.getenv("OLLAMA_STATUS_TIMEOUT", "2"))
+OLLAMA_CHAT_TIMEOUT = float(os.getenv("OLLAMA_CHAT_TIMEOUT", "60"))
 
 
 class OllamaUnavailable(Exception):
@@ -28,7 +30,9 @@ def get_ollama_tags_url():
     return urlunparse(parsed._replace(path=path, params="", query="", fragment=""))
 
 
-def get_ollama_status(timeout=2):
+def get_ollama_status(timeout=None):
+    timeout = OLLAMA_STATUS_TIMEOUT if timeout is None else timeout
+
     try:
         response = requests.get(get_ollama_tags_url(), timeout=timeout)
         response.raise_for_status()
@@ -88,7 +92,7 @@ def ask_ollama(system_prompt: str, user_prompt: str):
                     },
                 ],
             },
-            timeout=60,
+            timeout=OLLAMA_CHAT_TIMEOUT,
         )
 
         response.raise_for_status()

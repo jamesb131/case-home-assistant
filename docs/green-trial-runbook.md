@@ -26,7 +26,8 @@ First-trial packaging split:
 - API health: `http://case.local:8000/health`
 - System status: `http://case.local:8000/system/status`
 - CASE Postgres internal hostname: `2e435b46-case-postgres`
-- Desktop Ollama: `http://desktop-pc.local:11434`
+- Desktop CASE LLM bridge: `http://desktop-pc.local:11435`
+- Desktop Ollama on the Windows host: `http://host.docker.internal:11434`
 
 Google calendar auth files should be uploaded to:
 
@@ -58,16 +59,23 @@ Install and start Ollama, then pull the configured model:
 ollama pull llama3.1:8b
 ```
 
-The desktop must listen on the LAN. The expected CASE URL is:
+Run the CASE LLM bridge container from this repo:
+
+```bash
+docker compose --env-file env/desktop.env.example -f deploy/desktop-llm/docker-compose.yml up -d --build
+```
+
+The bridge must listen on the LAN. The expected CASE URL is:
 
 ```text
-http://desktop-pc.local:11434/api/chat
+http://desktop-pc.local:11435/api/chat
 ```
 
 From another device on the LAN, verify:
 
 ```bash
-curl http://desktop-pc.local:11434/api/tags
+curl http://desktop-pc.local:11435/health
+curl http://desktop-pc.local:11435/api/tags
 ```
 
 If the desktop is off, CASE should still run and the UI should show assistant/voice unavailable.
@@ -127,7 +135,7 @@ Edit `.env` and confirm:
 ```text
 POSTGRES_PASSWORD=...
 GOOGLE_CALENDAR_ID=...
-OLLAMA_URL=http://desktop-pc.local:11434/api/chat
+OLLAMA_URL=http://desktop-pc.local:11435/api/chat
 CASE_CORS_ORIGINS=http://case.local:8080,http://homeassistant.local:8080
 CASE_WEB_API_BASE_URL=http://case.local:8000
 ENERGY_RETENTION_DAYS=0

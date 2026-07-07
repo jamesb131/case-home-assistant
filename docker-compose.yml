@@ -28,6 +28,8 @@ services:
       GOOGLE_CALENDAR_ID: ${GOOGLE_CALENDAR_ID:-08d8bae9a07144d268a0e3d89f8bb525d49565c664142f4d97fcca1c78dd010f@group.calendar.google.com}
       OLLAMA_URL: ${OLLAMA_URL:-http://host.docker.internal:11434/api/chat}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+      OLLAMA_STATUS_TIMEOUT: ${OLLAMA_STATUS_TIMEOUT:-2}
+      OLLAMA_CHAT_TIMEOUT: ${OLLAMA_CHAT_TIMEOUT:-60}
       CASE_CORS_ORIGINS: ${CASE_CORS_ORIGINS:-http://localhost:5173,http://localhost:8080}
       CASE_API_TOKEN: ${CASE_API_TOKEN:-}
     volumes:
