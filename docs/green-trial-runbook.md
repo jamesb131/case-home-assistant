@@ -25,6 +25,7 @@ First-trial packaging split:
 - CASE API: `http://case.local:8000`
 - API health: `http://case.local:8000/health`
 - System status: `http://case.local:8000/system/status`
+- CASE Postgres internal hostname: `2e435b46-case-postgres`
 - Desktop Ollama: `http://desktop-pc.local:11434`
 
 If hostnames are not ready yet, use the device IP addresses for the first trial.

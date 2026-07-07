@@ -63,16 +63,16 @@ the first Green trial.
 ## Internal networking
 
 Home Assistant apps can talk over the internal app network by repository and
-slug derived name. For a local add-on install, CASE Postgres is reachable from
-CASE Core at:
+slug derived name. For this GitHub repository install, CASE Postgres is
+reachable from CASE Core at:
 
 ```text
-local-case-postgres:5432
+2e435b46-case-postgres:5432
 ```
 
-If the repository is installed from GitHub, Home Assistant generates a different
-repository prefix. Update the CASE Core `postgres_host` option after install if
-needed.
+Home Assistant generates internal DNS names as `{repo}-{slug}`. The repository
+prefix for `https://github.com/jamesb131/case-home-assistant` is currently
+`2e435b46`.
 
 ## Runtime behavior
 

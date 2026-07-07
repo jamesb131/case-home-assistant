@@ -24,7 +24,7 @@ map:
   - type: share
     read_only: false
 options:
-  postgres_host: local-case-postgres
+  postgres_host: 2e435b46-case-postgres
   postgres_port: 5432
   postgres_user: case
   postgres_password: change-this-before-deploying

@@ -17,16 +17,16 @@ ghcr.io/jamesb131/case-home-assistant/case-core:0.1.0
 
 ## Database
 
-Install and start CASE Postgres first. For a local add-on install, the internal
-database hostname is:
+Install and start CASE Postgres first. For this GitHub repository install, the
+internal database hostname is:
 
 ```text
-local-case-postgres
+2e435b46-case-postgres
 ```
 
-If the add-on repository is installed from GitHub instead of as a local
-repository, Home Assistant will generate a repository-specific prefix. In that
-case, update `postgres_host` in the CASE Core options.
+Home Assistant generates internal hostnames as `{repo}-{slug}`. The repository
+prefix for `https://github.com/jamesb131/case-home-assistant` is currently
+`2e435b46`.
 
 ## Google calendar auth
 
