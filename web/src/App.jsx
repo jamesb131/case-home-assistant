@@ -3203,6 +3203,7 @@ function ListsPage({
     lists[0];
 
   const otherLists = lists.filter((list) => list.id !== primaryList?.id);
+  const secondaryCardCount = otherLists.length + 1;
 
   return (
     <div>
@@ -3216,9 +3217,13 @@ function ListsPage({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: primaryList ? "minmax(360px, 32%) 1fr" : "1fr",
+          gridTemplateColumns: primaryList
+            ? "minmax(360px, 420px) minmax(640px, 1fr)"
+            : "1fr",
           gap: "20px",
           alignItems: "start",
+          overflowX: "auto",
+          paddingBottom: "8px",
         }}
       >
         {primaryList && (
@@ -3232,15 +3237,13 @@ function ListsPage({
           />
         )}
 
-        <section>
+        <section style={{ minWidth: 0, overflowX: "auto", paddingBottom: "8px" }}>
           <div
             style={{
               display: "grid",
-              gridTemplateColumns:
-                otherLists.length <= 1
-                  ? "1fr"
-                  : "repeat(auto-fit, minmax(300px, 1fr))",
+              gridTemplateColumns: `repeat(${secondaryCardCount}, minmax(300px, 1fr))`,
               gap: "20px",
+              minWidth: `${secondaryCardCount * 300 + (secondaryCardCount - 1) * 20}px`,
             }}
           >
             {otherLists.map((list) => (
