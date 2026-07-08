@@ -344,6 +344,7 @@ function App() {
 
       const json = await res.json();
       setAssistantStatus(json);
+      return json;
     } catch (err) {
       console.error(err);
       setAssistantStatus((current) => ({
@@ -356,6 +357,7 @@ function App() {
           message: err.message,
         },
       }));
+      return null;
     }
   }
 
@@ -379,7 +381,9 @@ function App() {
 
     if (!userMessage.trim()) return;
 
-    if (assistantStatus && !assistantStatus.available) {
+    const latestStatus = await loadAssistantStatus();
+
+    if (latestStatus?.available === false) {
       setAssistantMessages((prev) => [
         ...prev,
         { role: "user", text: userMessage },
@@ -469,7 +473,7 @@ function App() {
     window.speechSynthesis.speak(utterance);
   }
 
-  function startVoiceRecognition() {
+  async function startVoiceRecognition() {
     const SpeechRecognition = getSpeechRecognition();
 
     if (!window.isSecureContext) {
@@ -484,7 +488,9 @@ function App() {
       return;
     }
 
-    if (assistantStatus && assistantStatus.voice_available === false) {
+    const latestStatus = await loadAssistantStatus();
+
+    if (latestStatus?.voice_available === false) {
       setAssistantOpen(true);
       setAssistantMessages((prev) => [
         ...prev,
@@ -672,11 +678,12 @@ function App() {
   const gridIsExporting = gridValue < 0;
   const assistantAvailability = assistantStatus?.available;
   const assistantAvailable = assistantAvailability !== false;
-  const canUseBrowserVoice = window.isSecureContext && Boolean(getSpeechRecognition());
-  const voiceAvailable = assistantStatus?.voice_available !== false && canUseBrowserVoice;
+  const speechRecognitionAvailable = Boolean(getSpeechRecognition());
+  const voiceBlockedByAssistant = assistantStatus?.voice_available === false;
+  const voiceAvailable = !voiceBlockedByAssistant;
   const voiceUnavailableTitle = !window.isSecureContext
     ? "Voice requires HTTPS or localhost in Chrome"
-    : !getSpeechRecognition()
+    : !speechRecognitionAvailable
       ? "Speech recognition is not supported in this browser"
       : "Voice unavailable";
   const assistantStatusText =
@@ -1088,14 +1095,13 @@ function App() {
 
                   <button
                     onClick={startVoiceRecognition}
-                    disabled={!voiceAvailable}
                     style={{
                       width: "44px",
                       height: "44px",
                       flex: "0 0 44px",
                       borderRadius: "999px",
                       border: "none",
-                      cursor: voiceAvailable ? "pointer" : "not-allowed",
+                      cursor: "pointer",
                       background: !voiceAvailable
                         ? "rgba(255, 255, 255, 0.08)"
                         : isListening
@@ -1330,7 +1336,33 @@ function App() {
               fontSize: "18px",
             }}
           >
-            <div>CASE Assistant</div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+              }}
+            >
+              <div>CASE Assistant</div>
+              <button
+                onClick={() => setAssistantOpen(false)}
+                aria-label="Close CASE Assistant"
+                style={{
+                  width: "32px",
+                  height: "32px",
+                  borderRadius: "999px",
+                  border: "none",
+                  background: "#f3f4f6",
+                  color: "#111827",
+                  cursor: "pointer",
+                  fontSize: "20px",
+                  lineHeight: 1,
+                }}
+              >
+                ×
+              </button>
+            </div>
             <div
               style={{
                 display: "flex",
@@ -1410,35 +1442,34 @@ function App() {
               value={assistantInput}
               onChange={(e) => setAssistantInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && assistantAvailable) {
+                if (e.key === "Enter" && !assistantLoading) {
                   sendAssistantMessage();
                 }
               }}
               placeholder={
                 assistantAvailable
                   ? "Ask CASE something..."
-                  : "Assistant unavailable"
+                  : "Assistant may be offline - send to recheck"
               }
-              disabled={!assistantAvailable}
+              disabled={assistantLoading}
               style={{
                 flex: 1,
                 border: "1px solid #d1d5db",
                 borderRadius: "14px",
                 padding: "12px 14px",
                 fontSize: "14px",
-                background: assistantAvailable ? "white" : "#f3f4f6",
+                background: assistantLoading ? "#f3f4f6" : "white",
               }}
             />
 
             <button
               onClick={startVoiceRecognition}
-              disabled={!voiceAvailable}
               style={{
                 width: "42px",
                 height: "42px",
                 borderRadius: "999px",
                 border: "none",
-                cursor: voiceAvailable ? "pointer" : "not-allowed",
+                cursor: "pointer",
                 background: !voiceAvailable
                   ? "#f3f4f6"
                   : isListening
@@ -1464,15 +1495,15 @@ function App() {
 
             <button
               onClick={sendAssistantMessage}
-              disabled={!assistantAvailable || assistantLoading}
+              disabled={assistantLoading}
               style={{
                 border: "none",
                 borderRadius: "14px",
                 padding: "12px 16px",
-                background: assistantAvailable ? "#111827" : "#d1d5db",
+                background: assistantLoading ? "#d1d5db" : "#111827",
                 color: "white",
                 fontWeight: 800,
-                cursor: assistantAvailable ? "pointer" : "not-allowed",
+                cursor: assistantLoading ? "not-allowed" : "pointer",
               }}
             >
               Send
