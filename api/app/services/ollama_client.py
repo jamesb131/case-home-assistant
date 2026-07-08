@@ -30,8 +30,27 @@ def get_ollama_tags_url():
     return urlunparse(parsed._replace(path=path, params="", query="", fragment=""))
 
 
+def get_ollama_bridge_status_url():
+    parsed = urlparse(OLLAMA_URL)
+    return urlunparse(parsed._replace(path="/llm/status", params="", query="", fragment=""))
+
+
 def get_ollama_status(timeout=None):
     timeout = OLLAMA_STATUS_TIMEOUT if timeout is None else timeout
+
+    try:
+        response = requests.get(get_ollama_bridge_status_url(), timeout=timeout)
+
+        if response.ok:
+            data = response.json()
+
+            if "service_available" in data:
+                return {
+                    **data,
+                    "url": OLLAMA_URL,
+                }
+    except (requests.RequestException, ValueError):
+        pass
 
     try:
         response = requests.get(get_ollama_tags_url(), timeout=timeout)

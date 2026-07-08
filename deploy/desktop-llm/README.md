@@ -30,6 +30,7 @@ From another device on the LAN, verify:
 ```bash
 curl http://desktop-pc.local:11435/health
 curl http://desktop-pc.local:11435/api/tags
+curl -X POST http://desktop-pc.local:11435/llm/warmup
 ```
 
 Point CASE Core on the Green at:
@@ -50,7 +51,17 @@ OLLAMA_BASE_URL=http://host.docker.internal:11434
 OLLAMA_MODEL=llama3.1:8b
 OLLAMA_STATUS_TIMEOUT=2
 OLLAMA_CHAT_TIMEOUT=60
+OLLAMA_KEEP_ALIVE=10m
+OLLAMA_WARMUP_INTERVAL=300
+CASE_LLM_ALLOWED_CLIENTS=
 ```
 
 `host.docker.internal` lets the Linux container reach Ollama running directly on
 Windows.
+
+`OLLAMA_WARMUP_INTERVAL` keeps the model loaded by making a tiny local
+generation request every few minutes. Set it to `0` to disable this.
+
+`CASE_LLM_ALLOWED_CLIENTS` is an optional comma-separated IP allow-list. Leave it
+empty while testing. Once the Green is stable, set it to the Green IP plus any
+trusted admin device that needs direct diagnostics.

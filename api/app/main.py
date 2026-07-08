@@ -52,7 +52,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def require_api_token(request: Request, call_next):
-    if not api_token or request.url.path in auth_exempt_paths:
+    if not api_token or request.method == "OPTIONS" or request.url.path in auth_exempt_paths:
         return await call_next(request)
 
     auth_header = request.headers.get("authorization", "")
@@ -97,6 +97,15 @@ def assistant_status():
 @app.get("/llm/status")
 def llm_status():
     return get_ollama_status()
+
+@app.get("/security/status")
+def security_status():
+    return {
+        "api_token_configured": bool(api_token),
+        "cors_origins": cors_origins,
+        "cors_all_origins": "*" in cors_origins,
+        "auth_exempt_paths": sorted(auth_exempt_paths),
+    }
 
 @app.get("/energy/current")
 def energy_current():

@@ -1,4 +1,6 @@
 import os
+import threading
+import time
 from urllib.parse import urljoin
 
 import requests
@@ -10,6 +12,19 @@ OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://host.docker.internal:1143
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 OLLAMA_STATUS_TIMEOUT = float(os.getenv("OLLAMA_STATUS_TIMEOUT", "2"))
 OLLAMA_CHAT_TIMEOUT = float(os.getenv("OLLAMA_CHAT_TIMEOUT", "60"))
+OLLAMA_KEEP_ALIVE = os.getenv("OLLAMA_KEEP_ALIVE", "10m")
+OLLAMA_WARMUP_INTERVAL = int(os.getenv("OLLAMA_WARMUP_INTERVAL", "300"))
+CASE_LLM_ALLOWED_CLIENTS = {
+    client.strip()
+    for client in os.getenv("CASE_LLM_ALLOWED_CLIENTS", "").split(",")
+    if client.strip()
+}
+
+last_warmup = {
+    "ok": None,
+    "checked_at": None,
+    "message": "Warmup has not run yet.",
+}
 
 app = FastAPI(title="CASE LLM bridge")
 
@@ -62,7 +77,72 @@ def llm_status():
             if model_present
             else f"Ollama is running but {OLLAMA_MODEL} is not installed."
         ),
+        "keep_alive": OLLAMA_KEEP_ALIVE,
+        "warmup": last_warmup,
+        "allowed_clients": sorted(CASE_LLM_ALLOWED_CLIENTS),
     }
+
+
+def warm_ollama():
+    try:
+        response = requests.post(
+            ollama_url("/api/generate"),
+            json={
+                "model": OLLAMA_MODEL,
+                "prompt": "Reply with ok.",
+                "stream": False,
+                "keep_alive": OLLAMA_KEEP_ALIVE,
+                "options": {
+                    "num_predict": 1,
+                },
+            },
+            timeout=OLLAMA_CHAT_TIMEOUT,
+        )
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        last_warmup.update({
+            "ok": False,
+            "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+            "message": str(exc),
+        })
+        return False
+
+    last_warmup.update({
+        "ok": True,
+        "checked_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "message": "Ollama model warmed successfully.",
+    })
+    return True
+
+
+def warmup_loop():
+    if OLLAMA_WARMUP_INTERVAL <= 0:
+        return
+
+    while True:
+        warm_ollama()
+        time.sleep(OLLAMA_WARMUP_INTERVAL)
+
+
+@app.on_event("startup")
+def start_warmup_loop():
+    threading.Thread(target=warmup_loop, daemon=True).start()
+
+
+@app.middleware("http")
+async def restrict_clients(request: Request, call_next):
+    if not CASE_LLM_ALLOWED_CLIENTS:
+        return await call_next(request)
+
+    client_host = request.client.host if request.client else None
+
+    if client_host not in CASE_LLM_ALLOWED_CLIENTS:
+        return JSONResponse(
+            content={"error": "CASE LLM bridge client is not allowed."},
+            status_code=403,
+        )
+
+    return await call_next(request)
 
 
 @app.get("/health")
@@ -77,6 +157,16 @@ def health():
 @app.get("/llm/status")
 def status():
     return llm_status()
+
+
+@app.post("/llm/warmup")
+def warmup():
+    ok = warm_ollama()
+
+    return {
+        "ok": ok,
+        "warmup": last_warmup,
+    }
 
 
 @app.get("/api/tags")

@@ -123,8 +123,48 @@ function getSpeechRecognition() {
   return window.SpeechRecognition || window.webkitSpeechRecognition;
 }
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth <= 820);
+
+  useEffect(() => {
+    function updateIsMobile() {
+      setIsMobile(window.innerWidth <= 820);
+    }
+
+    updateIsMobile();
+    window.addEventListener("resize", updateIsMobile);
+
+    return () => window.removeEventListener("resize", updateIsMobile);
+  }, []);
+
+  return isMobile;
+}
+
+function selectCaseVoice() {
+  if (!window.speechSynthesis) return null;
+
+  const voices = window.speechSynthesis.getVoices();
+  const preferredNames = [
+    "Daniel",
+    "Oliver",
+    "Arthur",
+    "Google UK English Male",
+    "Microsoft James",
+    "Microsoft William",
+  ];
+
+  return (
+    voices.find((voice) => preferredNames.some((name) => voice.name.includes(name))) ||
+    voices.find((voice) => voice.lang === "en-AU") ||
+    voices.find((voice) => voice.lang === "en-GB") ||
+    voices.find((voice) => voice.lang.startsWith("en")) ||
+    null
+  );
+}
+
 function App() {
   const [activePage, setActivePage] = useState("Home");
+  const isMobile = useIsMobile();
 
   const [data, setData] = useState(null);
   const [recentEnergy, setRecentEnergy] = useState([]);
@@ -155,8 +195,10 @@ function App() {
   ]);
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [assistantPhase, setAssistantPhase] = useState("idle");
   const [assistantStatus, setAssistantStatus] = useState(null);
   const [systemStatus, setSystemStatus] = useState(null);
+  const [securityStatus, setSecurityStatus] = useState(null);
 
   async function loadTasks() {
     try {
@@ -376,6 +418,21 @@ function App() {
     }
   }
 
+  async function loadSecurityStatus() {
+    try {
+      const res = await apiFetch(`${API_BASE}/security/status`);
+      if (!res.ok) throw new Error(`Security status API returned ${res.status}`);
+
+      const json = await res.json();
+      setSecurityStatus(json);
+    } catch (err) {
+      console.error(err);
+      setSecurityStatus({
+        error: err.message,
+      });
+    }
+  }
+
   async function sendAssistantMessage(messageOverride = null) {
     const userMessage = messageOverride || assistantInput;
 
@@ -403,6 +460,7 @@ function App() {
 
     setAssistantInput("");
     setAssistantLoading(true);
+    setAssistantPhase("thinking");
 
     try {
       const res = await apiFetch(`${API_BASE}/case/ask`, {
@@ -429,7 +487,7 @@ function App() {
         });
       }
 
-      speakCase(json.reply);
+      const isSpeaking = speakCase(json.reply);
 
         if (
           json.intent === "list_command" ||
@@ -447,6 +505,9 @@ function App() {
           },
         ]);
 
+        if (!isSpeaking) {
+          setAssistantPhase("idle");
+        }
     } catch {
       setAssistantMessages((prev) => [
         ...prev,
@@ -455,22 +516,29 @@ function App() {
           text: "Something went wrong talking to the assistant.",
         },
       ]);
+      setAssistantPhase("idle");
     }
 
     setAssistantLoading(false);
   }
 
   function speakCase(text) {
-    if (!window.speechSynthesis || !text) return;
+    if (!window.speechSynthesis || !text) return false;
   
     window.speechSynthesis.cancel();
   
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = "en-AU";
-    utterance.rate = 0.95;
-    utterance.pitch = 0.85;
+    utterance.voice = selectCaseVoice();
+    utterance.rate = 0.9;
+    utterance.pitch = 0.75;
+    utterance.volume = 0.95;
+    utterance.onstart = () => setAssistantPhase("speaking");
+    utterance.onend = () => setAssistantPhase("idle");
+    utterance.onerror = () => setAssistantPhase("idle");
   
     window.speechSynthesis.speak(utterance);
+    return true;
   }
 
   async function startVoiceRecognition() {
@@ -515,15 +583,18 @@ function App() {
 
     recognition.onstart = () => {
       setIsListening(true);
+      setAssistantPhase("listening");
     };
 
     recognition.onend = () => {
       setIsListening(false);
+      setAssistantPhase((current) => current === "listening" ? "idle" : current);
     };
 
     recognition.onerror = (event) => {
       console.error(event);
       setIsListening(false);
+      setAssistantPhase("idle");
     };
 
     recognition.onresult = async (event) => {
@@ -603,6 +674,7 @@ function App() {
       loadLists();
       loadAssistantStatus();
       loadSystemStatus();
+      loadSecurityStatus();
     }, 0);
 
     const energyInterval = setInterval(() => {
@@ -624,6 +696,7 @@ function App() {
 
     const systemStatusInterval = setInterval(() => {
       loadSystemStatus();
+      loadSecurityStatus();
     }, 60000);
 
     return () => {
@@ -692,6 +765,12 @@ function App() {
       : assistantAvailability === false
         ? "Assistant unavailable"
         : "Checking assistant";
+  const assistantPhaseText = {
+    idle: assistantStatusText,
+    listening: "Listening",
+    thinking: "Thinking",
+    speaking: "Speaking",
+  }[assistantPhase] || assistantStatusText;
   const systemStatusItems = buildSystemStatusItems(systemStatus);
 
   return (
@@ -703,62 +782,147 @@ function App() {
         color: "#111827",
       }}
     >
-      <div style={{ display: "flex" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: isMobile ? "column" : "row",
+        }}
+      >
         <aside
           style={{
-            width: "120px",
-            minHeight: "100vh",
+            width: isMobile ? "100%" : "120px",
+            minHeight: isMobile ? "auto" : "100vh",
             background: "#0f172a",
             color: "white",
-            padding: "28px 14px",
+            padding: isMobile ? "14px 12px" : "28px 14px",
             boxSizing: "border-box",
+            position: isMobile ? "sticky" : "static",
+            top: 0,
+            zIndex: 50,
           }}
         >
-          <div style={{ fontWeight: "900", fontSize: "22px", marginBottom: "34px" }}>
+          <div style={{ fontWeight: "900", fontSize: "22px", marginBottom: isMobile ? "12px" : "34px" }}>
             CASE
           </div>
 
-          {[
-            ["⌂", "Home"],
-            ["🗓", "Planner"],
-            ["🧒", "Kids"],
-            ["📝", "Lists"],
-            ["⚡", "Energy"],
-            ["☁", "Weather"],
-            ["🛡", "Security"],
-          ].map(([icon, item]) => (
-            <div
-              onClick={() => setActivePage(item)}
-              style={{
-                cursor: "pointer",
-                display: "flex",
-                gap: "10px",
-                alignItems: "center",
-                fontSize: "14px",
-                fontWeight: activePage === item ? 800 : 500,
-                opacity: activePage === item ? 1 : 0.68,
-                marginBottom: "22px",
-                padding: activePage === item ? "12px 10px" : "8px 10px",
-                borderRadius: "10px",
-                background:
-                  activePage === item
-                    ? "rgba(255,255,255,0.12)"
-                    : "transparent",
-              }}
-            >
-              <span>{icon}</span>
-              <span>{item}</span>
-            </div>
-          ))}
+          <nav
+            style={{
+              display: isMobile ? "flex" : "block",
+              gap: isMobile ? "8px" : undefined,
+              overflowX: isMobile ? "auto" : undefined,
+              paddingBottom: isMobile ? "2px" : undefined,
+            }}
+          >
+            {[
+              ["⌂", "Home"],
+              ["🗓", "Planner"],
+              ["🧒", "Kids"],
+              ["📝", "Lists"],
+              ["⚡", "Energy"],
+              ["☁", "Weather"],
+              ["🛡", "Security"],
+            ].map(([icon, item]) => (
+              <div
+                key={item}
+                onClick={() => setActivePage(item)}
+                style={{
+                  cursor: "pointer",
+                  display: "flex",
+                  gap: "10px",
+                  alignItems: "center",
+                  fontSize: "14px",
+                  fontWeight: activePage === item ? 800 : 500,
+                  opacity: activePage === item ? 1 : 0.68,
+                  marginBottom: isMobile ? 0 : "22px",
+                  padding: activePage === item ? "12px 10px" : "8px 10px",
+                  borderRadius: "10px",
+                  whiteSpace: "nowrap",
+                  background:
+                    activePage === item
+                      ? "rgba(255,255,255,0.12)"
+                      : "transparent",
+                }}
+              >
+                <span>{icon}</span>
+                <span>{item}</span>
+              </div>
+            ))}
+          </nav>
         </aside>
 
-        <main style={{ flex: 1, padding: "24px 30px", maxWidth: "1900px" }}>
+        <main style={{ flex: 1, padding: isMobile ? "16px" : "24px 30px", maxWidth: "1900px" }}>
         {activePage === "Home" && (
           <>
+          {isMobile && (
+            <section
+              style={{
+                borderRadius: "22px",
+                background: "#111827",
+                color: "white",
+                padding: "20px",
+                marginBottom: "16px",
+                boxShadow: "0 14px 40px rgba(15, 23, 42, 0.16)",
+              }}
+            >
+              <div className="muted" style={{ color: "rgba(255,255,255,0.72)" }}>
+                Voice control
+              </div>
+              <h1 style={{ margin: "6px 0 14px", fontSize: "28px", lineHeight: 1.1 }}>
+                Ask CASE
+              </h1>
+              <button
+                onClick={startVoiceRecognition}
+                style={{
+                  width: "100%",
+                  border: "none",
+                  borderRadius: "18px",
+                  padding: "18px",
+                  background: isListening ? "#ef4444" : "#f8fafc",
+                  color: isListening ? "white" : "#111827",
+                  fontSize: "17px",
+                  fontWeight: 900,
+                  cursor: "pointer",
+                }}
+              >
+                {isListening ? "Listening..." : "Hold the room, talk to CASE"}
+              </button>
+              <div style={{ marginTop: "12px", fontSize: "13px", opacity: 0.78 }}>
+                {assistantPhaseText}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "14px" }}>
+                <button
+                  onClick={() => setActivePage("Lists")}
+                  style={{
+                    border: "none",
+                    borderRadius: "14px",
+                    padding: "12px",
+                    background: "rgba(255,255,255,0.12)",
+                    color: "white",
+                    fontWeight: 800,
+                  }}
+                >
+                  Lists
+                </button>
+                <button
+                  onClick={() => setActivePage("Home")}
+                  style={{
+                    border: "none",
+                    borderRadius: "14px",
+                    padding: "12px",
+                    background: "rgba(255,255,255,0.12)",
+                    color: "white",
+                    fontWeight: 800,
+                  }}
+                >
+                  Stats
+                </button>
+              </div>
+            </section>
+          )}
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 380px",
+              gridTemplateColumns: isMobile ? "1fr" : "1fr 380px",
               gap: "20px",
               alignItems: "start",
             }}
@@ -780,14 +944,14 @@ function App() {
               <section
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1.7fr 0.9fr",
+                  gridTemplateColumns: isMobile ? "1fr" : "1.7fr 0.9fr",
                   gap: "18px",
                   marginBottom: "18px",
                 }}
               >
                 {weather && (
                   <div className="card">
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1.2fr", gap: "20px" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1.2fr", gap: "20px" }}>
                       <div>
                         <div className="muted">Perth forecast</div>
                         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
@@ -807,7 +971,7 @@ function App() {
                       <div
                         style={{
                           display: "grid",
-                          gridTemplateColumns: "repeat(3, 1fr)",
+                          gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
                           alignItems: "center",
                           borderLeft: "1px solid #e5e7eb",
                           paddingLeft: "18px",
@@ -825,7 +989,7 @@ function App() {
 
                     <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0 12px" }} />
 
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "0" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(5, 120px)" : "repeat(5, 1fr)", gap: "0", overflowX: isMobile ? "auto" : undefined }}>
                       {weather.daily.slice(0, 5).map((day, i) => (
                         <div
                           key={day.date}
@@ -907,7 +1071,7 @@ function App() {
               <section
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
+                  gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(6, minmax(0, 1fr))",
                   gap: "14px",
                   marginBottom: "18px",
                 }}
@@ -947,7 +1111,7 @@ function App() {
               <section
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "300px 1fr",
+                  gridTemplateColumns: isMobile ? "1fr" : "300px 1fr",
                   gap: "18px",
                   marginBottom: "18px",
                 }}
@@ -1026,8 +1190,8 @@ function App() {
                 display: "flex",
                 flexDirection: "column",
                 gap: "18px",
-                position: "sticky",
-                top: "20px",
+                position: isMobile ? "static" : "sticky",
+                top: isMobile ? undefined : "20px",
               }}
             >
               <section
@@ -1089,7 +1253,7 @@ function App() {
                           background: assistantAvailable ? "#22c55e" : "#ef4444",
                         }}
                       />
-                      {assistantStatusText}
+                      {assistantPhaseText}
                     </div>
                   </button>
 
@@ -1297,6 +1461,13 @@ function App() {
               setTaskModalOpen={setTaskModalOpen}
             />
           )}
+          {activePage === "Security" && (
+            <SecurityPage
+              securityStatus={securityStatus}
+              assistantStatus={assistantStatus}
+              apiBase={API_BASE}
+            />
+          )}
         </main>
       </div>
 
@@ -1315,12 +1486,14 @@ function App() {
         <div
           style={{
             position: "fixed",
-            top: "100px",
-            right: "34px",
-            width: "420px",
-            height: "560px",
+            top: isMobile ? "0" : "100px",
+            right: isMobile ? "0" : "34px",
+            bottom: isMobile ? "0" : undefined,
+            left: isMobile ? "0" : undefined,
+            width: isMobile ? "100%" : "420px",
+            height: isMobile ? "100dvh" : "560px",
             background: "white",
-            borderRadius: "24px",
+            borderRadius: isMobile ? "0" : "24px",
             boxShadow: "0 20px 50px rgba(0,0,0,0.18)",
             display: "flex",
             flexDirection: "column",
@@ -1382,7 +1555,7 @@ function App() {
                   background: assistantAvailable ? "#22c55e" : "#ef4444",
                 }}
               />
-              {assistantStatusText}
+              {assistantPhaseText}
             </div>
           </div>
 
@@ -1423,6 +1596,9 @@ function App() {
             ))}
 
             {assistantLoading && <div style={{ color: "#667085" }}>CASE is thinking...</div>}
+            {assistantPhase === "speaking" && (
+              <div style={{ color: "#667085" }}>CASE is speaking...</div>
+            )}
             {!assistantAvailable && (
               <div style={{ color: "#b91c1c", fontSize: "13px", fontWeight: 700 }}>
                 The rest of CASE is online. Assistant and voice are waiting for the LLM service.
@@ -3289,6 +3465,92 @@ function ListsPage({
         </section>
       </div>
     </div>
+  );
+}
+
+function SecurityPage({ securityStatus, assistantStatus, apiBase }) {
+  const apiTokenOn = securityStatus?.api_token_configured === true;
+  const corsRestricted = securityStatus && securityStatus.cors_all_origins === false;
+  const llmOnline = assistantStatus?.available === true;
+  const bridgeWarm = assistantStatus?.llm?.warmup?.ok === true;
+
+  return (
+    <div>
+      <section style={{ marginBottom: "18px" }}>
+        <h1 style={{ margin: 0, fontSize: "32px" }}>Security</h1>
+        <div style={{ marginTop: "8px", fontSize: "15px", color: "#6b7280" }}>
+          Local access, API protection and bridge exposure
+        </div>
+      </section>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+          gap: "16px",
+        }}
+      >
+        <SecurityStatusCard
+          title="API token"
+          ok={apiTokenOn}
+          good="Configured"
+          bad="Not configured"
+        />
+        <SecurityStatusCard
+          title="CORS"
+          ok={corsRestricted}
+          good="Restricted origins"
+          bad="Allows all origins"
+        />
+        <SecurityStatusCard
+          title="LLM bridge"
+          ok={llmOnline}
+          good="Reachable"
+          bad="Unavailable"
+        />
+        <SecurityStatusCard
+          title="LLM warmup"
+          ok={bridgeWarm}
+          good="Warm"
+          bad={assistantStatus?.llm?.warmup?.message || "Not reported"}
+        />
+      </div>
+
+      <section className="card" style={{ marginTop: "18px" }}>
+        <div className="muted">API endpoint</div>
+        <h2 style={{ margin: "6px 0 0", fontSize: "20px" }}>{apiBase}</h2>
+
+        <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
+
+        <div className="muted" style={{ marginBottom: "10px" }}>
+          Allowed web origins
+        </div>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {(securityStatus?.cors_origins || []).map((origin) => (
+            <span key={origin} className="taskBadge">
+              {origin}
+            </span>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SecurityStatusCard({ title, ok, good, bad }) {
+  return (
+    <section className="card">
+      <div className="muted">{title}</div>
+      <h2
+        style={{
+          margin: "8px 0 0",
+          fontSize: "22px",
+          color: ok ? "#15803d" : "#b91c1c",
+        }}
+      >
+        {ok ? good : bad}
+      </h2>
+    </section>
   );
 }
 
