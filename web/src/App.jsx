@@ -119,6 +119,10 @@ function qualityColor(quality) {
   return "#6b7280";
 }
 
+function getSpeechRecognition() {
+  return window.SpeechRecognition || window.webkitSpeechRecognition;
+}
+
 function App() {
   const [activePage, setActivePage] = useState("Home");
 
@@ -342,13 +346,16 @@ function App() {
       setAssistantStatus(json);
     } catch (err) {
       console.error(err);
-      setAssistantStatus({
-        available: false,
-        voice_available: false,
+      setAssistantStatus((current) => ({
+        ...(current || {}),
+        available: current?.available === true ? true : null,
+        voice_available: current?.voice_available === true ? true : null,
+        status_error: err.message,
         llm: {
+          ...(current?.llm || {}),
           message: err.message,
         },
-      });
+      }));
     }
   }
 
@@ -463,7 +470,21 @@ function App() {
   }
 
   function startVoiceRecognition() {
-    if (assistantStatus && !assistantStatus.voice_available) {
+    const SpeechRecognition = getSpeechRecognition();
+
+    if (!window.isSecureContext) {
+      setAssistantOpen(true);
+      setAssistantMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: "Voice is blocked by Chrome on this HTTP local-network page. Text chat is still available.",
+        },
+      ]);
+      return;
+    }
+
+    if (assistantStatus && assistantStatus.voice_available === false) {
       setAssistantOpen(true);
       setAssistantMessages((prev) => [
         ...prev,
@@ -474,10 +495,6 @@ function App() {
       ]);
       return;
     }
-
-    const SpeechRecognition =
-      window.SpeechRecognition ||
-      window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       alert("Speech recognition is not supported in this browser.");
@@ -613,6 +630,28 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (assistantOpen) {
+      loadAssistantStatus();
+    }
+  }, [assistantOpen]);
+
+  useEffect(() => {
+    function refreshAssistantStatus() {
+      if (!document.hidden) {
+        loadAssistantStatus();
+      }
+    }
+
+    window.addEventListener("focus", refreshAssistantStatus);
+    document.addEventListener("visibilitychange", refreshAssistantStatus);
+
+    return () => {
+      window.removeEventListener("focus", refreshAssistantStatus);
+      document.removeEventListener("visibilitychange", refreshAssistantStatus);
+    };
+  }, []);
+
   if (error) {
     return (
       <div style={{ padding: 40, fontFamily: "sans-serif" }}>
@@ -631,13 +670,21 @@ function App() {
 
   const gridValue = state.grid_kw;
   const gridIsExporting = gridValue < 0;
-  const assistantAvailable = assistantStatus?.available !== false;
-  const voiceAvailable = assistantStatus?.voice_available !== false;
-  const assistantStatusText = assistantStatus
-    ? assistantAvailable
+  const assistantAvailability = assistantStatus?.available;
+  const assistantAvailable = assistantAvailability !== false;
+  const canUseBrowserVoice = window.isSecureContext && Boolean(getSpeechRecognition());
+  const voiceAvailable = assistantStatus?.voice_available !== false && canUseBrowserVoice;
+  const voiceUnavailableTitle = !window.isSecureContext
+    ? "Voice requires HTTPS or localhost in Chrome"
+    : !getSpeechRecognition()
+      ? "Speech recognition is not supported in this browser"
+      : "Voice unavailable";
+  const assistantStatusText =
+    assistantAvailability === true
       ? "Assistant online"
-      : "Assistant unavailable"
-    : "Checking assistant";
+      : assistantAvailability === false
+        ? "Assistant unavailable"
+        : "Checking assistant";
   const systemStatusItems = buildSystemStatusItems(systemStatus);
 
   return (
@@ -1059,7 +1106,7 @@ function App() {
                     }}
                     title={
                       !voiceAvailable
-                        ? "Voice unavailable"
+                        ? voiceUnavailableTitle
                         : isListening
                           ? "Listening..."
                           : "Speak to CASE"
@@ -1406,7 +1453,7 @@ function App() {
               }}
               title={
                 !voiceAvailable
-                  ? "Voice unavailable"
+                  ? voiceUnavailableTitle
                   : isListening
                     ? "Listening..."
                     : "Speak to CASE"
