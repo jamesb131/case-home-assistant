@@ -12,6 +12,7 @@ from app.services.case_assistant import ask_case
 from app.services.google_calendar_client import get_upcoming_events
 from app.services.google_calendar_client import get_calendar_service
 from app.services.google_calendar_client import get_calendar_error
+from app.services.google_calendar_client import get_calendar_auth_status
 
 from app.routers.lists_router import router as lists_router
 
@@ -291,3 +292,7 @@ def calendar_list():
             for calendar in result.get("items", [])
         ]
     }
+
+@app.get("/calendar/auth-status")
+def calendar_auth_status():
+    return get_calendar_auth_status()

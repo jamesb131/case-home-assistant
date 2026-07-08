@@ -39,9 +39,14 @@ def get_calendar_service():
                 except RefreshError as exc:
                     clear_stale_token()
                     ensure_google_auth_files()
-                    return calendar_unavailable(
-                        f"Google calendar token could not be refreshed: {exc}"
-                    )
+                    retry_result = retry_imported_token_refresh()
+
+                    if retry_result:
+                        creds = retry_result
+                    else:
+                        return calendar_unavailable(
+                            f"Google calendar token could not be refreshed: {exc}"
+                        )
             else:
                 return calendar_unavailable(
                     "Google calendar is not authorised. Run auth_google_calendar.py."
@@ -54,6 +59,85 @@ def get_calendar_service():
 
     except Exception as exc:
         return calendar_unavailable(f"Google calendar unavailable: {exc}")
+
+
+def retry_imported_token_refresh():
+    if not os.path.exists(TOKEN_PATH):
+        return None
+
+    try:
+        creds = load_credentials()
+
+        if not creds or creds.valid:
+            return creds
+
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            save_token(creds)
+            return creds
+    except RefreshError as exc:
+        calendar_unavailable(
+            f"Google calendar imported token could not be refreshed: {exc}"
+        )
+    except Exception as exc:
+        calendar_unavailable(f"Google calendar imported token failed: {exc}")
+
+    return None
+
+
+def get_calendar_auth_status():
+    ensure_google_auth_files()
+
+    status = {
+        "google_dir": GOOGLE_DIR,
+        "google_import_dir": GOOGLE_IMPORT_DIR,
+        "credentials_path": CREDENTIALS_PATH,
+        "token_path": TOKEN_PATH,
+        "credentials_exists": os.path.exists(CREDENTIALS_PATH),
+        "token_exists": os.path.exists(TOKEN_PATH),
+        "import_credentials_exists": False,
+        "import_token_exists": False,
+        "last_error": get_calendar_error(),
+    }
+
+    if GOOGLE_IMPORT_DIR:
+        status["import_credentials_exists"] = os.path.exists(
+            os.path.join(GOOGLE_IMPORT_DIR, "credentials.json")
+        )
+        status["import_token_exists"] = os.path.exists(
+            os.path.join(GOOGLE_IMPORT_DIR, "token.json")
+        )
+
+    if not status["token_exists"]:
+        return {
+            **status,
+            "available": False,
+            "token_valid": False,
+            "message": "Google token file is missing.",
+        }
+
+    try:
+        creds = load_credentials()
+
+        return {
+            **status,
+            "available": bool(creds and creds.valid),
+            "token_valid": bool(creds and creds.valid),
+            "token_expired": bool(creds and creds.expired),
+            "has_refresh_token": bool(creds and creds.refresh_token),
+            "message": (
+                "Google token is valid."
+                if creds and creds.valid
+                else "Google token exists but is not currently valid."
+            ),
+        }
+    except Exception as exc:
+        return {
+            **status,
+            "available": False,
+            "token_valid": False,
+            "message": f"Google token could not be read: {exc}",
+        }
 
 
 def get_upcoming_events(days: int = 7, max_results: int = 20):
