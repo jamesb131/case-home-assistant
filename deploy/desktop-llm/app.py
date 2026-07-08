@@ -111,7 +111,7 @@ async def proxy_request(path, request: Request):
             request.method,
             ollama_url(path),
             params=dict(request.query_params),
-            content=body,
+            data=body,
             headers=headers,
             timeout=timeout,
         )
