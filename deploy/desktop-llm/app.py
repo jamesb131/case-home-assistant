@@ -100,18 +100,19 @@ async def proxy_request(path, request: Request):
         if path in {"api/chat", "api/generate"}
         else OLLAMA_STATUS_TIMEOUT
     )
+    headers = {}
+    content_type = request.headers.get("content-type")
+
+    if content_type:
+        headers["content-type"] = content_type
 
     try:
         upstream = requests.request(
             request.method,
             ollama_url(path),
-            params=request.query_params,
+            params=dict(request.query_params),
             content=body,
-            headers={
-                key: value
-                for key, value in request.headers.items()
-                if key.lower() not in {"host", "content-length"}
-            },
+            headers=headers,
             timeout=timeout,
         )
     except requests.RequestException as exc:
@@ -119,11 +120,16 @@ async def proxy_request(path, request: Request):
             content={"error": f"Ollama is unavailable: {exc}"},
             status_code=503,
         )
+    except Exception as exc:
+        return JSONResponse(
+            content={"error": f"CASE LLM bridge failed: {type(exc).__name__}: {exc}"},
+            status_code=502,
+        )
 
     return Response(
         content=upstream.content,
         status_code=upstream.status_code,
-        media_type=upstream.headers.get("content-type"),
+        media_type="application/json",
     )
 
 
