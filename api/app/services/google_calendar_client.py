@@ -1,4 +1,5 @@
 import os
+import shutil
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -12,6 +13,7 @@ from googleapiclient.errors import HttpError
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 
 GOOGLE_DIR = os.getenv("GOOGLE_DIR", "/app/app/google")
+GOOGLE_IMPORT_DIR = os.getenv("GOOGLE_IMPORT_DIR")
 CREDENTIALS_PATH = os.path.join(GOOGLE_DIR, "credentials.json")
 TOKEN_PATH = os.path.join(GOOGLE_DIR, "token.json")
 
@@ -25,8 +27,10 @@ def get_calendar_service():
     creds = None
 
     try:
+        ensure_google_auth_files()
+
         if os.path.exists(TOKEN_PATH):
-            creds = Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+            creds = load_credentials()
 
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
@@ -34,6 +38,7 @@ def get_calendar_service():
                     creds.refresh(Request())
                 except RefreshError as exc:
                     clear_stale_token()
+                    ensure_google_auth_files()
                     return calendar_unavailable(
                         f"Google calendar token could not be refreshed: {exc}"
                     )
@@ -42,10 +47,7 @@ def get_calendar_service():
                     "Google calendar is not authorised. Run auth_google_calendar.py."
                 )
 
-            os.makedirs(GOOGLE_DIR, exist_ok=True)
-
-            with open(TOKEN_PATH, "w") as token:
-                token.write(creds.to_json())
+            save_token(creds)
 
         _last_calendar_error = None
         return build("calendar", "v3", credentials=creds)
@@ -98,6 +100,75 @@ def calendar_unavailable(message):
     _last_calendar_error = message
     print(message)
     return None
+
+
+def load_credentials():
+    try:
+        return Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+    except Exception as exc:
+        quarantine_token(f"Could not read Google token: {exc}")
+        ensure_google_auth_files()
+
+        if os.path.exists(TOKEN_PATH):
+            return Credentials.from_authorized_user_file(TOKEN_PATH, SCOPES)
+
+        raise
+
+
+def ensure_google_auth_files():
+    if not GOOGLE_IMPORT_DIR or not os.path.isdir(GOOGLE_IMPORT_DIR):
+        return
+
+    os.makedirs(GOOGLE_DIR, exist_ok=True)
+
+    for filename in ("credentials.json", "token.json"):
+        source_path = os.path.join(GOOGLE_IMPORT_DIR, filename)
+        target_path = os.path.join(GOOGLE_DIR, filename)
+
+        if not os.path.exists(source_path) or os.path.exists(target_path):
+            continue
+
+        shutil.copy2(source_path, target_path)
+        os.chmod(target_path, 0o600)
+        print(f"Imported Google auth file: {target_path}")
+
+
+def save_token(creds):
+    token_json = creds.to_json()
+    write_file_atomic(TOKEN_PATH, token_json)
+
+    if GOOGLE_IMPORT_DIR and os.path.isdir(GOOGLE_IMPORT_DIR):
+        import_token_path = os.path.join(GOOGLE_IMPORT_DIR, "token.json")
+
+        try:
+            write_file_atomic(import_token_path, token_json)
+        except OSError as exc:
+            print(f"Could not update Google token backup: {exc}")
+
+
+def write_file_atomic(path, content):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    temp_path = f"{path}.tmp"
+
+    with open(temp_path, "w") as handle:
+        handle.write(content)
+
+    os.chmod(temp_path, 0o600)
+    os.replace(temp_path, path)
+
+
+def quarantine_token(reason):
+    print(reason)
+
+    if not os.path.exists(TOKEN_PATH):
+        return
+
+    failed_path = f"{TOKEN_PATH}.invalid"
+
+    try:
+        os.replace(TOKEN_PATH, failed_path)
+    except OSError as exc:
+        print(f"Could not quarantine Google token: {exc}")
 
 
 def clear_stale_token():
