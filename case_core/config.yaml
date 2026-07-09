@@ -1,5 +1,5 @@
 name: CASE Core
-version: "0.1.12"
+version: "0.1.13"
 slug: case_core
 description: Local-first household assistant API, worker and web UI.
 url: https://github.com/jamesb131/case-home-assistant
@@ -37,7 +37,7 @@ options:
   ollama_chat_timeout: 60
   case_cors_origins: http://case.local:8080,http://homeassistant.local:8080,http://192.168.0.154:8080
   case_api_token: ""
-  case_web_api_base_url: http://case.local:8000
+  case_web_api_base_url: /api
   case_web_api_token: ""
   log_interval: 30
   weather_poll_interval: 900
@@ -62,7 +62,7 @@ schema:
   ollama_chat_timeout: int(5,300)
   case_cors_origins: str
   case_api_token: password?
-  case_web_api_base_url: url
+  case_web_api_base_url: str
   case_web_api_token: password?
   log_interval: int(5,)
   weather_poll_interval: int(60,)

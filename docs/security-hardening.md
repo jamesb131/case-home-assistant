@@ -11,7 +11,7 @@ In CASE Core add-on options:
 case_api_token: "<long random value>"
 case_web_api_token: "<same long random value>"
 case_cors_origins: "http://192.168.0.154:8080,http://homeassistant.local:8080"
-case_web_api_base_url: "http://192.168.0.154:8000"
+case_web_api_base_url: "/api"
 ```
 
 Generate a token locally:
@@ -40,6 +40,23 @@ OLLAMA_WARMUP_INTERVAL=300
 
 Set `OLLAMA_WARMUP_INTERVAL=0` to disable warmup.
 
+## HTTPS and remote phone access
+
+The preferred path is:
+
+```text
+phone -> Tailscale/WireGuard -> HTTPS proxy -> CASE web port 8080 -> /api -> CASE API
+```
+
+Keep CASE on a private network path. Do not port-forward CASE directly from the
+router.
+
+See:
+
+```text
+docs/mobile-remote-access.md
+```
+
 ## Re-private GitHub repos
 
 Home Assistant can install from a private add-on repo only if it has credentials
@@ -52,14 +69,11 @@ for the Git repository and container image registry. The cleaner options are:
 For now, option 1 is the least brittle. Before making anything private, confirm
 the Green can pull both images without an interactive login.
 
-## Remote phone access
+See:
 
-Do not expose CASE directly to the internet. Use one of:
-
-- Tailscale on the phone and home network.
-- WireGuard on the router or a small always-on host.
-- Home Assistant remote access as a front door if CASE is later proxied behind
-  HA authentication.
+```text
+docs/private-repos-and-packages.md
+```
 
 The target remote path should preserve the same API token requirement and avoid
 opening the desktop LLM bridge to the public internet.
