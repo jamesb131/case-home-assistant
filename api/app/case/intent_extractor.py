@@ -1,4 +1,5 @@
 import json
+import re
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -6,6 +7,11 @@ from app.services.ollama_client import OllamaUnavailable, ask_ollama
 
 
 def extract_case_intent(message: str):
+    deterministic_intent = extract_deterministic_intent(message)
+
+    if deterministic_intent:
+        return deterministic_intent
+
     today = datetime.now(
         ZoneInfo("Australia/Perth")
     ).date().isoformat()
@@ -27,6 +33,8 @@ Allowed domains:
 - kids
 - birthdays
 - household
+- features
+- navigation
 - time
 - general
 
@@ -49,7 +57,7 @@ Allowed energy metrics:
 
 Schema:
 {
-  "domain": "tasks | lists | calendar | weather | energy | kids | birthdays | household | time | general",
+  "domain": "tasks | lists | calendar | weather | energy | kids | birthdays | household | features | navigation | time | general",
   "operation": "create | read | update | delete | complete | summarise | clarify",
   "confidence": "high | medium | low",
 
@@ -71,7 +79,8 @@ Schema:
   "question": string | null,
 
   "location": string | null,
-  "category": string | null
+  "category": string | null,
+  "target_page": string | null
 }
 
 Critical mapping rules:
@@ -190,6 +199,20 @@ Household bin rules:
 Birthday rules:
 - "When is X's birthday?" means domain=birthdays, operation=read. Do not ask whether X is one of the children.
 
+Feature suggestion rules:
+- "feature suggestion", "suggest a feature", "feature request", "we should add", "it would be good if CASE could" => domain=features, operation=create.
+- Put the requested feature in title.
+- Preserve the user's idea in question.
+- "what feature suggestions do we have?" => domain=features, operation=read.
+
+Navigation rules:
+- "show me", "open", "go to", "take me to", "navigate to" followed by a CASE page or section => domain=navigation, operation=read.
+- "show me the lists", "open the shopping list", "take me to groceries" => target_page=Lists.
+- "show me the calendar", "open planner", "what's on the calendar page" => target_page=Planner.
+- "show me solar production", "show energy", "take me to battery" => target_page=Home.
+- "show security" => target_page=Security.
+- "show weather" => target_page=Home.
+
 """
 
     user_prompt = f"""
@@ -216,3 +239,75 @@ User message:
                 "Sorry, could you rephrase that?"
             ),
         }
+
+
+def extract_deterministic_intent(message):
+    text = message.strip()
+    lower = text.lower()
+
+    feature_prefixes = [
+        "feature suggestion",
+        "feature request",
+        "suggest a feature",
+        "suggest feature",
+    ]
+
+    if any(lower.startswith(prefix) for prefix in feature_prefixes):
+        return {
+            "domain": "features",
+            "operation": "create",
+            "confidence": "high",
+            "clarification_needed": False,
+            "clarification_question": None,
+            "title": clean_prefixed_text(text, feature_prefixes),
+            "question": text,
+        }
+
+    if re.search(r"\b(we should add|it would be good if case could|case should|add a feature)\b", lower):
+        return {
+            "domain": "features",
+            "operation": "create",
+            "confidence": "medium",
+            "clarification_needed": False,
+            "clarification_question": None,
+            "title": text,
+            "question": text,
+        }
+
+    if "feature suggestion" in lower and any(word in lower for word in ["what", "show", "read", "list"]):
+        return {
+            "domain": "features",
+            "operation": "read",
+            "confidence": "high",
+            "clarification_needed": False,
+            "clarification_question": None,
+            "question": text,
+        }
+
+    navigation_patterns = [
+        r"\b(show me|open|go to|take me to|navigate to|bring up)\b",
+    ]
+
+    if any(re.search(pattern, lower) for pattern in navigation_patterns):
+        return {
+            "domain": "navigation",
+            "operation": "read",
+            "confidence": "high",
+            "clarification_needed": False,
+            "clarification_question": None,
+            "target_page": lower,
+            "question": text,
+        }
+
+    return None
+
+
+def clean_prefixed_text(text, prefixes):
+    cleaned = text.strip()
+
+    for prefix in prefixes:
+        if cleaned.lower().startswith(prefix):
+            cleaned = cleaned[len(prefix):].strip(" :-")
+            break
+
+    return cleaned or text.strip()

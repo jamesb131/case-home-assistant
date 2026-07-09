@@ -7,6 +7,8 @@ SUPPORTED_DOMAINS = [
     "kids",
     "birthdays",
     "household",
+    "features",
+    "navigation",
     "time",
     "general",
 ]
@@ -112,6 +114,7 @@ def validate_case_intent(intent):
         "question",
         "location",
         "category",
+        "target_page",
         "clarification_question",
     ]:
         value = normalised.get(key)

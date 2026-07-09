@@ -488,11 +488,18 @@ function App() {
         });
       }
 
+      if (json.ui_action?.type === "navigate" && json.ui_action.page) {
+        setActivePage(json.ui_action.page);
+        setAssistantOpen(false);
+        setMobileMenuOpen(false);
+      }
+
       const isSpeaking = speakCase(json.reply);
 
         if (
           json.intent === "list_command" ||
-          json.intent === "task_command"
+          json.intent === "task_command" ||
+          json.intent === "feature_suggestion_create"
         ) {
           await loadTasks();
           await loadLists();

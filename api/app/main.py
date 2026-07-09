@@ -25,6 +25,7 @@ from app.routers.task_templates_router import router as task_templates_router
 
 from app.routers.tasks_router import router as tasks_router
 from app.repositories.system_snapshots_repository import get_snapshot, record_heartbeat
+from app.repositories.feature_suggestions_repository import get_feature_suggestions
 
 cors_origins = [
     origin.strip()
@@ -105,6 +106,12 @@ def security_status():
         "cors_origins": cors_origins,
         "cors_all_origins": "*" in cors_origins,
         "auth_exempt_paths": sorted(auth_exempt_paths),
+    }
+
+@app.get("/features/suggestions")
+def feature_suggestions():
+    return {
+        "suggestions": get_feature_suggestions(),
     }
 
 @app.get("/energy/current")

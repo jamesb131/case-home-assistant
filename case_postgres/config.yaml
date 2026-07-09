@@ -1,5 +1,5 @@
 name: CASE Postgres
-version: "0.1.10"
+version: "0.1.11"
 slug: case_postgres
 description: Persistent Postgres database for CASE.
 url: https://github.com/jamesb131/case-home-assistant
