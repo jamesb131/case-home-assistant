@@ -35,6 +35,7 @@ Allowed domains:
 - household
 - features
 - navigation
+- refresh
 - time
 - general
 
@@ -57,7 +58,7 @@ Allowed energy metrics:
 
 Schema:
 {
-  "domain": "tasks | lists | calendar | weather | energy | kids | birthdays | household | features | navigation | time | general",
+  "domain": "tasks | lists | calendar | weather | energy | kids | birthdays | household | features | navigation | refresh | time | general",
   "operation": "create | read | update | delete | complete | summarise | clarify",
   "confidence": "high | medium | low",
 
@@ -213,6 +214,13 @@ Navigation rules:
 - "show security" => target_page=Security.
 - "show weather" => target_page=Home.
 
+Refresh rules:
+- "refresh all data", "refresh everything", "update everything" => domain=refresh, operation=update, category=all.
+- "refresh events", "refresh calendar", "update calendar" => domain=refresh, operation=update, category=calendar.
+- "refresh solar", "refresh energy", "update power data" => domain=refresh, operation=update, category=energy.
+- "refresh weather" => domain=refresh, operation=update, category=weather.
+- "refresh bins" => domain=refresh, operation=update, category=bins.
+
 """
 
     user_prompt = f"""
@@ -299,6 +307,17 @@ def extract_deterministic_intent(message):
             "question": text,
         }
 
+    if re.search(r"\b(refresh|update|reload|sync)\b", lower):
+        return {
+            "domain": "refresh",
+            "operation": "update",
+            "confidence": "high",
+            "clarification_needed": False,
+            "clarification_question": None,
+            "category": infer_refresh_category(lower),
+            "question": text,
+        }
+
     return None
 
 
@@ -311,3 +330,22 @@ def clean_prefixed_text(text, prefixes):
             break
 
     return cleaned or text.strip()
+
+
+def infer_refresh_category(lower):
+    if any(word in lower for word in ["event", "calendar", "appointment"]):
+        return "calendar"
+
+    if any(word in lower for word in ["solar", "energy", "power", "battery", "sigenergy"]):
+        return "energy"
+
+    if "weather" in lower:
+        return "weather"
+
+    if "bin" in lower:
+        return "bins"
+
+    if any(word in lower for word in ["task", "recurring"]):
+        return "recurring"
+
+    return "all"

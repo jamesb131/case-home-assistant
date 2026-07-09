@@ -19,6 +19,7 @@ from app.routers.lists_router import router as lists_router
 from app.services.sigenergy_client import get_energy_snapshot
 from app.services.decision_service import get_decision_summary
 from app.services.system_status import get_system_status
+from app.services.refresh_service import refresh_data
 from app.worker import log_energy_snapshot
 
 from app.routers.task_templates_router import router as task_templates_router
@@ -113,6 +114,10 @@ def feature_suggestions():
     return {
         "suggestions": get_feature_suggestions(),
     }
+
+@app.post("/refresh/{scope}")
+def refresh_scope(scope: str):
+    return refresh_data(scope)
 
 @app.get("/energy/current")
 def energy_current():

@@ -494,6 +494,10 @@ function App() {
         setMobileMenuOpen(false);
       }
 
+      if (json.ui_action?.type === "refresh_data") {
+        await refreshVisibleData();
+      }
+
       const isSpeaking = speakCase(json.reply);
 
         if (
@@ -669,6 +673,21 @@ function App() {
     } catch (err) {
       console.error(err);
     }
+  }
+
+  async function refreshVisibleData() {
+    await Promise.allSettled([
+      loadData(),
+      loadRecentEnergy(),
+      loadTodaySummary(),
+      loadWeather(),
+      loadCalendarEvents(),
+      loadTasks(),
+      loadLists(),
+      loadAssistantStatus(),
+      loadSystemStatus(),
+      loadSecurityStatus(),
+    ]);
   }
 
   useEffect(() => {
@@ -926,6 +945,7 @@ function App() {
               </h1>
               <button
                 onClick={startVoiceRecognition}
+                className={isListening ? "voiceButton listening" : "voiceButton"}
                 style={{
                   width: "100%",
                   border: "none",
@@ -938,7 +958,22 @@ function App() {
                   cursor: "pointer",
                 }}
               >
-                {isListening ? "Listening..." : "Hold the room, talk to CASE"}
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "30px",
+                    height: "30px",
+                    borderRadius: "999px",
+                    marginRight: "10px",
+                    background: isListening ? "rgba(255,255,255,0.2)" : "#111827",
+                    color: isListening ? "white" : "white",
+                  }}
+                >
+                  🎤
+                </span>
+                {isListening ? "Listening..." : "Press to talk to CASE"}
               </button>
               <div style={{ marginTop: "12px", fontSize: "13px", opacity: 0.78 }}>
                 {assistantPhaseText}
@@ -1816,6 +1851,29 @@ function App() {
           padding: 11px 18px;
           font-weight: 800;
           cursor: pointer;
+        }
+
+        .voiceButton {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+        }
+
+        .voiceButton.listening {
+          animation: voicePulse 1.25s ease-in-out infinite;
+        }
+
+        @keyframes voicePulse {
+          0% {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.42);
+          }
+          70% {
+            box-shadow: 0 0 0 14px rgba(239, 68, 68, 0);
+          }
+          100% {
+            box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+          }
         }
 
         .compactSolar {

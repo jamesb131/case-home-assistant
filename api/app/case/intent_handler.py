@@ -7,6 +7,7 @@ from app.case.handlers.kids_handler import handle_kids_intent
 from app.case.handlers.household_handler import handle_household_intent
 from app.case.handlers.features_handler import handle_features_intent
 from app.case.handlers.navigation_handler import handle_navigation_intent
+from app.case.handlers.refresh_handler import handle_refresh_intent
 
 
 def handle_case_intent(intent):
@@ -48,6 +49,9 @@ def handle_case_intent(intent):
 
     if domain == "navigation":
         return handle_navigation_intent(intent)
+
+    if domain == "refresh":
+        return handle_refresh_intent(intent)
 
     if domain == "time":
         from datetime import datetime
