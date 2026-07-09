@@ -15,6 +15,12 @@ fi
 case "$MODE" in
     local)
         docker build \
+            -f deploy/ha/case-https-proxy/Dockerfile \
+            --build-arg BUILD_VERSION="$VERSION" \
+            -t "$REGISTRY/case-https-proxy:$VERSION" \
+            .
+
+        docker build \
             -f deploy/ha/case-postgres/Dockerfile \
             --build-arg BUILD_VERSION="$VERSION" \
             -t "$REGISTRY/case-postgres:$VERSION" \
@@ -24,17 +30,19 @@ case "$MODE" in
             -f deploy/ha/case-core/Dockerfile \
             --build-arg BUILD_VERSION="$VERSION" \
             -t "$REGISTRY/case-core:$VERSION" \
-            .
-
-        docker build \
-            -f deploy/ha/case-https-proxy/Dockerfile \
-            --build-arg BUILD_VERSION="$VERSION" \
-            -t "$REGISTRY/case-https-proxy:$VERSION" \
             .
         ;;
     push)
         docker buildx build \
             --platform "$PLATFORMS" \
+            -f deploy/ha/case-https-proxy/Dockerfile \
+            --build-arg BUILD_VERSION="$VERSION" \
+            -t "$REGISTRY/case-https-proxy:$VERSION" \
+            --push \
+            .
+
+        docker buildx build \
+            --platform "$PLATFORMS" \
             -f deploy/ha/case-postgres/Dockerfile \
             --build-arg BUILD_VERSION="$VERSION" \
             -t "$REGISTRY/case-postgres:$VERSION" \
@@ -46,14 +54,6 @@ case "$MODE" in
             -f deploy/ha/case-core/Dockerfile \
             --build-arg BUILD_VERSION="$VERSION" \
             -t "$REGISTRY/case-core:$VERSION" \
-            --push \
-            .
-
-        docker buildx build \
-            --platform "$PLATFORMS" \
-            -f deploy/ha/case-https-proxy/Dockerfile \
-            --build-arg BUILD_VERSION="$VERSION" \
-            -t "$REGISTRY/case-https-proxy:$VERSION" \
             --push \
             .
         ;;
