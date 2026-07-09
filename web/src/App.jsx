@@ -165,6 +165,7 @@ function selectCaseVoice() {
 function App() {
   const [activePage, setActivePage] = useState("Home");
   const isMobile = useIsMobile();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [data, setData] = useState(null);
   const [recentEnergy, setRecentEnergy] = useState([]);
@@ -771,6 +772,15 @@ function App() {
     thinking: "Thinking",
     speaking: "Speaking",
   }[assistantPhase] || assistantStatusText;
+  const navItems = [
+    ["⌂", "Home"],
+    ["🗓", "Planner"],
+    ["🧒", "Kids"],
+    ["📝", "Lists"],
+    ["⚡", "Energy"],
+    ["☁", "Weather"],
+    ["🛡", "Security"],
+  ];
   const systemStatusItems = buildSystemStatusItems(systemStatus);
 
   return (
@@ -794,37 +804,63 @@ function App() {
             minHeight: isMobile ? "auto" : "100vh",
             background: "#0f172a",
             color: "white",
-            padding: isMobile ? "14px 12px" : "28px 14px",
+            padding: isMobile ? "18px 16px" : "28px 14px",
             boxSizing: "border-box",
             position: isMobile ? "sticky" : "static",
             top: 0,
             zIndex: 50,
           }}
         >
-          <div style={{ fontWeight: "900", fontSize: "22px", marginBottom: isMobile ? "12px" : "34px" }}>
-            CASE
-          </div>
-
-          <nav
+          <div
             style={{
-              display: isMobile ? "flex" : "block",
-              gap: isMobile ? "8px" : undefined,
-              overflowX: isMobile ? "auto" : undefined,
-              paddingBottom: isMobile ? "2px" : undefined,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "14px",
+              marginBottom: isMobile && !mobileMenuOpen ? 0 : isMobile ? "14px" : "34px",
             }}
           >
-            {[
-              ["⌂", "Home"],
-              ["🗓", "Planner"],
-              ["🧒", "Kids"],
-              ["📝", "Lists"],
-              ["⚡", "Energy"],
-              ["☁", "Weather"],
-              ["🛡", "Security"],
-            ].map(([icon, item]) => (
+            <div style={{ fontWeight: "900", fontSize: isMobile ? "26px" : "22px" }}>
+              CASE
+            </div>
+
+            {isMobile && (
+              <button
+                onClick={() => setMobileMenuOpen((open) => !open)}
+                aria-label="Toggle navigation"
+                style={{
+                  width: "44px",
+                  height: "40px",
+                  border: "1px solid rgba(255,255,255,0.16)",
+                  borderRadius: "12px",
+                  background: "rgba(255,255,255,0.08)",
+                  color: "white",
+                  cursor: "pointer",
+                  fontSize: "22px",
+                  fontWeight: 900,
+                  lineHeight: 1,
+                }}
+              >
+                ☰
+              </button>
+            )}
+          </div>
+
+          {(!isMobile || mobileMenuOpen) && (
+            <nav
+              style={{
+                display: isMobile ? "grid" : "block",
+                gridTemplateColumns: isMobile ? "1fr 1fr" : undefined,
+                gap: isMobile ? "8px" : undefined,
+              }}
+            >
+              {navItems.map(([icon, item]) => (
               <div
                 key={item}
-                onClick={() => setActivePage(item)}
+                onClick={() => {
+                  setActivePage(item);
+                  setMobileMenuOpen(false);
+                }}
                 style={{
                   cursor: "pointer",
                   display: "flex",
@@ -834,7 +870,7 @@ function App() {
                   fontWeight: activePage === item ? 800 : 500,
                   opacity: activePage === item ? 1 : 0.68,
                   marginBottom: isMobile ? 0 : "22px",
-                  padding: activePage === item ? "12px 10px" : "8px 10px",
+                  padding: activePage === item ? "12px 10px" : isMobile ? "12px 10px" : "8px 10px",
                   borderRadius: "10px",
                   whiteSpace: "nowrap",
                   background:
@@ -846,11 +882,20 @@ function App() {
                 <span>{icon}</span>
                 <span>{item}</span>
               </div>
-            ))}
-          </nav>
+              ))}
+            </nav>
+          )}
         </aside>
 
-        <main style={{ flex: 1, padding: isMobile ? "16px" : "24px 30px", maxWidth: "1900px" }}>
+        <main
+          style={{
+            flex: 1,
+            padding: isMobile ? "18px 14px" : "24px 30px",
+            maxWidth: "1900px",
+            minWidth: 0,
+            overflowX: "hidden",
+          }}
+        >
         {activePage === "Home" && (
           <>
           {isMobile && (
@@ -861,6 +906,8 @@ function App() {
                 color: "white",
                 padding: "20px",
                 marginBottom: "16px",
+                width: "100%",
+                boxSizing: "border-box",
                 boxShadow: "0 14px 40px rgba(15, 23, 42, 0.16)",
               }}
             >
@@ -973,8 +1020,11 @@ function App() {
                           display: "grid",
                           gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
                           alignItems: "center",
-                          borderLeft: "1px solid #e5e7eb",
-                          paddingLeft: "18px",
+                          borderLeft: isMobile ? "none" : "1px solid #e5e7eb",
+                          borderTop: isMobile ? "1px solid #e5e7eb" : "none",
+                          paddingLeft: isMobile ? 0 : "18px",
+                          paddingTop: isMobile ? "14px" : 0,
+                          gap: isMobile ? "10px" : 0,
                         }}
                       >
                         <InfoMini icon="↗" label="Sunrise" value={formatTime(weather.sunrise)} />
@@ -989,28 +1039,44 @@ function App() {
 
                     <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0 12px" }} />
 
-                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(5, 120px)" : "repeat(5, 1fr)", gap: "0", overflowX: isMobile ? "auto" : undefined }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: isMobile ? "1fr" : "repeat(5, 1fr)",
+                        gap: isMobile ? "10px" : "0",
+                      }}
+                    >
                       {weather.daily.slice(0, 5).map((day, i) => (
                         <div
                           key={day.date}
                           style={{
-                            padding: "7px 12px",
-                            borderLeft: i === 0 ? "none" : "1px solid #e5e7eb",
-                            textAlign: "center",
+                            padding: isMobile ? "12px" : "7px 12px",
+                            borderLeft: !isMobile && i !== 0 ? "1px solid #e5e7eb" : "none",
+                            border: isMobile ? "1px solid #e5e7eb" : undefined,
+                            borderRadius: isMobile ? "14px" : undefined,
+                            display: isMobile ? "grid" : undefined,
+                            gridTemplateColumns: isMobile ? "70px 1fr 90px" : undefined,
+                            alignItems: isMobile ? "center" : undefined,
+                            textAlign: isMobile ? "left" : "center",
+                            gap: isMobile ? "8px" : undefined,
                           }}
                         >
-                          <div style={{ fontWeight: 800, marginBottom: "6px" }}>
-                            {new Date(day.date).toLocaleDateString([], { weekday: "short" })}
+                          <div>
+                            <div style={{ fontWeight: 800, marginBottom: "6px" }}>
+                              {new Date(day.date).toLocaleDateString([], { weekday: "short" })}
+                            </div>
+                            <div style={{ fontSize: "26px", marginBottom: "2px" }}>{weatherIcon(day)}</div>
                           </div>
-                          <div style={{ fontSize: "26px", marginBottom: "2px" }}>{weatherIcon(day)}</div>
-                          <div style={{ fontWeight: 900, fontSize: "20px" }}>
-                            {Math.round(day.temp_max)}°
-                          </div>
-                          <div style={{ color: "#2563eb", fontWeight: 700 }}>
-                            {Math.round(day.temp_min)}°
-                          </div>
+                          <div>
+                            <div style={{ fontWeight: 900, fontSize: "20px" }}>
+                              {Math.round(day.temp_max)}°
+                            </div>
+                            <div style={{ color: "#2563eb", fontWeight: 700 }}>
+                              {Math.round(day.temp_min)}°
+                            </div>
 
-                          <TinyTempLine points={day.temp_profile || []} color={weatherAccent(day)} />
+                            <TinyTempLine points={day.temp_profile || []} color={weatherAccent(day)} />
+                          </div>
 
                           <div className="tiny">
                             💧 {day.rain_probability}% · 💨 {Math.round(weather.current.wind_speed_10m)} km/h
@@ -1178,7 +1244,7 @@ function App() {
                     <div className="muted">15-minute view</div>
                   </div>
 
-                  <div style={{ height: "430px" }}>
+                  <div style={{ height: isMobile ? "300px" : "430px", width: "100%", minWidth: 0 }}>
                     <EnergyDayChart data={recentEnergy} />
                   </div>
                 </div>
@@ -1438,6 +1504,7 @@ function App() {
           {activePage === "Lists" && (
             <ListsPage
               lists={lists}
+              isMobile={isMobile}
               newListItemText={newListItemText}
               setNewListItemText={setNewListItemText}
               addListItem={addListItem}
@@ -3365,6 +3432,7 @@ function KidsPage({ tasks }) {
 
 function ListsPage({
   lists,
+  isMobile = false,
   newListItemText,
   setNewListItemText,
   addListItem,
@@ -3393,12 +3461,14 @@ function ListsPage({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: primaryList
+          gridTemplateColumns: isMobile
+            ? "1fr"
+            : primaryList
             ? "minmax(360px, 420px) minmax(640px, 1fr)"
             : "1fr",
           gap: "20px",
           alignItems: "start",
-          overflowX: "auto",
+          overflowX: isMobile ? "hidden" : "auto",
           paddingBottom: "8px",
         }}
       >
@@ -3413,13 +3483,17 @@ function ListsPage({
           />
         )}
 
-        <section style={{ minWidth: 0, overflowX: "auto", paddingBottom: "8px" }}>
+        <section style={{ minWidth: 0, overflowX: isMobile ? "hidden" : "auto", paddingBottom: "8px" }}>
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: `repeat(${secondaryCardCount}, minmax(300px, 1fr))`,
+              gridTemplateColumns: isMobile
+                ? "1fr"
+                : `repeat(${secondaryCardCount}, minmax(300px, 1fr))`,
               gap: "20px",
-              minWidth: `${secondaryCardCount * 300 + (secondaryCardCount - 1) * 20}px`,
+              minWidth: isMobile
+                ? 0
+                : `${secondaryCardCount * 300 + (secondaryCardCount - 1) * 20}px`,
             }}
           >
             {otherLists.map((list) => (
