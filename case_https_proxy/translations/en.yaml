@@ -1,0 +1,18 @@
+configuration:
+  domain:
+    name: Domain
+    description: Local DNS name served by the HTTPS proxy.
+  upstream_host:
+    name: Upstream host
+    description: Hostname or IP address of the CASE Core web UI.
+  upstream_port:
+    name: Upstream port
+    description: Port of the CASE Core web UI.
+  certificate_path:
+    name: Certificate path
+    description: Full path to the TLS certificate file in the SSL share.
+  private_key_path:
+    name: Private key path
+    description: Full path to the TLS private key file in the SSL share.
+network:
+  443/TCP: CASE secure web UI

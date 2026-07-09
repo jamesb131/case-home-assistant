@@ -1,0 +1,34 @@
+name: CASE HTTPS Proxy
+version: "0.1.14"
+slug: case_https_proxy
+description: Local HTTPS reverse proxy for CASE.
+url: https://github.com/jamesb131/case-home-assistant
+arch:
+  - aarch64
+  - amd64
+startup: services
+boot: auto
+stage: stable
+init: false
+legacy: true
+image: ghcr.io/jamesb131/case-home-assistant/case-https-proxy
+webui: https://[HOST]:[PORT:443]
+ports:
+  443/tcp: 443
+ports_description:
+  443/tcp: CASE secure web UI
+map:
+  - type: ssl
+    read_only: true
+options:
+  domain: case.home.arpa
+  upstream_host: 192.168.0.154
+  upstream_port: 8080
+  certificate_path: /ssl/case-home-arpa.crt
+  private_key_path: /ssl/case-home-arpa.key
+schema:
+  domain: str
+  upstream_host: str
+  upstream_port: port
+  certificate_path: str
+  private_key_path: str

@@ -18,6 +18,11 @@ case_core/
   README.md
   DOCS.md
   translations/en.yaml
+case_https_proxy/
+  config.yaml
+  README.md
+  DOCS.md
+  translations/en.yaml
 ```
 
 Home Assistant requires `repository.yaml` at the Git repository root.
@@ -27,6 +32,7 @@ The add-on definitions point at prebuilt images:
 ```text
 ghcr.io/jamesb131/case-home-assistant/case-postgres:<config version>
 ghcr.io/jamesb131/case-home-assistant/case-core:<config version>
+ghcr.io/jamesb131/case-home-assistant/case-https-proxy:<config version>
 ```
 
 The image Dockerfiles live in:
@@ -34,6 +40,7 @@ The image Dockerfiles live in:
 ```text
 deploy/ha/case-postgres/Dockerfile
 deploy/ha/case-core/Dockerfile
+deploy/ha/case-https-proxy/Dockerfile
 ```
 
 Build them with:
@@ -67,6 +74,7 @@ on Home Assistant building images from the whole monorepo as a Docker context.
 
 - CASE Postgres: persistent database, data under `/data/postgres`, cold backups.
 - CASE Core: API, worker, migrations and web UI in one app image.
+- CASE HTTPS Proxy: local TLS reverse proxy for browser microphone support.
 - Desktop PC: Ollama only.
 
 This keeps database persistence separate while avoiding too many moving parts in
@@ -108,9 +116,18 @@ CASE Postgres image:
 3. Translate HA app options into `POSTGRES_USER`, `POSTGRES_PASSWORD` and
    `POSTGRES_DB`.
 
+CASE HTTPS Proxy image:
+
+1. Read `/data/options.json` for domain, upstream and certificate paths.
+2. Read certificate and private key from the Home Assistant `/ssl` share.
+3. Serve HTTPS on port `443`.
+4. Reverse proxy requests to the CASE Core web UI, normally
+   `http://192.168.0.154:8080`.
+
 ## Security notes
 
 - Do not commit Google `credentials.json` or `token.json`.
 - Do not bake Google auth files into container images.
 - Keep `CASE_API_TOKEN` empty for local smoke tests only.
 - Set a real API token before any VPN, proxy or tunnel access.
+- Do not commit HTTPS certificate private keys.

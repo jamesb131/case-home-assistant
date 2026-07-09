@@ -45,11 +45,12 @@ Set `OLLAMA_WARMUP_INTERVAL=0` to disable warmup.
 The preferred path is:
 
 ```text
-phone -> Tailscale/WireGuard -> HTTPS proxy -> CASE web port 8080 -> /api -> CASE API
+browser -> CASE HTTPS Proxy -> CASE web port 8080 -> /api -> CASE API
 ```
 
-Keep CASE on a private network path. Do not port-forward CASE directly from the
-router.
+For local-only secure access, use the CASE HTTPS Proxy add-on with a certificate
+trusted by your Mac and phone. Keep CASE on a private network path. Do not
+port-forward CASE directly from the router.
 
 See:
 

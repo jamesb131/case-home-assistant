@@ -42,9 +42,10 @@ can load the UI and call the API on the same secure origin.
 
 Good options, in preferred order:
 
-1. Tailscale HTTPS or Tailscale Serve in front of the Green's CASE web port.
-2. Caddy reverse proxy on an always-on host, with a trusted certificate.
-3. Home Assistant proxy/ingress if it can preserve the CASE API paths cleanly.
+1. CASE HTTPS Proxy add-on on the Green, with a locally trusted certificate.
+2. Tailscale HTTPS or Tailscale Serve in front of the Green's CASE web port.
+3. Caddy reverse proxy on an always-on host, with a trusted certificate.
+4. Home Assistant proxy/ingress if it can preserve the CASE API paths cleanly.
 
 For the first working version, Tailscale is still the lowest-risk choice:
 
@@ -60,12 +61,14 @@ case_api_token: "<long random value>"
 case_web_api_token: "<same long random value>"
 ```
 
-If using a separate Caddy host, proxy only the web port:
+For local-only HTTPS, the CASE HTTPS Proxy add-on should be configured like:
 
-```text
-case.example.internal {
-    reverse_proxy 192.168.0.154:8080
-}
+```yaml
+domain: case.home.arpa
+upstream_host: 192.168.0.154
+upstream_port: 8080
+certificate_path: /ssl/case-home-arpa.crt
+private_key_path: /ssl/case-home-arpa.key
 ```
 
 Do not proxy the desktop LLM bridge to the internet.

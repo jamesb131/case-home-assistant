@@ -25,6 +25,12 @@ case "$MODE" in
             --build-arg BUILD_VERSION="$VERSION" \
             -t "$REGISTRY/case-core:$VERSION" \
             .
+
+        docker build \
+            -f deploy/ha/case-https-proxy/Dockerfile \
+            --build-arg BUILD_VERSION="$VERSION" \
+            -t "$REGISTRY/case-https-proxy:$VERSION" \
+            .
         ;;
     push)
         docker buildx build \
@@ -40,6 +46,14 @@ case "$MODE" in
             -f deploy/ha/case-core/Dockerfile \
             --build-arg BUILD_VERSION="$VERSION" \
             -t "$REGISTRY/case-core:$VERSION" \
+            --push \
+            .
+
+        docker buildx build \
+            --platform "$PLATFORMS" \
+            -f deploy/ha/case-https-proxy/Dockerfile \
+            --build-arg BUILD_VERSION="$VERSION" \
+            -t "$REGISTRY/case-https-proxy:$VERSION" \
             --push \
             .
         ;;

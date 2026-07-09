@@ -11,6 +11,7 @@ on:
       - deploy/ha/**
       - case_core/config.yaml
       - case_postgres/config.yaml
+      - case_https_proxy/**
       - scripts/build-ha-images.sh
       - .github/workflows/publish-ha-images.yml
 
