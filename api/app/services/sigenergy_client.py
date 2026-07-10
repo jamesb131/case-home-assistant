@@ -1,4 +1,7 @@
 from pymodbus.client import ModbusTcpClient
+from pymodbus.exceptions import ModbusIOException
+
+from app.services.sigenergy_registers import SIGENERGY_REGISTERS
 
 HOST = "192.168.0.2"
 PORT = 502
@@ -40,6 +43,148 @@ def read_input(client, device_id, address, count, decoder, gain=1):
         raise RuntimeError(result)
 
     return decoder(result.registers) / gain
+
+
+DECODERS = {
+    "u16": u16,
+    "s16": s16,
+    "u32": u32,
+    "s32": s32,
+}
+
+
+def read_register_spec(client, spec):
+    decoder = DECODERS[spec["decoder"]]
+    raw = client.read_input_registers(
+        address=spec["address"],
+        count=spec["count"],
+        device_id=spec["device_id"],
+    )
+
+    if raw.isError():
+        raise RuntimeError(raw)
+
+    decoded = decoder(raw.registers) / spec.get("gain", 1)
+
+    return {
+        "device_id": spec["device_id"],
+        "register_address": spec["address"],
+        "register_count": spec["count"],
+        "register_type": spec["decoder"],
+        "raw_registers": raw.registers,
+        "decoded_value": decoded,
+        "unit": spec.get("unit"),
+        "label": spec.get("label"),
+    }
+
+
+def read_sigenergy_registers(registers=None):
+    client = ModbusTcpClient(HOST, port=PORT, timeout=2, retries=0)
+
+    if not client.connect():
+        raise RuntimeError("Could not connect to Sigenergy")
+
+    try:
+        readings = []
+
+        for spec in registers or SIGENERGY_REGISTERS:
+            try:
+                readings.append(read_register_spec(client, spec))
+            except (ModbusIOException, RuntimeError):
+                continue
+
+        return readings
+    finally:
+        client.close()
+
+
+def looks_interesting_register_value(value):
+    if value is None:
+        return False
+
+    absolute = abs(value)
+
+    return 0 < absolute <= 30000
+
+
+def scan_sigenergy_register_range(device_id, start, end, max_results=200):
+    client = ModbusTcpClient(HOST, port=PORT, timeout=1, retries=0)
+
+    if not client.connect():
+        raise RuntimeError("Could not connect to Sigenergy")
+
+    try:
+        results = []
+
+        for address in range(start, end + 1):
+            if len(results) >= max_results:
+                break
+
+            try:
+                raw = client.read_input_registers(
+                    address=address,
+                    count=1,
+                    device_id=device_id,
+                )
+            except ModbusIOException:
+                continue
+
+            if raw.isError():
+                continue
+
+            for register_type, decoder in [("u16", u16), ("s16", s16)]:
+                decoded = decoder(raw.registers)
+
+                if looks_interesting_register_value(decoded):
+                    results.append({
+                        "device_id": device_id,
+                        "register_address": address,
+                        "register_count": 1,
+                        "register_type": register_type,
+                        "raw_registers": raw.registers,
+                        "decoded_value": decoded,
+                        "unit": None,
+                        "label": f"scan_{device_id}_{address}_{register_type}",
+                    })
+
+            if len(results) >= max_results:
+                break
+
+            try:
+                raw_pair = client.read_input_registers(
+                    address=address,
+                    count=2,
+                    device_id=device_id,
+                )
+            except ModbusIOException:
+                continue
+
+            if raw_pair.isError():
+                continue
+
+            for register_type, decoder, gain in [
+                ("u32", u32, 1),
+                ("s32", s32, 1),
+                ("u32_kw_candidate", u32, 1000),
+                ("s32_kw_candidate", s32, 1000),
+            ]:
+                decoded = decoder(raw_pair.registers) / gain
+
+                if looks_interesting_register_value(decoded):
+                    results.append({
+                        "device_id": device_id,
+                        "register_address": address,
+                        "register_count": 2,
+                        "register_type": register_type,
+                        "raw_registers": raw_pair.registers,
+                        "decoded_value": decoded,
+                        "unit": "kW" if "kw" in register_type else None,
+                        "label": f"scan_{device_id}_{address}_{register_type}",
+                    })
+
+        return results
+    finally:
+        client.close()
 
 
 def get_energy_snapshot():

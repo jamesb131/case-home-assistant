@@ -16,7 +16,8 @@ from app.services.google_calendar_client import get_calendar_auth_status
 
 from app.routers.lists_router import router as lists_router
 
-from app.services.sigenergy_client import get_energy_snapshot
+from app.services.sigenergy_client import get_energy_snapshot, scan_sigenergy_register_range
+from app.services.sigenergy_repository import get_register_changes, insert_raw_registers
 from app.services.decision_service import get_decision_summary
 from app.services.system_status import get_system_status
 from app.services.refresh_service import refresh_data
@@ -230,6 +231,8 @@ def get_energy_today_summary():
                 WITH readings AS (
                     SELECT
                         captured_at,
+                        solar_kw,
+                        house_load_kw,
                         grid_kw,
                         LEAD(captured_at) OVER (ORDER BY captured_at) AS next_at
                     FROM energy_readings
@@ -243,17 +246,72 @@ def get_energy_today_summary():
                             ELSE 0
                         END
                     ), 0) AS grid_import_kwh
+                    ,
+                    COALESCE(SUM(
+                        CASE
+                            WHEN solar_kw > 0 AND next_at IS NOT NULL
+                            THEN solar_kw * EXTRACT(EPOCH FROM (next_at - captured_at)) / 3600
+                            ELSE 0
+                        END
+                    ), 0) AS solar_kwh,
+                    COALESCE(SUM(
+                        CASE
+                            WHEN house_load_kw > 0 AND next_at IS NOT NULL
+                            THEN house_load_kw * EXTRACT(EPOCH FROM (next_at - captured_at)) / 3600
+                            ELSE 0
+                        END
+                    ), 0) AS house_load_kwh
                 FROM readings;
             """)
 
             row = cur.fetchone()
 
             return {
-                "grid_import_kwh": round(float(row[0]), 2)
+                "grid_import_kwh": round(float(row[0]), 2),
+                "solar_kwh": round(float(row[1]), 2),
+                "house_load_kwh": round(float(row[2]), 2),
+                "ev_kw": None,
+                "ev_charging": None,
+                "ev_status": "smart_port_not_mapped",
             }
 
     finally:
         conn.close()
+
+@app.get("/energy/sigenergy/register-changes")
+def sigenergy_register_changes(minutes: int = 30, limit: int = 40):
+    bounded_minutes = max(2, min(minutes, 240))
+    bounded_limit = max(1, min(limit, 200))
+
+    return {
+        "minutes": bounded_minutes,
+        "changes": get_register_changes(
+            minutes=bounded_minutes,
+            limit=bounded_limit,
+        ),
+    }
+
+@app.post("/energy/sigenergy/scan")
+def sigenergy_scan(device_id: int = 247, start: int = 32000, end: int = 32150, limit: int = 200):
+    bounded_start = max(0, start)
+    bounded_end = max(bounded_start, min(end, bounded_start + 500))
+    bounded_limit = max(1, min(limit, 500))
+
+    readings = scan_sigenergy_register_range(
+        device_id=device_id,
+        start=bounded_start,
+        end=bounded_end,
+        max_results=bounded_limit,
+    )
+    insert_raw_registers(readings)
+
+    return {
+        "device_id": device_id,
+        "start": bounded_start,
+        "end": bounded_end,
+        "stored": len(readings),
+        "readings": readings,
+    }
 
 class CaseAskRequest(BaseModel):
     message: str

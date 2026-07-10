@@ -1296,13 +1296,33 @@ function App() {
               <section
                 style={{
                   display: "grid",
-                  gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(6, minmax(0, 1fr))",
+                  gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))",
                   gap: "14px",
                   marginBottom: "18px",
                 }}
               >
                 <EnergyCard icon="☀️" label="Production" value={formatKw(state.solar_kw)} unit="kW" />
                 <EnergyCard icon="🏠" label="Consumption" value={formatKw(state.house_load_kw)} unit="kW" />
+                <EnergyCard
+                  icon="☀️"
+                  label="Solar today"
+                  value={(todaySummary?.solar_kwh ?? 0).toFixed(1)}
+                  unit="kWh"
+                />
+                <EnergyCard
+                  icon="🏡"
+                  label="Usage today"
+                  value={(todaySummary?.house_load_kwh ?? 0).toFixed(1)}
+                  unit="kWh"
+                />
+                <EnergyCard
+                  icon="🚗"
+                  label="Car"
+                  value={todaySummary?.ev_kw === null || todaySummary?.ev_kw === undefined ? "--" : Number(todaySummary.ev_kw).toFixed(2)}
+                  unit="kW"
+                  subtext={todaySummary?.ev_status === "smart_port_not_mapped" ? "Not mapped yet" : undefined}
+                  color={todaySummary?.ev_charging ? "#16a34a" : "#111827"}
+                />
                 <EnergyCard
                   icon="⚡"
                   label="Grid"
@@ -2017,11 +2037,28 @@ function App() {
 
         .coffeeHomeCard {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(300px, 0.95fr) auto;
+          grid-template-columns: auto minmax(0, 1fr) minmax(300px, 0.95fr) auto;
           align-items: center;
           gap: 14px;
           margin-bottom: 18px;
           padding: 16px 18px;
+        }
+
+        .deviceArtwork {
+          width: 64px;
+          height: 64px;
+          border-radius: 16px;
+          object-fit: contain;
+          background: #f8fafc;
+          border: 1px solid #e5e7eb;
+          padding: 5px;
+        }
+
+        .deviceArtwork.large {
+          width: 96px;
+          height: 96px;
+          border-radius: 18px;
+          padding: 7px;
         }
 
         .coffeeRefreshButton {
@@ -2109,6 +2146,11 @@ function App() {
           .coffeeHomeCard {
             grid-template-columns: 1fr;
             gap: 10px;
+          }
+
+          .deviceArtwork {
+            width: 54px;
+            height: 54px;
           }
 
           .coffeeModeControl.compact {
@@ -2271,6 +2313,12 @@ function CoffeeMachineHomeCard({ status, onOpen, onRefresh, onModeChange }) {
 
   return (
     <section className="card coffeeHomeCard">
+      <img
+        className="deviceArtwork"
+        src="/devices/gaggia-classic.png"
+        alt="Gaggia Classic coffee machine"
+      />
+
       <div style={{ minWidth: 0 }}>
         <button
           onClick={onOpen}
@@ -3963,9 +4011,16 @@ function IoTPage({
       >
         <section className="card">
           <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
-            <div>
-              <div className="muted">GaggiMate</div>
-              <h2 style={{ margin: "6px 0 0", fontSize: "26px" }}>Gaggia Classic</h2>
+            <div style={{ display: "flex", gap: "12px", alignItems: "center", minWidth: 0 }}>
+              <img
+                className="deviceArtwork large"
+                src="/devices/gaggia-classic.png"
+                alt="Gaggia Classic coffee machine"
+              />
+              <div style={{ minWidth: 0 }}>
+                <div className="muted">GaggiMate</div>
+                <h2 style={{ margin: "6px 0 0", fontSize: "26px" }}>Gaggia Classic</h2>
+              </div>
             </div>
             <span
               style={{

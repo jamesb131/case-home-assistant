@@ -20,7 +20,8 @@ from app.services.gaggimate_client import (
     offline_status as offline_gaggimate_status,
 )
 from app.services.google_calendar_client import get_calendar_error, get_upcoming_events
-from app.services.sigenergy_client import get_energy_snapshot
+from app.services.sigenergy_client import get_energy_snapshot, read_sigenergy_registers
+from app.services.sigenergy_repository import insert_raw_registers
 from app.services.weather_client import get_weather_summary
 
 
@@ -40,11 +41,21 @@ PERTH_TZ = ZoneInfo("Australia/Perth")
 def log_energy_snapshot():
     snapshot = get_energy_snapshot()
     result = insert_energy_reading(snapshot)
+
+    raw_register_count = 0
+    try:
+        raw_registers = read_sigenergy_registers()
+        insert_raw_registers(raw_registers)
+        raw_register_count = len(raw_registers)
+    except Exception as exc:
+        print(f"sigenergy raw register log skipped: {exc}")
+
     upsert_snapshot(
         "energy.latest",
         {
             "snapshot": snapshot,
             "inserted": result,
+            "raw_register_count": raw_register_count,
         },
         ttl_seconds=max(LOG_INTERVAL_SECONDS * 4, 120),
     )
@@ -52,6 +63,7 @@ def log_energy_snapshot():
     return {
         "result": result,
         "snapshot": snapshot,
+        "raw_register_count": raw_register_count,
     }
 
 
