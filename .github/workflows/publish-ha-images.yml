@@ -32,6 +32,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -46,5 +48,39 @@ jobs:
           username: jamesb131
           password: ${{ secrets.GHCR_PAT || secrets.GITHUB_TOKEN }}
 
+      - name: Choose images to build
+        id: images
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "targets=all" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          changed_files="$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}")"
+          targets=()
+
+          if echo "$changed_files" | grep -Eq '^(api/|web/|case_core/config.yaml|deploy/ha/case-core/|scripts/build-ha-images.sh|\.github/workflows/publish-ha-images.yml)'; then
+            targets+=("core")
+          fi
+
+          if echo "$changed_files" | grep -Eq '^(case_postgres/|deploy/ha/case-postgres/)'; then
+            targets+=("postgres")
+          fi
+
+          if echo "$changed_files" | grep -Eq '^(case_https_proxy/|deploy/ha/case-https-proxy/)'; then
+            targets+=("https-proxy")
+          fi
+
+          if [ "${#targets[@]}" -eq 0 ]; then
+            targets+=("core")
+          fi
+
+          unique_targets="$(printf '%s\n' "${targets[@]}" | sort -u | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+          echo "targets=$unique_targets" >> "$GITHUB_OUTPUT"
+          echo "Building images: $unique_targets"
+
       - name: Build and push images
-        run: scripts/build-ha-images.sh push
+        run: scripts/build-ha-images.sh push "${{ steps.images.outputs.targets }}"
