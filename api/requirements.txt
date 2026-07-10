@@ -3,6 +3,7 @@ uvicorn[standard]
 psycopg2-binary
 pymodbus
 requests
+websocket-client
 
 google-api-python-client
 google-auth-httplib2

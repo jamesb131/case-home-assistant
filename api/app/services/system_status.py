@@ -25,6 +25,7 @@ def get_system_status():
         "sigenergy": get_snapshot_status(snapshots.get("energy.latest")),
         "bins": get_snapshot_status(snapshots.get("household.bins")),
         "recurring_tasks": get_snapshot_status(snapshots.get("tasks.recurring")),
+        "gaggimate": get_snapshot_status(snapshots.get("iot.gaggimate")),
         "snapshots": snapshots,
     }
 

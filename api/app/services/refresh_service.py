@@ -2,6 +2,7 @@ from app.worker import (
     log_energy_snapshot,
     poll_bins_snapshot,
     poll_calendar_snapshot,
+    poll_gaggimate_snapshot,
     poll_recurring_tasks,
     poll_weather_snapshot,
     poll_worker_status,
@@ -16,12 +17,14 @@ REFRESH_JOBS = {
     "bins": poll_bins_snapshot,
     "status": poll_worker_status,
     "recurring_tasks": poll_recurring_tasks,
+    "gaggimate": poll_gaggimate_snapshot,
+    "coffee": poll_gaggimate_snapshot,
 }
 
 REFRESH_ALIASES = {
-    "all": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks"],
-    "everything": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks"],
-    "data": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks"],
+    "all": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks", "gaggimate"],
+    "everything": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks", "gaggimate"],
+    "data": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks", "gaggimate"],
     "events": ["calendar"],
     "calendar": ["calendar"],
     "solar": ["energy"],
@@ -32,6 +35,9 @@ REFRESH_ALIASES = {
     "bins": ["bins"],
     "tasks": ["recurring_tasks"],
     "recurring": ["recurring_tasks"],
+    "coffee": ["gaggimate"],
+    "gaggia": ["gaggimate"],
+    "gaggimate": ["gaggimate"],
 }
 
 

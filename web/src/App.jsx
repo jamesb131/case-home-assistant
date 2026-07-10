@@ -200,6 +200,9 @@ function App() {
   const [assistantStatus, setAssistantStatus] = useState(null);
   const [systemStatus, setSystemStatus] = useState(null);
   const [securityStatus, setSecurityStatus] = useState(null);
+  const [gaggimateStatus, setGaggimateStatus] = useState(null);
+  const [gaggimateProfiles, setGaggimateProfiles] = useState([]);
+  const [gaggimateError, setGaggimateError] = useState(null);
 
   async function loadTasks() {
     try {
@@ -675,6 +678,80 @@ function App() {
     }
   }
 
+  async function loadGaggimateStatus() {
+    try {
+      const res = await apiFetch(`${API_BASE}/iot/gaggimate/status`);
+      if (!res.ok) throw new Error(`GaggiMate API returned ${res.status}`);
+      const json = await res.json();
+      setGaggimateStatus(json);
+      setGaggimateError(json.error || null);
+    } catch (err) {
+      console.error(err);
+      setGaggimateError(err.message);
+      setGaggimateStatus((current) => ({
+        ...(current || {}),
+        online: false,
+        error: err.message,
+      }));
+    }
+  }
+
+  async function loadGaggimateProfiles() {
+    try {
+      const res = await apiFetch(`${API_BASE}/iot/gaggimate/profiles`);
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || `GaggiMate profiles returned ${res.status}`);
+
+      setGaggimateProfiles(json.profiles || []);
+      setGaggimateError(null);
+    } catch (err) {
+      console.error(err);
+      setGaggimateProfiles([]);
+      setGaggimateError(err.message);
+    }
+  }
+
+  async function refreshGaggimate() {
+    try {
+      const res = await apiFetch(`${API_BASE}/iot/gaggimate/refresh`, {
+        method: "POST",
+      });
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || `GaggiMate refresh returned ${res.status}`);
+
+      setGaggimateStatus(json);
+      setGaggimateError(json.error || null);
+    } catch (err) {
+      console.error(err);
+      setGaggimateError(err.message);
+    }
+  }
+
+  async function selectGaggimateProfile(profileId) {
+    try {
+      const res = await apiFetch(`${API_BASE}/iot/gaggimate/profiles/select`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ profile_id: profileId }),
+      });
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || `Profile select returned ${res.status}`);
+
+      await Promise.allSettled([
+        loadGaggimateStatus(),
+        loadGaggimateProfiles(),
+      ]);
+    } catch (err) {
+      console.error(err);
+      setGaggimateError(err.message);
+    }
+  }
+
   async function refreshVisibleData() {
     await Promise.allSettled([
       loadData(),
@@ -687,6 +764,7 @@ function App() {
       loadAssistantStatus(),
       loadSystemStatus(),
       loadSecurityStatus(),
+      loadGaggimateStatus(),
     ]);
   }
 
@@ -702,6 +780,7 @@ function App() {
       loadAssistantStatus();
       loadSystemStatus();
       loadSecurityStatus();
+      loadGaggimateStatus();
     }, 0);
 
     const energyInterval = setInterval(() => {
@@ -726,6 +805,10 @@ function App() {
       loadSecurityStatus();
     }, 60000);
 
+    const gaggimateInterval = setInterval(() => {
+      loadGaggimateStatus();
+    }, 30000);
+
     return () => {
       clearTimeout(initialLoad);
       clearInterval(energyInterval);
@@ -733,8 +816,16 @@ function App() {
       clearInterval(calendarInterval);
       clearInterval(assistantStatusInterval);
       clearInterval(systemStatusInterval);
+      clearInterval(gaggimateInterval);
     };
   }, []);
+
+  useEffect(() => {
+    if (activePage === "IoT") {
+      loadGaggimateProfiles();
+      loadGaggimateStatus();
+    }
+  }, [activePage]);
 
   useEffect(() => {
     if (assistantOpen) {
@@ -804,6 +895,7 @@ function App() {
     ["🧒", "Kids"],
     ["📝", "Lists"],
     ["⚡", "Energy"],
+    ["☕", "IoT"],
     ["☁", "Weather"],
     ["🛡", "Security"],
   ];
@@ -1060,7 +1152,7 @@ function App() {
                       <div
                         style={{
                           display: "grid",
-                          gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
+                          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
                           alignItems: "center",
                           borderLeft: isMobile ? "none" : "1px solid #e5e7eb",
                           borderTop: isMobile ? "1px solid #e5e7eb" : "none",
@@ -1084,44 +1176,38 @@ function App() {
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: isMobile ? "1fr" : "repeat(5, 1fr)",
-                        gap: isMobile ? "10px" : "0",
+                        gridTemplateColumns: isMobile ? "repeat(3, minmax(0, 1fr))" : "repeat(5, 1fr)",
+                        gap: isMobile ? "8px" : "0",
                       }}
                     >
-                      {weather.daily.slice(0, 5).map((day, i) => (
+                      {weather.daily.slice(0, isMobile ? 3 : 5).map((day, i) => (
                         <div
                           key={day.date}
                           style={{
-                            padding: isMobile ? "12px" : "7px 12px",
+                            padding: isMobile ? "10px 8px" : "7px 12px",
                             borderLeft: !isMobile && i !== 0 ? "1px solid #e5e7eb" : "none",
-                            border: isMobile ? "1px solid #e5e7eb" : undefined,
-                            borderRadius: isMobile ? "14px" : undefined,
-                            display: isMobile ? "grid" : undefined,
-                            gridTemplateColumns: isMobile ? "70px 1fr 90px" : undefined,
-                            alignItems: isMobile ? "center" : undefined,
-                            textAlign: isMobile ? "left" : "center",
-                            gap: isMobile ? "8px" : undefined,
+                            borderRadius: isMobile ? "12px" : undefined,
+                            textAlign: "center",
+                            minWidth: 0,
                           }}
                         >
                           <div>
-                            <div style={{ fontWeight: 800, marginBottom: "6px" }}>
+                            <div style={{ fontWeight: 800, marginBottom: isMobile ? "2px" : "6px" }}>
                               {new Date(day.date).toLocaleDateString([], { weekday: "short" })}
                             </div>
-                            <div style={{ fontSize: "26px", marginBottom: "2px" }}>{weatherIcon(day)}</div>
+                            <div style={{ fontSize: isMobile ? "22px" : "26px", marginBottom: "2px" }}>{weatherIcon(day)}</div>
                           </div>
                           <div>
-                            <div style={{ fontWeight: 900, fontSize: "20px" }}>
+                            <div style={{ fontWeight: 900, fontSize: isMobile ? "19px" : "20px" }}>
                               {Math.round(day.temp_max)}°
                             </div>
                             <div style={{ color: "#2563eb", fontWeight: 700 }}>
                               {Math.round(day.temp_min)}°
                             </div>
-
-                            <TinyTempLine points={day.temp_profile || []} color={weatherAccent(day)} />
                           </div>
 
-                          <div className="tiny">
-                            💧 {day.rain_probability}% · 💨 {Math.round(weather.current.wind_speed_10m)} km/h
+                          <div className="tiny" style={{ marginTop: "5px" }}>
+                            💧 {day.rain_probability}%
                           </div>
                         </div>
                       ))}
@@ -1216,6 +1302,12 @@ function App() {
                 />
               </section>
 
+              <CoffeeMachineHomeCard
+                status={gaggimateStatus}
+                onOpen={() => setActivePage("IoT")}
+                onRefresh={refreshGaggimate}
+              />
+
               <section
                 style={{
                   display: "grid",
@@ -1286,8 +1378,8 @@ function App() {
                     <div className="muted">15-minute view</div>
                   </div>
 
-                  <div style={{ height: isMobile ? "300px" : "430px", width: "100%", minWidth: 0 }}>
-                    <EnergyDayChart data={recentEnergy} />
+                  <div style={{ width: "100%", minWidth: 0 }}>
+                    <EnergyDayChart data={recentEnergy} isMobile={isMobile} />
                   </div>
                 </div>
               </section>
@@ -1542,6 +1634,16 @@ function App() {
           </div>
           </>
 )}
+          {activePage === "IoT" && (
+            <IoTPage
+              gaggimateStatus={gaggimateStatus}
+              gaggimateProfiles={gaggimateProfiles}
+              gaggimateError={gaggimateError}
+              refreshGaggimate={refreshGaggimate}
+              loadGaggimateProfiles={loadGaggimateProfiles}
+              selectGaggimateProfile={selectGaggimateProfile}
+            />
+          )}
           {activePage === "Kids" && <KidsPage tasks={tasks} />}
           {activePage === "Lists" && (
             <ListsPage
@@ -1880,6 +1982,15 @@ function App() {
           padding: 20px;
         }
 
+        .coffeeHomeCard {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) minmax(160px, 0.8fr) auto;
+          align-items: center;
+          gap: 14px;
+          margin-bottom: 18px;
+          padding: 16px 18px;
+        }
+
         .solarRow {
           display: flex;
           justify-content: space-between;
@@ -1910,6 +2021,18 @@ function App() {
           background: #f8fafc;
           color: #475569;
           border: 1px solid #e2e8f0;
+        }
+
+        @media (max-width: 820px) {
+          .card {
+            border-radius: 18px;
+            padding: 18px;
+          }
+
+          .coffeeHomeCard {
+            grid-template-columns: 1fr;
+            gap: 10px;
+          }
         }
 
       `}</style>
@@ -1950,6 +2073,10 @@ function buildSystemStatusItems(status) {
     {
       label: "Recurring",
       status: status.recurring_tasks?.status || "unknown",
+    },
+    {
+      label: "Coffee",
+      status: status.gaggimate?.status || "unknown",
     },
   ];
 }
@@ -2047,9 +2174,52 @@ function SystemStatusPanel({ items, compact = false }) {
   );
 }
 
+function CoffeeMachineHomeCard({ status, onOpen, onRefresh }) {
+  const online = status?.online === true;
+  const temp = status?.current_temp_c;
+  const target = status?.target_temp_c;
+
+  return (
+    <section className="card coffeeHomeCard">
+      <button
+        onClick={onOpen}
+        style={{
+          border: "none",
+          background: "transparent",
+          padding: 0,
+          textAlign: "left",
+          cursor: "pointer",
+          minWidth: 0,
+        }}
+      >
+        <div className="muted">Coffee machine</div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: "10px", marginTop: "5px", flexWrap: "wrap" }}>
+          <strong style={{ fontSize: "22px" }}>
+            {online && temp !== null && temp !== undefined ? `${Math.round(temp)}°C` : "Offline"}
+          </strong>
+          {online && target !== null && target !== undefined && (
+            <span className="tiny" style={{ marginTop: 0 }}>Target {Math.round(target)}°C</span>
+          )}
+        </div>
+      </button>
+
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {status?.profile_label || "No profile"}
+        </div>
+        <div className="tiny">{status?.mode_label || "Waiting for GaggiMate"}</div>
+      </div>
+
+      <button className="button" onClick={onRefresh} style={{ borderRadius: "12px", padding: "10px 12px" }}>
+        Refresh
+      </button>
+    </section>
+  );
+}
+
 function InfoMini({ icon, label, value }) {
   return (
-    <div>
+    <div style={{ minWidth: 0, textAlign: "center" }}>
       <div style={{ fontSize: "17px", marginBottom: "5px", color: "#f59e0b" }}>{icon}</div>
       <div className="muted">{label}</div>
       <div style={{ fontWeight: 800 }}>{value}</div>
@@ -2137,15 +2307,15 @@ function TinyTempLine({ points, color }) {
   );
 }
 
-function EnergyDayChart({ data }) {
+function EnergyDayChart({ data, isMobile = false }) {
   const width = 1100;
-  const height = 360;
+  const height = isMobile ? 260 : 320;
 
   const margin = {
-    top: 8,
-    right: 54,
-    bottom: 28,
-    left: 50,
+    top: 18,
+    right: isMobile ? 28 : 54,
+    bottom: 24,
+    left: isMobile ? 34 : 50,
   };
 
   const plotWidth = width - margin.left - margin.right;
@@ -2228,7 +2398,7 @@ function EnergyDayChart({ data }) {
     <div style={{ width: "100%", overflow: "hidden" }}>
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        style={{ width: "100%", height: "360px", display: "block" }}
+        style={{ width: "100%", height: isMobile ? "260px" : "320px", display: "block" }}
       >
         {[-20, -10, 0, 10, 20].map((kw) => {
           const y = yFromKw(kw);
@@ -2407,14 +2577,17 @@ function EnergyDayChart({ data }) {
 
       <div
         style={{
-          display: "flex",
+          display: isMobile ? "grid" : "flex",
+          gridTemplateColumns: isMobile ? "1fr 1fr" : undefined,
           gap: "16px",
-          flexWrap: "wrap",
+          rowGap: isMobile ? "8px" : undefined,
+          columnGap: isMobile ? "10px" : undefined,
+          flexWrap: isMobile ? undefined : "wrap",
           alignItems: "center",
           fontSize: "12px",
           color: "#667085",
-          marginTop: "-4px",
-          paddingLeft: `${margin.left}px`,
+          marginTop: isMobile ? "4px" : "-4px",
+          paddingLeft: isMobile ? 0 : `${margin.left}px`,
         }}
       >
         <LegendBar color="#fbbf24" label="Solar production" />
@@ -3605,6 +3778,195 @@ function ListsPage({
       </div>
     </div>
   );
+}
+
+function IoTPage({
+  gaggimateStatus,
+  gaggimateProfiles,
+  gaggimateError,
+  refreshGaggimate,
+  loadGaggimateProfiles,
+  selectGaggimateProfile,
+}) {
+  const online = gaggimateStatus?.online === true;
+  const currentTemp = gaggimateStatus?.current_temp_c;
+  const targetTemp = gaggimateStatus?.target_temp_c;
+  const activeProfile = gaggimateStatus?.profile_label;
+
+  return (
+    <div>
+      <section style={{ marginBottom: "18px" }}>
+        <h1 style={{ margin: 0, fontSize: "32px" }}>IoT</h1>
+        <div style={{ marginTop: "8px", fontSize: "15px", color: "#6b7280" }}>
+          Local devices, controls and telemetry
+        </div>
+      </section>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: "16px",
+          alignItems: "start",
+        }}
+      >
+        <section className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
+            <div>
+              <div className="muted">GaggiMate</div>
+              <h2 style={{ margin: "6px 0 0", fontSize: "26px" }}>Gaggia Classic</h2>
+            </div>
+            <span
+              style={{
+                borderRadius: "999px",
+                padding: "7px 10px",
+                fontSize: "12px",
+                fontWeight: 900,
+                background: online ? "#dcfce7" : "#fee2e2",
+                color: online ? "#15803d" : "#b91c1c",
+              }}
+            >
+              {online ? "Online" : "Offline"}
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: "10px",
+              marginTop: "18px",
+            }}
+          >
+            <MetricBox label="Temp" value={formatMetric(currentTemp, "°C")} />
+            <MetricBox label="Target" value={formatMetric(targetTemp, "°C")} />
+            <MetricBox label="Pressure" value={formatMetric(gaggimateStatus?.pressure_bar, " bar", 1)} />
+            <MetricBox label="Flow" value={formatMetric(gaggimateStatus?.flow_ml_s, " ml/s", 1)} />
+          </div>
+
+          <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
+
+          <div style={{ display: "grid", gap: "10px" }}>
+            <DeviceDetail label="Mode" value={gaggimateStatus?.mode_label || "--"} />
+            <DeviceDetail label="Profile" value={activeProfile || "--"} />
+            <DeviceDetail label="Host" value={gaggimateStatus?.host || "--"} />
+            <DeviceDetail
+              label="Last seen"
+              value={
+                gaggimateStatus?.captured_at
+                  ? new Date(gaggimateStatus.captured_at).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })
+                  : "--"
+              }
+            />
+          </div>
+
+          {(gaggimateError || gaggimateStatus?.error) && (
+            <div
+              style={{
+                marginTop: "16px",
+                borderRadius: "14px",
+                padding: "12px",
+                background: "#fef2f2",
+                color: "#991b1b",
+                fontSize: "13px",
+                fontWeight: 700,
+                lineHeight: 1.4,
+              }}
+            >
+              {gaggimateError || gaggimateStatus?.error}
+            </div>
+          )}
+
+          <button className="button" onClick={refreshGaggimate} style={{ marginTop: "16px", width: "100%" }}>
+            Refresh machine
+          </button>
+        </section>
+
+        <section className="card">
+          <div className="muted">Profiles</div>
+          <h2 style={{ margin: "6px 0 14px", fontSize: "22px" }}>Select profile</h2>
+
+          <button
+            className="button"
+            onClick={loadGaggimateProfiles}
+            style={{ marginBottom: "14px", width: "100%", background: "#334155" }}
+          >
+            Load profiles
+          </button>
+
+          {gaggimateProfiles.length === 0 ? (
+            <div className="tiny">No profiles loaded yet.</div>
+          ) : (
+            <div style={{ display: "grid", gap: "8px" }}>
+              {gaggimateProfiles.map((profile) => {
+                const selected = profile.selected || profile.label === activeProfile;
+
+                return (
+                  <button
+                    key={profile.id || profile.label}
+                    disabled={!online || !profile.id}
+                    onClick={() => selectGaggimateProfile(profile.id)}
+                    style={{
+                      border: selected ? "2px solid #111827" : "1px solid #e2e8f0",
+                      background: selected ? "#f8fafc" : "white",
+                      color: "#111827",
+                      borderRadius: "14px",
+                      padding: "12px",
+                      textAlign: "left",
+                      cursor: online && profile.id ? "pointer" : "not-allowed",
+                      opacity: online && profile.id ? 1 : 0.55,
+                    }}
+                  >
+                    <div style={{ fontWeight: 900 }}>{profile.label || profile.id}</div>
+                    {profile.description && (
+                      <div className="tiny" style={{ marginTop: "4px" }}>
+                        {profile.description}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
+
+          <div className="tiny" style={{ lineHeight: 1.5 }}>
+            Power switching is intentionally not enabled here yet. GaggiMate documents status and profile
+            control over WebSocket; machine power should go through a documented relay path or smart plug.
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function MetricBox({ label, value }) {
+  return (
+    <div className="innerCard" style={{ textAlign: "left" }}>
+      <div className="muted">{label}</div>
+      <div style={{ fontSize: "22px", fontWeight: 900, marginTop: "4px" }}>{value}</div>
+    </div>
+  );
+}
+
+function DeviceDetail({ label, value }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", fontSize: "14px" }}>
+      <span className="muted">{label}</span>
+      <strong style={{ textAlign: "right", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+function formatMetric(value, unit, decimals = 0) {
+  if (value === null || value === undefined) return "--";
+  return `${Number(value).toFixed(decimals)}${unit}`;
 }
 
 function SecurityPage({ securityStatus, assistantStatus, apiBase }) {

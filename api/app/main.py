@@ -21,6 +21,13 @@ from app.services.decision_service import get_decision_summary
 from app.services.system_status import get_system_status
 from app.services.refresh_service import refresh_data
 from app.worker import log_energy_snapshot
+from app.worker import poll_gaggimate_snapshot
+from app.services.gaggimate_client import (
+    GaggimateUnavailable,
+    list_profiles as list_gaggimate_profiles,
+    select_profile as select_gaggimate_profile,
+)
+from app.repositories.gaggimate_repository import get_recent_gaggimate_readings
 
 from app.routers.task_templates_router import router as task_templates_router
 
@@ -250,9 +257,72 @@ def get_energy_today_summary():
 class CaseAskRequest(BaseModel):
     message: str
 
+class GaggimateProfileSelectRequest(BaseModel):
+    profile_id: str
+
 @app.post("/case/ask")
 def case_ask(request: CaseAskRequest):
     return ask_case(request.message)
+
+@app.get("/iot/gaggimate/status")
+def gaggimate_status():
+    snapshot = get_snapshot("iot.gaggimate")
+
+    if snapshot:
+        return {
+            **snapshot["payload"]["snapshot"],
+            "cached": True,
+            "captured_at": snapshot["captured_at"],
+            "status": snapshot["status"],
+            "snapshot_error": snapshot["error"],
+        }
+
+    result = poll_gaggimate_snapshot()
+    return {
+        **result["payload"]["snapshot"],
+        "cached": False,
+        "captured_at": result["captured_at"],
+        "status": result["status"],
+        "snapshot_error": result["error"],
+    }
+
+@app.post("/iot/gaggimate/refresh")
+def refresh_gaggimate_status():
+    result = poll_gaggimate_snapshot()
+    return {
+        **result["payload"]["snapshot"],
+        "cached": False,
+        "captured_at": result["captured_at"],
+        "status": result["status"],
+        "snapshot_error": result["error"],
+    }
+
+@app.get("/iot/gaggimate/readings")
+def gaggimate_readings(limit: int = 120):
+    bounded_limit = max(1, min(limit, 500))
+    return {"readings": get_recent_gaggimate_readings(limit=bounded_limit)}
+
+@app.get("/iot/gaggimate/profiles")
+def gaggimate_profiles():
+    try:
+        return {"profiles": list_gaggimate_profiles()}
+    except GaggimateUnavailable as exc:
+        return JSONResponse(
+            status_code=503,
+            content={"profiles": [], "error": str(exc)},
+        )
+
+@app.post("/iot/gaggimate/profiles/select")
+def gaggimate_select_profile(request: GaggimateProfileSelectRequest):
+    try:
+        result = select_gaggimate_profile(request.profile_id)
+        poll_gaggimate_snapshot()
+        return result
+    except GaggimateUnavailable as exc:
+        return JSONResponse(
+            status_code=503,
+            content={"selected": False, "error": str(exc)},
+        )
 
 @app.get("/calendar/upcoming")
 def calendar_upcoming():

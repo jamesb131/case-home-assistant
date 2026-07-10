@@ -8,11 +8,16 @@ from app.repositories.system_snapshots_repository import (
     record_heartbeat,
     upsert_snapshot,
 )
+from app.repositories.gaggimate_repository import insert_gaggimate_reading
 from app.repositories.task_templates_repository import generate_recurring_tasks
 from app.services.energy_repository import (
     insert_energy_reading,
     prune_energy_readings,
     refresh_energy_daily_rollups,
+)
+from app.services.gaggimate_client import (
+    get_gaggimate_status,
+    offline_status as offline_gaggimate_status,
 )
 from app.services.google_calendar_client import get_calendar_error, get_upcoming_events
 from app.services.sigenergy_client import get_energy_snapshot
@@ -28,6 +33,7 @@ RETENTION_INTERVAL_SECONDS = int(os.getenv("RETENTION_INTERVAL", "86400"))
 RECURRING_TASK_INTERVAL_SECONDS = int(os.getenv("RECURRING_TASK_INTERVAL", "3600"))
 RECURRING_TASK_DAYS_AHEAD = int(os.getenv("RECURRING_TASK_DAYS_AHEAD", "21"))
 ENERGY_RETENTION_DAYS = int(os.getenv("ENERGY_RETENTION_DAYS", "0"))
+GAGGIMATE_INTERVAL_SECONDS = int(os.getenv("GAGGIMATE_POLL_INTERVAL", "60"))
 PERTH_TZ = ZoneInfo("Australia/Perth")
 
 
@@ -109,6 +115,7 @@ def poll_worker_status():
             "bins_interval_seconds": BINS_INTERVAL_SECONDS,
             "recurring_task_interval_seconds": RECURRING_TASK_INTERVAL_SECONDS,
             "recurring_task_days_ahead": RECURRING_TASK_DAYS_AHEAD,
+            "gaggimate_interval_seconds": GAGGIMATE_INTERVAL_SECONDS,
         },
     )
 
@@ -127,6 +134,29 @@ def poll_recurring_tasks():
             ],
         },
         ttl_seconds=RECURRING_TASK_INTERVAL_SECONDS * 3,
+    )
+
+
+def poll_gaggimate_snapshot():
+    status = "ok"
+
+    try:
+        snapshot = get_gaggimate_status()
+    except Exception as exc:
+        status = "error"
+        snapshot = offline_gaggimate_status(exc)
+
+    result = insert_gaggimate_reading(snapshot)
+
+    return upsert_snapshot(
+        "iot.gaggimate",
+        {
+            "snapshot": snapshot,
+            "inserted": result,
+        },
+        status=status,
+        ttl_seconds=GAGGIMATE_INTERVAL_SECONDS * 3,
+        error=snapshot.get("error"),
     )
 
 
@@ -211,6 +241,12 @@ def worker_loop():
             "name": "recurring_tasks",
             "interval": RECURRING_TASK_INTERVAL_SECONDS,
             "job": poll_recurring_tasks,
+            "next_run": 0,
+        },
+        {
+            "name": "gaggimate",
+            "interval": GAGGIMATE_INTERVAL_SECONDS,
+            "job": poll_gaggimate_snapshot,
             "next_run": 0,
         },
         {

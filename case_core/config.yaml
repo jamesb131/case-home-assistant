@@ -1,5 +1,5 @@
 name: CASE Core
-version: "0.1.14"
+version: "0.1.15"
 slug: case_core
 description: Local-first household assistant API, worker and web UI.
 url: https://github.com/jamesb131/case-home-assistant
@@ -48,6 +48,10 @@ options:
   recurring_task_interval: 3600
   recurring_task_days_ahead: 21
   energy_retention_days: 0
+  gaggimate_host: 192.168.0.116
+  gaggimate_ws_protocol: ws
+  gaggimate_timeout: 3
+  gaggimate_poll_interval: 60
 schema:
   postgres_host: str
   postgres_port: port
@@ -73,3 +77,7 @@ schema:
   recurring_task_interval: int(60,)
   recurring_task_days_ahead: int(1,90)
   energy_retention_days: int(0,)
+  gaggimate_host: str
+  gaggimate_ws_protocol: list(ws|wss)
+  gaggimate_timeout: int(1,30)
+  gaggimate_poll_interval: int(30,)

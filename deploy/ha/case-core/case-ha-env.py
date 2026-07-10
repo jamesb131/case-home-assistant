@@ -31,6 +31,10 @@ OPTION_ENV_MAP = {
     "recurring_task_interval": "RECURRING_TASK_INTERVAL",
     "recurring_task_days_ahead": "RECURRING_TASK_DAYS_AHEAD",
     "energy_retention_days": "ENERGY_RETENTION_DAYS",
+    "gaggimate_host": "GAGGIMATE_HOST",
+    "gaggimate_ws_protocol": "GAGGIMATE_WS_PROTOCOL",
+    "gaggimate_timeout": "GAGGIMATE_TIMEOUT",
+    "gaggimate_poll_interval": "GAGGIMATE_POLL_INTERVAL",
 }
 
 
