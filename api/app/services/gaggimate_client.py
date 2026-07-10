@@ -10,11 +10,18 @@ GAGGIMATE_WS_PROTOCOL = os.getenv("GAGGIMATE_WS_PROTOCOL", "ws")
 GAGGIMATE_TIMEOUT_SECONDS = float(os.getenv("GAGGIMATE_TIMEOUT", "3"))
 
 MODE_LABELS = {
-    0: "Idle",
-    1: "Heating",
-    2: "Brew",
-    3: "Steam",
-    4: "Hot water",
+    0: "Standby",
+    1: "Brew",
+    2: "Steam",
+    3: "Water",
+    4: "Grind",
+}
+
+CONTROL_MODES = {
+    "standby": 0,
+    "brew": 1,
+    "steam": 2,
+    "water": 3,
 }
 
 
@@ -83,6 +90,30 @@ def select_profile(profile_id):
         raise GaggimateUnavailable(message["error"])
 
     return {"selected": True, "profile_id": profile_id}
+
+
+def change_mode(mode):
+    mode_key = str(mode or "").strip().lower()
+
+    if mode_key not in CONTROL_MODES:
+        raise GaggimateUnavailable(f"Unsupported GaggiMate mode: {mode}")
+
+    mode_id = CONTROL_MODES[mode_key]
+
+    def send_request(ws):
+        ws.send(json.dumps({"tp": "req:change-mode", "mode": mode_id}))
+
+    message = wait_for_message(
+        lambda payload: payload.get("tp") == "evt:status" and payload.get("m") == mode_id,
+        send_request=send_request,
+    )
+
+    return {
+        "changed": True,
+        "mode": mode_key,
+        "mode_id": mode_id,
+        "status": normalise_status(message),
+    }
 
 
 def wait_for_message(predicate, send_request=None):

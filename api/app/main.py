@@ -24,6 +24,7 @@ from app.worker import log_energy_snapshot
 from app.worker import poll_gaggimate_snapshot
 from app.services.gaggimate_client import (
     GaggimateUnavailable,
+    change_mode as change_gaggimate_mode,
     list_profiles as list_gaggimate_profiles,
     select_profile as select_gaggimate_profile,
 )
@@ -260,6 +261,9 @@ class CaseAskRequest(BaseModel):
 class GaggimateProfileSelectRequest(BaseModel):
     profile_id: str
 
+class GaggimateModeRequest(BaseModel):
+    mode: str
+
 @app.post("/case/ask")
 def case_ask(request: CaseAskRequest):
     return ask_case(request.message)
@@ -322,6 +326,18 @@ def gaggimate_select_profile(request: GaggimateProfileSelectRequest):
         return JSONResponse(
             status_code=503,
             content={"selected": False, "error": str(exc)},
+        )
+
+@app.post("/iot/gaggimate/mode")
+def gaggimate_change_mode(request: GaggimateModeRequest):
+    try:
+        result = change_gaggimate_mode(request.mode)
+        poll_gaggimate_snapshot()
+        return result
+    except GaggimateUnavailable as exc:
+        return JSONResponse(
+            status_code=503,
+            content={"changed": False, "error": str(exc)},
         )
 
 @app.get("/calendar/upcoming")

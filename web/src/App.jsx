@@ -47,6 +47,13 @@ const PERSON_THEMES = {
   },
 };
 
+const GAGGIMATE_MODES = [
+  { id: "standby", label: "Standby", mode: 0 },
+  { id: "brew", label: "Brew", mode: 1 },
+  { id: "steam", label: "Steam", mode: 2 },
+  { id: "water", label: "Water", mode: 3 },
+];
+
 
 function getPersonTheme(name) {
   return PERSON_THEMES[name] || PERSON_THEMES.Unassigned;
@@ -752,6 +759,30 @@ function App() {
     }
   }
 
+  async function changeGaggimateMode(mode) {
+    try {
+      const res = await apiFetch(`${API_BASE}/iot/gaggimate/mode`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ mode }),
+      });
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || `Mode change returned ${res.status}`);
+
+      setGaggimateStatus({
+        ...(json.status || {}),
+        cached: false,
+      });
+      setGaggimateError(null);
+    } catch (err) {
+      console.error(err);
+      setGaggimateError(err.message);
+    }
+  }
+
   async function refreshVisibleData() {
     await Promise.allSettled([
       loadData(),
@@ -1306,6 +1337,7 @@ function App() {
                 status={gaggimateStatus}
                 onOpen={() => setActivePage("IoT")}
                 onRefresh={refreshGaggimate}
+                onModeChange={changeGaggimateMode}
               />
 
               <section
@@ -1369,7 +1401,7 @@ function App() {
                   </div>
                 )}
 
-                <div className="card">
+                <div className="card energyTrendCard">
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                     <div>
                       <div className="muted">Energy trend</div>
@@ -1642,6 +1674,7 @@ function App() {
               refreshGaggimate={refreshGaggimate}
               loadGaggimateProfiles={loadGaggimateProfiles}
               selectGaggimateProfile={selectGaggimateProfile}
+              changeGaggimateMode={changeGaggimateMode}
             />
           )}
           {activePage === "Kids" && <KidsPage tasks={tasks} />}
@@ -1984,11 +2017,55 @@ function App() {
 
         .coffeeHomeCard {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) minmax(160px, 0.8fr) auto;
+          grid-template-columns: minmax(0, 1fr) minmax(300px, 0.95fr) auto;
           align-items: center;
           gap: 14px;
           margin-bottom: 18px;
           padding: 16px 18px;
+        }
+
+        .coffeeRefreshButton {
+          border-radius: 12px;
+          padding: 10px 12px;
+          white-space: nowrap;
+        }
+
+        .coffeeModeControl {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 6px;
+          padding: 5px;
+          border-radius: 14px;
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+        }
+
+        .coffeeModeButton {
+          border: none;
+          border-radius: 10px;
+          background: transparent;
+          color: #475569;
+          cursor: pointer;
+          font-size: 12px;
+          font-weight: 900;
+          min-height: 34px;
+          padding: 0 8px;
+          white-space: nowrap;
+        }
+
+        .coffeeModeButton.active {
+          background: #111827;
+          color: white;
+          box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
+        }
+
+        .coffeeModeButton:disabled {
+          cursor: not-allowed;
+          opacity: 0.48;
+        }
+
+        .energyTrendCard {
+          padding-bottom: 18px;
         }
 
         .solarRow {
@@ -2032,6 +2109,18 @@ function App() {
           .coffeeHomeCard {
             grid-template-columns: 1fr;
             gap: 10px;
+          }
+
+          .coffeeModeControl.compact {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .coffeeRefreshButton {
+            width: 100%;
+          }
+
+          .energyTrendCard {
+            padding: 18px 14px 14px;
           }
         }
 
@@ -2174,46 +2263,78 @@ function SystemStatusPanel({ items, compact = false }) {
   );
 }
 
-function CoffeeMachineHomeCard({ status, onOpen, onRefresh }) {
+function CoffeeMachineHomeCard({ status, onOpen, onRefresh, onModeChange }) {
   const online = status?.online === true;
   const temp = status?.current_temp_c;
   const target = status?.target_temp_c;
+  const activeMode = status?.mode;
 
   return (
     <section className="card coffeeHomeCard">
-      <button
-        onClick={onOpen}
-        style={{
-          border: "none",
-          background: "transparent",
-          padding: 0,
-          textAlign: "left",
-          cursor: "pointer",
-          minWidth: 0,
-        }}
-      >
-        <div className="muted">Coffee machine</div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: "10px", marginTop: "5px", flexWrap: "wrap" }}>
-          <strong style={{ fontSize: "22px" }}>
-            {online && temp !== null && temp !== undefined ? `${Math.round(temp)}°C` : "Offline"}
-          </strong>
-          {online && target !== null && target !== undefined && (
-            <span className="tiny" style={{ marginTop: 0 }}>Target {Math.round(target)}°C</span>
-          )}
-        </div>
-      </button>
-
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontWeight: 900, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {status?.profile_label || "No profile"}
+        <button
+          onClick={onOpen}
+          style={{
+            border: "none",
+            background: "transparent",
+            padding: 0,
+            textAlign: "left",
+            cursor: "pointer",
+            minWidth: 0,
+          }}
+        >
+          <div className="muted">Coffee machine</div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: "10px", marginTop: "5px", flexWrap: "wrap" }}>
+            <strong style={{ fontSize: "22px" }}>
+              {online && temp !== null && temp !== undefined ? `${Math.round(temp)}°C` : "Offline"}
+            </strong>
+            {online && target !== null && target !== undefined && (
+              <span className="tiny" style={{ marginTop: 0 }}>Target {Math.round(target)}°C</span>
+            )}
+          </div>
+        </button>
+
+        <div className="tiny" style={{ marginTop: "5px" }}>
+          {status?.profile_label || "No profile"} · {status?.mode_label || "Waiting for GaggiMate"}
         </div>
-        <div className="tiny">{status?.mode_label || "Waiting for GaggiMate"}</div>
       </div>
 
-      <button className="button" onClick={onRefresh} style={{ borderRadius: "12px", padding: "10px 12px" }}>
+      <GaggimateModeControl
+        activeMode={activeMode}
+        online={online}
+        onModeChange={onModeChange}
+        compact
+      />
+
+      <button className="button coffeeRefreshButton" onClick={onRefresh}>
         Refresh
       </button>
     </section>
+  );
+}
+
+function GaggimateModeControl({ activeMode, online, onModeChange, compact = false }) {
+  return (
+    <div
+      className={compact ? "coffeeModeControl compact" : "coffeeModeControl"}
+      aria-label="Coffee machine mode"
+    >
+      {GAGGIMATE_MODES.map((mode) => {
+        const active = activeMode === mode.mode;
+
+        return (
+          <button
+            key={mode.id}
+            disabled={!online}
+            onClick={() => onModeChange(mode.id)}
+            className={active ? "coffeeModeButton active" : "coffeeModeButton"}
+            title={`Set coffee machine to ${mode.label}`}
+          >
+            {mode.label}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -2309,20 +2430,20 @@ function TinyTempLine({ points, color }) {
 
 function EnergyDayChart({ data, isMobile = false }) {
   const width = 1100;
-  const height = isMobile ? 260 : 320;
+  const height = isMobile ? 210 : 320;
 
   const margin = {
-    top: 18,
-    right: isMobile ? 28 : 54,
-    bottom: 24,
-    left: isMobile ? 34 : 50,
+    top: isMobile ? 16 : 18,
+    right: isMobile ? 22 : 54,
+    bottom: isMobile ? 18 : 24,
+    left: isMobile ? 30 : 50,
   };
 
   const plotWidth = width - margin.left - margin.right;
   const plotHeight = height - margin.top - margin.bottom;
 
   const zeroY = margin.top + plotHeight / 2;
-  const maxKw = 20;
+  const maxKw = isMobile ? 10 : 20;
 
   const now = new Date();
 
@@ -2391,16 +2512,25 @@ function EnergyDayChart({ data, isMobile = false }) {
     battery_soc: g.battery_soc / g.count,
   }));
 
-  const tickHours = Array.from({ length: 13 }, (_, i) => i * 2);
+  const tickHours = isMobile
+    ? [0, 6, 12, 18, 24]
+    : Array.from({ length: 13 }, (_, i) => i * 2);
   const nowX = xFromDate(now);
+  const legendItems = [
+    { type: "bar", color: "#fbbf24", label: "Solar production", compactLabel: "Solar" },
+    { type: "thin", color: "#92400e", label: "Into house/battery", compactLabel: "To home" },
+    { type: "bar", color: "#93c5fd", label: "Consumption", compactLabel: "Use" },
+    { type: "thin", color: "#2563eb", label: "Covered by PV/battery", compactLabel: "Covered" },
+    { type: "line", color: "rgba(100,116,139,0.35)", label: "Battery SoC", compactLabel: "Battery" },
+  ];
 
   return (
     <div style={{ width: "100%", overflow: "hidden" }}>
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        style={{ width: "100%", height: isMobile ? "260px" : "320px", display: "block" }}
+        style={{ width: "100%", height: isMobile ? "210px" : "320px", display: "block" }}
       >
-        {[-20, -10, 0, 10, 20].map((kw) => {
+        {(isMobile ? [-10, -5, 0, 5, 10] : [-20, -10, 0, 10, 20]).map((kw) => {
           const y = yFromKw(kw);
 
           return (
@@ -2431,6 +2561,8 @@ function EnergyDayChart({ data, isMobile = false }) {
           const x = margin.left + (hour / 24) * plotWidth;
           const label =
             hour === 0
+              ? "12am"
+              : hour === 24
               ? "12am"
               : hour < 12
               ? `${hour}am`
@@ -2578,23 +2710,29 @@ function EnergyDayChart({ data, isMobile = false }) {
       <div
         style={{
           display: isMobile ? "grid" : "flex",
-          gridTemplateColumns: isMobile ? "1fr 1fr" : undefined,
-          gap: "16px",
-          rowGap: isMobile ? "8px" : undefined,
-          columnGap: isMobile ? "10px" : undefined,
+          gridTemplateColumns: isMobile ? "repeat(5, minmax(0, auto))" : undefined,
+          gap: isMobile ? "8px" : "14px",
+          rowGap: isMobile ? "6px" : undefined,
+          columnGap: isMobile ? "8px" : undefined,
           flexWrap: isMobile ? undefined : "wrap",
           alignItems: "center",
-          fontSize: "12px",
+          justifyContent: isMobile ? "space-between" : "center",
+          fontSize: isMobile ? "10px" : "12px",
           color: "#667085",
-          marginTop: isMobile ? "4px" : "-4px",
+          marginTop: isMobile ? "2px" : "-4px",
           paddingLeft: isMobile ? 0 : `${margin.left}px`,
+          paddingRight: isMobile ? 0 : `${margin.right}px`,
         }}
       >
-        <LegendBar color="#fbbf24" label="Solar production" />
-        <LegendThinLine color="#92400e" label="Into house/battery" />
-        <LegendBar color="#93c5fd" label="Consumption" />
-        <LegendThinLine color="#2563eb" label="Covered by PV/battery" />
-        <LegendLine color="rgba(100,116,139,0.35)" label="Battery SoC" />
+        {legendItems.map((item) => (
+          <ChartLegendItem
+            key={item.label}
+            type={item.type}
+            color={item.color}
+            label={isMobile ? item.compactLabel : item.label}
+            compact={isMobile}
+          />
+        ))}
       </div>
     </div>
   );
@@ -2634,13 +2772,13 @@ function batterySocPath(rows, margin, plotWidth, plotHeight) {
   return points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
 }
 
-function LegendBar({ color, label }) {
+function LegendBar({ color, label, compact = false }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: compact ? "4px" : "6px", whiteSpace: "nowrap" }}>
       <span
         style={{
-          width: "18px",
-          height: "10px",
+          width: compact ? "14px" : "18px",
+          height: compact ? "8px" : "10px",
           borderRadius: "999px",
           background: color,
           display: "inline-block",
@@ -2652,13 +2790,13 @@ function LegendBar({ color, label }) {
   );
 }
 
-function LegendThinLine({ color, label }) {
+function LegendThinLine({ color, label, compact = false }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: compact ? "4px" : "6px", whiteSpace: "nowrap" }}>
       <span
         style={{
           width: "3px",
-          height: "16px",
+          height: compact ? "12px" : "16px",
           borderRadius: "999px",
           background: color,
           display: "inline-block",
@@ -2670,12 +2808,12 @@ function LegendThinLine({ color, label }) {
   );
 }
 
-function LegendLine({ color, label }) {
+function LegendLine({ color, label, compact = false }) {
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: compact ? "4px" : "6px", whiteSpace: "nowrap" }}>
       <span
         style={{
-          width: "22px",
+          width: compact ? "16px" : "22px",
           height: "2px",
           background: color,
           display: "inline-block",
@@ -2684,6 +2822,18 @@ function LegendLine({ color, label }) {
       {label}
     </span>
   );
+}
+
+function ChartLegendItem({ type, color, label, compact = false }) {
+  if (type === "bar") {
+    return <LegendBar color={color} label={label} compact={compact} />;
+  }
+
+  if (type === "thin") {
+    return <LegendThinLine color={color} label={label} compact={compact} />;
+  }
+
+  return <LegendLine color={color} label={label} compact={compact} />;
 }
 
 function EventList({ events }) {
@@ -3787,6 +3937,7 @@ function IoTPage({
   refreshGaggimate,
   loadGaggimateProfiles,
   selectGaggimateProfile,
+  changeGaggimateMode,
 }) {
   const online = gaggimateStatus?.online === true;
   const currentTemp = gaggimateStatus?.current_temp_c;
@@ -3843,6 +3994,15 @@ function IoTPage({
             <MetricBox label="Pressure" value={formatMetric(gaggimateStatus?.pressure_bar, " bar", 1)} />
             <MetricBox label="Flow" value={formatMetric(gaggimateStatus?.flow_ml_s, " ml/s", 1)} />
           </div>
+
+          <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
+
+          <div className="muted" style={{ marginBottom: "10px" }}>Mode</div>
+          <GaggimateModeControl
+            activeMode={gaggimateStatus?.mode}
+            online={online}
+            onModeChange={changeGaggimateMode}
+          />
 
           <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
 
