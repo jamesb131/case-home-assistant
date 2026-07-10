@@ -19,6 +19,11 @@ PAGE_ALIASES = {
     "battery": "Home",
     "weather": "Home",
     "security": "Security",
+    "iot": "IoT",
+    "devices": "IoT",
+    "coffee": "IoT",
+    "gaggia": "IoT",
+    "gaggimate": "IoT",
 }
 
 
@@ -35,7 +40,7 @@ def handle_navigation_intent(intent):
 
     if not page:
         return {
-            "reply": "I can take you to Home, Planner, Kids, Lists, Weather or Security.",
+            "reply": "I can take you to Home, Planner, Kids, Lists, IoT, Weather or Security.",
             "intent": "navigation_clarify",
             "confidence": intent.get("confidence", "low"),
             "source": "navigation_handler",

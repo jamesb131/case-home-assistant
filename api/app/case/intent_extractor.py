@@ -34,6 +34,7 @@ Allowed domains:
 - birthdays
 - household
 - features
+- iot
 - navigation
 - refresh
 - time
@@ -58,7 +59,7 @@ Allowed energy metrics:
 
 Schema:
 {
-  "domain": "tasks | lists | calendar | weather | energy | kids | birthdays | household | features | navigation | refresh | time | general",
+  "domain": "tasks | lists | calendar | weather | energy | kids | birthdays | household | features | iot | navigation | refresh | time | general",
   "operation": "create | read | update | delete | complete | summarise | clarify",
   "confidence": "high | medium | low",
 
@@ -221,6 +222,12 @@ Refresh rules:
 - "refresh weather" => domain=refresh, operation=update, category=weather.
 - "refresh bins" => domain=refresh, operation=update, category=bins.
 
+IoT coffee rules:
+- "coffee machine", "Gaggia", "GaggiMate", "espresso machine" => domain=iot, category=coffee.
+- "what is the coffee machine doing?", "coffee machine status", "coffee temperature" => domain=iot, operation=read, category=coffee.
+- "set coffee machine to brew/steam/water/standby" => domain=iot, operation=update, category=coffee, target_page=brew/steam/water/standby.
+- "refresh coffee machine" => domain=iot, operation=update, category=coffee_refresh.
+
 """
 
     user_prompt = f"""
@@ -271,6 +278,11 @@ def extract_deterministic_intent(message):
             "question": text,
         }
 
+    coffee_intent = extract_coffee_intent(text, lower)
+
+    if coffee_intent:
+        return coffee_intent
+
     if re.search(r"\b(we should add|it would be good if case could|case should|add a feature)\b", lower):
         return {
             "domain": "features",
@@ -317,6 +329,73 @@ def extract_deterministic_intent(message):
             "category": infer_refresh_category(lower),
             "question": text,
         }
+
+    return None
+
+
+def extract_coffee_intent(text, lower):
+    if not any(word in lower for word in ["coffee", "gaggia", "gaggimate", "espresso"]):
+        return None
+
+    if re.search(r"\b(show me|open|go to|take me to|navigate to|bring up)\b", lower):
+        return {
+            "domain": "navigation",
+            "operation": "read",
+            "confidence": "high",
+            "clarification_needed": False,
+            "clarification_question": None,
+            "target_page": "coffee",
+            "question": text,
+        }
+
+    mode = infer_coffee_mode(lower)
+
+    if mode and re.search(r"\b(set|change|switch|put|turn)\b", lower):
+        return {
+            "domain": "iot",
+            "operation": "update",
+            "confidence": "high",
+            "clarification_needed": False,
+            "clarification_question": None,
+            "category": "coffee",
+            "target_page": mode,
+            "question": text,
+        }
+
+    if re.search(r"\b(refresh|update|reload|sync)\b", lower):
+        return {
+            "domain": "iot",
+            "operation": "update",
+            "confidence": "high",
+            "clarification_needed": False,
+            "clarification_question": None,
+            "category": "coffee_refresh",
+            "question": text,
+        }
+
+    return {
+        "domain": "iot",
+        "operation": "read",
+        "confidence": "high",
+        "clarification_needed": False,
+        "clarification_question": None,
+        "category": "coffee",
+        "question": text,
+    }
+
+
+def infer_coffee_mode(lower):
+    if "standby" in lower or "idle" in lower or re.search(r"\boff\b", lower):
+        return "standby"
+
+    if "brew" in lower:
+        return "brew"
+
+    if "steam" in lower:
+        return "steam"
+
+    if "water" in lower:
+        return "water"
 
     return None
 
