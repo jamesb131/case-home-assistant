@@ -911,6 +911,7 @@ function App() {
       loadSystemStatus(),
       loadSecurityStatus(),
       loadGaggimateStatus(),
+      loadGaggimateProfiles(),
       loadRoborockStatus(),
       loadNewsSummary(),
     ]);
@@ -929,6 +930,7 @@ function App() {
       loadSystemStatus();
       loadSecurityStatus();
       loadGaggimateStatus();
+      loadGaggimateProfiles();
       loadRoborockStatus();
       loadNewsSummary();
     }, 0);
@@ -1490,9 +1492,11 @@ function App() {
 
               <CoffeeMachineHomeCard
                 status={gaggimateStatus}
+                profiles={gaggimateProfiles}
                 onOpen={() => setActivePage("IoT")}
                 onRefresh={refreshGaggimate}
                 onModeChange={changeGaggimateMode}
+                onProfileSelect={selectGaggimateProfile}
               />
 
               <section
@@ -2185,12 +2189,12 @@ function App() {
 
         .coffeeHomeCard {
           display: grid;
-          grid-template-columns: 92px minmax(0, 1fr) auto;
+          grid-template-columns: 92px minmax(0, 1fr);
           align-items: stretch;
-          gap: 16px;
+          column-gap: 16px;
+          row-gap: 12px;
           margin-bottom: 18px;
           padding: 14px 16px;
-          min-height: 132px;
         }
 
         .coffeeHomeArtwork {
@@ -2230,6 +2234,38 @@ function App() {
           padding: 10px 12px;
           white-space: nowrap;
           align-self: center;
+          grid-column: 1 / -1;
+          width: 100%;
+        }
+
+        .coffeeHomeCard .coffeeModeControl.compact {
+          grid-column: 1 / -1;
+        }
+
+        .coffeeHomeCard .coffeeProfileControl.compact {
+          grid-column: 1 / -1;
+        }
+
+        .coffeeProfileControl {
+          display: grid;
+          gap: 7px;
+        }
+
+        .caseSelect {
+          width: 100%;
+          border: 1px solid #dbe3ec;
+          border-radius: 12px;
+          background: #f8fafc;
+          color: #111827;
+          font: inherit;
+          font-weight: 800;
+          padding: 11px 12px;
+          min-height: 42px;
+        }
+
+        .caseSelect:disabled {
+          cursor: not-allowed;
+          opacity: 0.58;
         }
 
         .coffeeModeControl {
@@ -2318,7 +2354,6 @@ function App() {
           .coffeeHomeArtwork {
             width: 82px;
             height: 112px;
-            grid-row: span 2;
           }
 
           .deviceArtwork {
@@ -2332,7 +2367,6 @@ function App() {
 
           .coffeeRefreshButton {
             width: 100%;
-            grid-column: 2;
           }
 
           .energyTrendCard {
@@ -2491,11 +2525,12 @@ function SystemStatusPanel({ items, compact = false }) {
   );
 }
 
-function CoffeeMachineHomeCard({ status, onOpen, onRefresh, onModeChange }) {
+function CoffeeMachineHomeCard({ status, profiles = [], onOpen, onRefresh, onModeChange, onProfileSelect }) {
   const online = status?.online === true;
   const temp = status?.current_temp_c;
   const target = status?.target_temp_c;
   const activeMode = status?.mode;
+  const selectedProfile = getSelectedGaggimateProfile(profiles, status?.profile_label);
 
   return (
     <section className="card coffeeHomeCard">
@@ -2531,19 +2566,65 @@ function CoffeeMachineHomeCard({ status, onOpen, onRefresh, onModeChange }) {
         <div className="tiny" style={{ marginTop: "5px" }}>
           {status?.profile_label || "No profile"} · {status?.mode_label || "Waiting for GaggiMate"}
         </div>
-
-        <GaggimateModeControl
-          activeMode={activeMode}
-          online={online}
-          onModeChange={onModeChange}
-          compact
-        />
       </div>
+
+      <GaggimateModeControl
+        activeMode={activeMode}
+        online={online}
+        onModeChange={onModeChange}
+        compact
+      />
+
+      <GaggimateProfileSelect
+        profiles={profiles}
+        selectedProfile={selectedProfile}
+        online={online}
+        onProfileSelect={onProfileSelect}
+        compact
+      />
 
       <button className="button coffeeRefreshButton" onClick={onRefresh}>
         Refresh
       </button>
     </section>
+  );
+}
+
+function GaggimateProfileSelect({ profiles = [], selectedProfile, online, onProfileSelect, compact = false }) {
+  const selectedId = selectedProfile?.id || "";
+
+  return (
+    <div className={compact ? "coffeeProfileControl compact" : "coffeeProfileControl"}>
+      <label className="muted" htmlFor={compact ? "coffee-profile-home" : "coffee-profile-iot"}>
+        Profile
+      </label>
+      <select
+        id={compact ? "coffee-profile-home" : "coffee-profile-iot"}
+        value={selectedId}
+        disabled={!online || profiles.length === 0}
+        onChange={(event) => {
+          if (event.target.value) {
+            onProfileSelect(event.target.value);
+          }
+        }}
+        className="caseSelect"
+      >
+        {profiles.length === 0 ? (
+          <option value="">No profiles loaded</option>
+        ) : (
+          profiles.map((profile) => (
+            <option key={profile.id || profile.label} value={profile.id || ""}>
+              {profile.label || profile.id}
+            </option>
+          ))
+        )}
+      </select>
+      {selectedProfile?.description && (
+        <div className="tiny" style={{ marginTop: "6px" }}>
+          {selectedProfile.description}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -2569,6 +2650,14 @@ function GaggimateModeControl({ activeMode, online, onModeChange, compact = fals
         );
       })}
     </div>
+  );
+}
+
+function getSelectedGaggimateProfile(profiles, activeProfileLabel) {
+  return (
+    profiles.find((profile) => profile.selected) ||
+    profiles.find((profile) => profile.label === activeProfileLabel) ||
+    null
   );
 }
 
@@ -4181,6 +4270,10 @@ function IoTPage({
   const currentTemp = gaggimateStatus?.current_temp_c;
   const targetTemp = gaggimateStatus?.target_temp_c;
   const activeProfile = gaggimateStatus?.profile_label;
+  const selectedProfile = getSelectedGaggimateProfile(gaggimateProfiles, activeProfile);
+  const roborockRoutes = roborockStatus?.routes || [];
+  const [selectedRoborockRoute, setSelectedRoborockRoute] = useState(roborockRoutes[0] || "");
+  const activeRoborockRoute = selectedRoborockRoute || roborockRoutes[0] || "";
 
   return (
     <div>
@@ -4248,6 +4341,22 @@ function IoTPage({
             online={online}
             onModeChange={changeGaggimateMode}
           />
+
+          <div style={{ marginTop: "16px" }}>
+            <GaggimateProfileSelect
+              profiles={gaggimateProfiles}
+              selectedProfile={selectedProfile}
+              online={online}
+              onProfileSelect={selectGaggimateProfile}
+            />
+            <button
+              className="button"
+              onClick={loadGaggimateProfiles}
+              style={{ marginTop: "10px", width: "100%", background: "#334155" }}
+            >
+              Load profiles
+            </button>
+          </div>
 
           <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
 
@@ -4333,22 +4442,35 @@ function IoTPage({
             <button className="button" onClick={() => runRoborockCommand("dock")} style={{ background: "#475569" }}>Dock</button>
           </div>
 
-          {(roborockStatus?.routes || []).length > 0 && (
+          {roborockRoutes.length > 0 ? (
             <>
-              <div className="muted" style={{ margin: "16px 0 10px" }}>Routes</div>
-              <div style={{ display: "grid", gap: "8px" }}>
-                {roborockStatus.routes.map((route) => (
-                  <button
-                    key={route}
-                    className="button"
-                    onClick={() => runRoborockCommand("run_route", route)}
-                    style={{ background: "#0f172a" }}
-                  >
-                    {route}
-                  </button>
-                ))}
+              <div className="muted" style={{ margin: "16px 0 10px" }}>Routine</div>
+              <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "8px" }}>
+                <select
+                  className="caseSelect"
+                  value={activeRoborockRoute}
+                  onChange={(event) => setSelectedRoborockRoute(event.target.value)}
+                >
+                  {roborockRoutes.map((route) => (
+                    <option key={route} value={route}>
+                      {route}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="button"
+                  onClick={() => runRoborockCommand("run_route", activeRoborockRoute)}
+                  disabled={!activeRoborockRoute}
+                  style={{ background: "#0f172a" }}
+                >
+                  Run
+                </button>
               </div>
             </>
+          ) : (
+            <div className="tiny" style={{ marginTop: "14px", lineHeight: 1.5 }}>
+              Add named routines in CASE Core with roborock_route_entities, for example {"{\"kitchen\":\"script.roborock_clean_kitchen\"}"}.
+            </div>
           )}
 
           <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
@@ -4381,59 +4503,13 @@ function IoTPage({
             Refresh vacuum
           </button>
         </section>
-
         <section className="card">
-          <div className="muted">Profiles</div>
-          <h2 style={{ margin: "6px 0 14px", fontSize: "22px" }}>Select profile</h2>
-
-          <button
-            className="button"
-            onClick={loadGaggimateProfiles}
-            style={{ marginBottom: "14px", width: "100%", background: "#334155" }}
-          >
-            Load profiles
-          </button>
-
-          {gaggimateProfiles.length === 0 ? (
-            <div className="tiny">No profiles loaded yet.</div>
-          ) : (
-            <div style={{ display: "grid", gap: "8px" }}>
-              {gaggimateProfiles.map((profile) => {
-                const selected = profile.selected || profile.label === activeProfile;
-
-                return (
-                  <button
-                    key={profile.id || profile.label}
-                    disabled={!online || !profile.id}
-                    onClick={() => selectGaggimateProfile(profile.id)}
-                    style={{
-                      border: selected ? "2px solid #111827" : "1px solid #e2e8f0",
-                      background: selected ? "#f8fafc" : "white",
-                      color: "#111827",
-                      borderRadius: "14px",
-                      padding: "12px",
-                      textAlign: "left",
-                      cursor: online && profile.id ? "pointer" : "not-allowed",
-                      opacity: online && profile.id ? 1 : 0.55,
-                    }}
-                  >
-                    <div style={{ fontWeight: 900 }}>{profile.label || profile.id}</div>
-                    {profile.description && (
-                      <div className="tiny" style={{ marginTop: "4px" }}>
-                        {profile.description}
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
-
+          <div className="muted">IoT notes</div>
+          <h2 style={{ margin: "6px 0 14px", fontSize: "22px" }}>Guardrails</h2>
           <div className="tiny" style={{ lineHeight: 1.5 }}>
-            Power switching is intentionally not enabled here yet. GaggiMate documents status and profile
-            control over WebSocket; machine power should go through a documented relay path or smart plug.
+            Coffee machine power switching is intentionally not enabled here yet. GaggiMate documents status
+            and profile control over WebSocket; machine power should go through a documented relay path or
+            smart plug. Roborock routines run only through named Home Assistant scripts, buttons or scenes.
           </div>
         </section>
       </div>
