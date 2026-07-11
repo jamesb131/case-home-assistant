@@ -37,6 +37,13 @@ OPTION_ENV_MAP = {
     "gaggimate_ws_protocol": "GAGGIMATE_WS_PROTOCOL",
     "gaggimate_timeout": "GAGGIMATE_TIMEOUT",
     "gaggimate_poll_interval": "GAGGIMATE_POLL_INTERVAL",
+    "home_assistant_url": "HOME_ASSISTANT_URL",
+    "home_assistant_token": "HOME_ASSISTANT_TOKEN",
+    "roborock_vacuum_entity_id": "ROBOROCK_VACUUM_ENTITY_ID",
+    "roborock_route_entities": "ROBOROCK_ROUTE_ENTITIES",
+    "roborock_poll_interval": "ROBOROCK_POLL_INTERVAL",
+    "news_feeds": "NEWS_FEEDS",
+    "news_refresh_interval_seconds": "NEWS_REFRESH_INTERVAL_SECONDS",
 }
 
 

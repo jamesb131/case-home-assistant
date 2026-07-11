@@ -1,9 +1,13 @@
 from app.repositories.system_snapshots_repository import get_snapshot
 from app.services.gaggimate_client import GaggimateUnavailable, change_mode
+from app.services.home_assistant_client import HomeAssistantUnavailable
+from app.services.roborock_client import run_roborock_command
 from app.worker import poll_gaggimate_snapshot
+from app.worker import poll_roborock_snapshot
 
 
 COFFEE_ALIASES = ["coffee", "gaggia", "gaggimate", "espresso"]
+ROBOROCK_ALIASES = ["vacuum", "roborock", "qrevo", "robot cleaner"]
 
 
 def handle_iot_intent(intent):
@@ -13,8 +17,11 @@ def handle_iot_intent(intent):
     if device == "coffee" or any(alias in raw_message for alias in COFFEE_ALIASES):
         return handle_coffee_intent(intent)
 
+    if device in ["roborock", "roborock_route", "vacuum"] or any(alias in raw_message for alias in ROBOROCK_ALIASES):
+        return handle_roborock_intent(intent)
+
     return {
-        "reply": "I can help with the coffee machine at the moment.",
+        "reply": "I can help with the coffee machine and Roborock vacuum at the moment.",
         "intent": "iot_not_supported",
         "confidence": intent.get("confidence", "medium"),
         "source": "iot_handler",
@@ -149,6 +156,115 @@ def normalise_coffee_mode(value):
 
     if "water" in lower or "hot water" in lower:
         return "water"
+
+    return None
+
+
+def handle_roborock_intent(intent):
+    operation = intent.get("operation")
+    command = normalise_roborock_command(intent)
+
+    if operation == "update" and command:
+        return update_roborock(command, intent)
+
+    return read_roborock_status(intent)
+
+
+def read_roborock_status(intent):
+    snapshot = get_snapshot("iot.roborock")
+
+    if not snapshot:
+        snapshot = poll_roborock_snapshot()
+
+    status = snapshot["payload"]["snapshot"]
+
+    if not status.get("configured"):
+        return {
+            "reply": "Roborock is not configured yet. Add the Home Assistant URL, token and vacuum entity ID first.",
+            "intent": "roborock_status_not_configured",
+            "confidence": intent.get("confidence", "medium"),
+            "source": "iot_handler",
+            "roborock": status,
+        }
+
+    if not status.get("available"):
+        return {
+            "reply": f"Roborock looks unavailable. {status.get('message') or ''}".strip(),
+            "intent": "roborock_status_unavailable",
+            "confidence": intent.get("confidence", "medium"),
+            "source": "iot_handler",
+            "roborock": status,
+        }
+
+    battery = status.get("battery_level")
+    pieces = [
+        f"Roborock is {status.get('activity') or status.get('state') or 'online'}"
+    ]
+
+    if battery is not None:
+        pieces.append(f"battery {battery} percent")
+
+    if status.get("cleaning_progress") is not None:
+        pieces.append(f"cleaning progress {status['cleaning_progress']} percent")
+
+    if status.get("error"):
+        pieces.append(f"error {status['error']}")
+
+    return {
+        "reply": ", ".join(pieces) + ".",
+        "intent": "roborock_status",
+        "confidence": intent.get("confidence", "medium"),
+        "source": "iot_handler",
+        "roborock": status,
+    }
+
+
+def update_roborock(command, intent):
+    route = intent.get("title")
+
+    try:
+        result = run_roborock_command(command, route=route)
+    except HomeAssistantUnavailable as exc:
+        return {
+            "reply": f"I couldn't control Roborock. {exc}",
+            "intent": "roborock_update_failed",
+            "confidence": intent.get("confidence", "medium"),
+            "source": "iot_handler",
+        }
+
+    status = result.get("status") or {}
+
+    if command == "run_route":
+        reply = f"Roborock route {route} started."
+    elif command == "dock":
+        reply = "Roborock is returning to the dock."
+    elif command == "pause":
+        reply = "Roborock cleaning paused."
+    else:
+        reply = "Roborock cleaning started."
+
+    return {
+        "reply": reply,
+        "intent": "roborock_update",
+        "confidence": intent.get("confidence", "medium"),
+        "source": "iot_handler",
+        "roborock": status,
+        "ui_action": {
+            "type": "refresh_data",
+            "scope": "roborock",
+        },
+    }
+
+
+def normalise_roborock_command(intent):
+    target = (intent.get("target_page") or "").lower()
+    category = (intent.get("category") or "").lower()
+
+    if category == "roborock_route" or intent.get("title"):
+        return "run_route"
+
+    if target in ["start", "pause", "dock"]:
+        return target
 
     return None
 

@@ -210,6 +210,12 @@ function App() {
   const [gaggimateStatus, setGaggimateStatus] = useState(null);
   const [gaggimateProfiles, setGaggimateProfiles] = useState([]);
   const [gaggimateError, setGaggimateError] = useState(null);
+  const [roborockStatus, setRoborockStatus] = useState(null);
+  const [roborockError, setRoborockError] = useState(null);
+  const [newsItems, setNewsItems] = useState([]);
+  const [newsSummary, setNewsSummary] = useState(null);
+  const [newsError, setNewsError] = useState(null);
+  const [newsLoading, setNewsLoading] = useState(false);
 
   async function loadTasks() {
     try {
@@ -783,6 +789,115 @@ function App() {
     }
   }
 
+  async function loadRoborockStatus() {
+    try {
+      const res = await apiFetch(`${API_BASE}/iot/roborock/status`);
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || json.message || `Roborock API returned ${res.status}`);
+
+      setRoborockStatus(json);
+      setRoborockError(json.snapshot_error || json.message || null);
+    } catch (err) {
+      console.error(err);
+      setRoborockError(err.message);
+      setRoborockStatus((current) => ({
+        ...(current || {}),
+        available: false,
+        message: err.message,
+      }));
+    }
+  }
+
+  async function refreshRoborock() {
+    try {
+      const res = await apiFetch(`${API_BASE}/iot/roborock/refresh`, {
+        method: "POST",
+      });
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || json.message || `Roborock refresh returned ${res.status}`);
+
+      setRoborockStatus(json);
+      setRoborockError(json.snapshot_error || json.message || null);
+    } catch (err) {
+      console.error(err);
+      setRoborockError(err.message);
+    }
+  }
+
+  async function runRoborockCommand(command, route = null) {
+    try {
+      const res = await apiFetch(`${API_BASE}/iot/roborock/command`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ command, route }),
+      });
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || `Roborock command returned ${res.status}`);
+
+      setRoborockStatus(json.status || json);
+      setRoborockError(null);
+    } catch (err) {
+      console.error(err);
+      setRoborockError(err.message);
+    }
+  }
+
+  async function loadNews() {
+    try {
+      const res = await apiFetch(`${API_BASE}/news/latest`);
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || `News API returned ${res.status}`);
+
+      setNewsItems(json.items || []);
+      setNewsError(null);
+    } catch (err) {
+      console.error(err);
+      setNewsError(err.message);
+    }
+  }
+
+  async function loadNewsSummary() {
+    try {
+      const res = await apiFetch(`${API_BASE}/news/summary`);
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || `News summary returned ${res.status}`);
+
+      setNewsSummary(json);
+      setNewsItems(json.items || []);
+      setNewsError(null);
+    } catch (err) {
+      console.error(err);
+      setNewsError(err.message);
+    }
+  }
+
+  async function refreshNews() {
+    setNewsLoading(true);
+
+    try {
+      const res = await apiFetch(`${API_BASE}/news/refresh`, {
+        method: "POST",
+      });
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || json.snapshot_error || `News refresh returned ${res.status}`);
+
+      await loadNewsSummary();
+    } catch (err) {
+      console.error(err);
+      setNewsError(err.message);
+    } finally {
+      setNewsLoading(false);
+    }
+  }
+
   async function refreshVisibleData() {
     await Promise.allSettled([
       loadData(),
@@ -796,6 +911,8 @@ function App() {
       loadSystemStatus(),
       loadSecurityStatus(),
       loadGaggimateStatus(),
+      loadRoborockStatus(),
+      loadNewsSummary(),
     ]);
   }
 
@@ -812,6 +929,8 @@ function App() {
       loadSystemStatus();
       loadSecurityStatus();
       loadGaggimateStatus();
+      loadRoborockStatus();
+      loadNewsSummary();
     }, 0);
 
     const energyInterval = setInterval(() => {
@@ -840,6 +959,14 @@ function App() {
       loadGaggimateStatus();
     }, 30000);
 
+    const roborockInterval = setInterval(() => {
+      loadRoborockStatus();
+    }, 60000);
+
+    const newsInterval = setInterval(() => {
+      loadNewsSummary();
+    }, 300000);
+
     return () => {
       clearTimeout(initialLoad);
       clearInterval(energyInterval);
@@ -848,6 +975,8 @@ function App() {
       clearInterval(assistantStatusInterval);
       clearInterval(systemStatusInterval);
       clearInterval(gaggimateInterval);
+      clearInterval(roborockInterval);
+      clearInterval(newsInterval);
     };
   }, []);
 
@@ -855,6 +984,11 @@ function App() {
     if (activePage === "IoT") {
       loadGaggimateProfiles();
       loadGaggimateStatus();
+      loadRoborockStatus();
+    }
+
+    if (activePage === "News") {
+      loadNewsSummary();
     }
   }, [activePage]);
 
@@ -928,6 +1062,7 @@ function App() {
     ["⚡", "Energy"],
     ["☕", "IoT"],
     ["☁", "Weather"],
+    ["📰", "News"],
     ["🛡", "Security"],
   ];
   const systemStatusItems = buildSystemStatusItems(systemStatus);
@@ -1695,6 +1830,19 @@ function App() {
               loadGaggimateProfiles={loadGaggimateProfiles}
               selectGaggimateProfile={selectGaggimateProfile}
               changeGaggimateMode={changeGaggimateMode}
+              roborockStatus={roborockStatus}
+              roborockError={roborockError}
+              refreshRoborock={refreshRoborock}
+              runRoborockCommand={runRoborockCommand}
+            />
+          )}
+          {activePage === "News" && (
+            <NewsPage
+              newsItems={newsItems}
+              newsSummary={newsSummary}
+              newsError={newsError}
+              newsLoading={newsLoading}
+              refreshNews={refreshNews}
             />
           )}
           {activePage === "Kids" && <KidsPage tasks={tasks} />}
@@ -2037,11 +2185,27 @@ function App() {
 
         .coffeeHomeCard {
           display: grid;
-          grid-template-columns: auto minmax(0, 1fr) minmax(300px, 0.95fr) auto;
-          align-items: center;
-          gap: 14px;
+          grid-template-columns: 92px minmax(0, 1fr) auto;
+          align-items: stretch;
+          gap: 16px;
           margin-bottom: 18px;
-          padding: 16px 18px;
+          padding: 14px 16px;
+          min-height: 132px;
+        }
+
+        .coffeeHomeArtwork {
+          width: 92px;
+          height: 118px;
+          object-fit: contain;
+          align-self: center;
+          justify-self: center;
+        }
+
+        .coffeeHomeBody {
+          min-width: 0;
+          display: grid;
+          align-content: center;
+          gap: 8px;
         }
 
         .deviceArtwork {
@@ -2065,6 +2229,7 @@ function App() {
           border-radius: 12px;
           padding: 10px 12px;
           white-space: nowrap;
+          align-self: center;
         }
 
         .coffeeModeControl {
@@ -2144,8 +2309,16 @@ function App() {
           }
 
           .coffeeHomeCard {
-            grid-template-columns: 1fr;
-            gap: 10px;
+            grid-template-columns: 82px minmax(0, 1fr);
+            gap: 12px;
+            padding: 14px;
+            min-height: 0;
+          }
+
+          .coffeeHomeArtwork {
+            width: 82px;
+            height: 112px;
+            grid-row: span 2;
           }
 
           .deviceArtwork {
@@ -2159,10 +2332,15 @@ function App() {
 
           .coffeeRefreshButton {
             width: 100%;
+            grid-column: 2;
           }
 
           .energyTrendCard {
             padding: 18px 14px 14px;
+          }
+
+          .newsLayout {
+            grid-template-columns: 1fr !important;
           }
         }
 
@@ -2208,6 +2386,14 @@ function buildSystemStatusItems(status) {
     {
       label: "Coffee",
       status: status.gaggimate?.status || "unknown",
+    },
+    {
+      label: "Roborock",
+      status: status.roborock?.status || "unknown",
+    },
+    {
+      label: "News",
+      status: status.news?.status || "unknown",
     },
   ];
 }
@@ -2314,12 +2500,12 @@ function CoffeeMachineHomeCard({ status, onOpen, onRefresh, onModeChange }) {
   return (
     <section className="card coffeeHomeCard">
       <img
-        className="deviceArtwork"
+        className="coffeeHomeArtwork"
         src="/devices/gaggia-classic.png"
         alt="Gaggia Classic coffee machine"
       />
 
-      <div style={{ minWidth: 0 }}>
+      <div className="coffeeHomeBody">
         <button
           onClick={onOpen}
           style={{
@@ -2337,7 +2523,7 @@ function CoffeeMachineHomeCard({ status, onOpen, onRefresh, onModeChange }) {
               {online && temp !== null && temp !== undefined ? `${Math.round(temp)}°C` : "Offline"}
             </strong>
             {online && target !== null && target !== undefined && (
-              <span className="tiny" style={{ marginTop: 0 }}>Target {Math.round(target)}°C</span>
+            <span className="tiny" style={{ marginTop: 0 }}>Target {Math.round(target)}°C</span>
             )}
           </div>
         </button>
@@ -2345,14 +2531,14 @@ function CoffeeMachineHomeCard({ status, onOpen, onRefresh, onModeChange }) {
         <div className="tiny" style={{ marginTop: "5px" }}>
           {status?.profile_label || "No profile"} · {status?.mode_label || "Waiting for GaggiMate"}
         </div>
-      </div>
 
-      <GaggimateModeControl
-        activeMode={activeMode}
-        online={online}
-        onModeChange={onModeChange}
-        compact
-      />
+        <GaggimateModeControl
+          activeMode={activeMode}
+          online={online}
+          onModeChange={onModeChange}
+          compact
+        />
+      </div>
 
       <button className="button coffeeRefreshButton" onClick={onRefresh}>
         Refresh
@@ -3986,6 +4172,10 @@ function IoTPage({
   loadGaggimateProfiles,
   selectGaggimateProfile,
   changeGaggimateMode,
+  roborockStatus,
+  roborockError,
+  refreshRoborock,
+  runRoborockCommand,
 }) {
   const online = gaggimateStatus?.online === true;
   const currentTemp = gaggimateStatus?.current_temp_c;
@@ -4101,6 +4291,98 @@ function IoTPage({
         </section>
 
         <section className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
+            <div>
+              <div className="muted">Roborock</div>
+              <h2 style={{ margin: "6px 0 0", fontSize: "26px" }}>Qrevo MaxQ</h2>
+            </div>
+            <span
+              style={{
+                borderRadius: "999px",
+                padding: "7px 10px",
+                fontSize: "12px",
+                fontWeight: 900,
+                background: roborockStatus?.available ? "#dcfce7" : "#fee2e2",
+                color: roborockStatus?.available ? "#15803d" : "#b91c1c",
+              }}
+            >
+              {roborockStatus?.available ? "Online" : roborockStatus?.configured === false ? "Setup needed" : "Offline"}
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: "10px",
+              marginTop: "18px",
+            }}
+          >
+            <MetricBox label="State" value={roborockStatus?.state || "--"} />
+            <MetricBox label="Battery" value={formatMetric(roborockStatus?.battery_level, "%")} />
+            <MetricBox label="Activity" value={roborockStatus?.activity || "--"} />
+            <MetricBox label="Dock" value={roborockStatus?.dock_state || "--"} />
+          </div>
+
+          <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
+
+          <div className="muted" style={{ marginBottom: "10px" }}>Controls</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" }}>
+            <button className="button" onClick={() => runRoborockCommand("start")}>Start</button>
+            <button className="button" onClick={() => runRoborockCommand("pause")} style={{ background: "#334155" }}>Pause</button>
+            <button className="button" onClick={() => runRoborockCommand("dock")} style={{ background: "#475569" }}>Dock</button>
+          </div>
+
+          {(roborockStatus?.routes || []).length > 0 && (
+            <>
+              <div className="muted" style={{ margin: "16px 0 10px" }}>Routes</div>
+              <div style={{ display: "grid", gap: "8px" }}>
+                {roborockStatus.routes.map((route) => (
+                  <button
+                    key={route}
+                    className="button"
+                    onClick={() => runRoborockCommand("run_route", route)}
+                    style={{ background: "#0f172a" }}
+                  >
+                    {route}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
+
+          <div style={{ display: "grid", gap: "10px" }}>
+            <DeviceDetail label="Entity" value={roborockStatus?.entity_id || "--"} />
+            <DeviceDetail label="Cleaned area" value={formatMetric(roborockStatus?.cleaned_area, " m²")} />
+            <DeviceDetail label="Cleaning time" value={formatMetric(roborockStatus?.cleaning_time, " min")} />
+            <DeviceDetail label="Error" value={roborockStatus?.error || "--"} />
+          </div>
+
+          {(roborockError || roborockStatus?.message) && (
+            <div
+              style={{
+                marginTop: "16px",
+                borderRadius: "14px",
+                padding: "12px",
+                background: roborockStatus?.available ? "#f8fafc" : "#fef2f2",
+                color: roborockStatus?.available ? "#475569" : "#991b1b",
+                fontSize: "13px",
+                fontWeight: 700,
+                lineHeight: 1.4,
+              }}
+            >
+              {roborockError || roborockStatus?.message}
+            </div>
+          )}
+
+          <button className="button" onClick={refreshRoborock} style={{ marginTop: "16px", width: "100%" }}>
+            Refresh vacuum
+          </button>
+        </section>
+
+        <section className="card">
           <div className="muted">Profiles</div>
           <h2 style={{ margin: "6px 0 14px", fontSize: "22px" }}>Select profile</h2>
 
@@ -4159,6 +4441,115 @@ function IoTPage({
   );
 }
 
+function NewsPage({ newsItems, newsSummary, newsError, newsLoading, refreshNews }) {
+  const items = newsItems || [];
+
+  return (
+    <div>
+      <section style={{ marginBottom: "18px" }}>
+        <h1 style={{ margin: 0, fontSize: "32px" }}>News</h1>
+        <div style={{ marginTop: "8px", fontSize: "15px", color: "#6b7280" }}>
+          ABC headlines and local CASE summaries
+        </div>
+      </section>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1.5fr) minmax(280px, 0.7fr)",
+          gap: "16px",
+          alignItems: "start",
+        }}
+        className="newsLayout"
+      >
+        <section className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
+            <div>
+              <div className="muted">Latest</div>
+              <h2 style={{ margin: "6px 0 0", fontSize: "26px" }}>ABC News</h2>
+            </div>
+            <button className="button" onClick={refreshNews} disabled={newsLoading}>
+              {newsLoading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
+
+          {newsError && (
+            <div
+              style={{
+                marginTop: "16px",
+                borderRadius: "14px",
+                padding: "12px",
+                background: "#fef2f2",
+                color: "#991b1b",
+                fontSize: "13px",
+                fontWeight: 700,
+              }}
+            >
+              {newsError}
+            </div>
+          )}
+
+          <div style={{ display: "grid", gap: "12px", marginTop: "18px" }}>
+            {items.length === 0 ? (
+              <div className="tiny">No news loaded yet.</div>
+            ) : (
+              items.map((item) => (
+                <article key={item.url} className="innerCard" style={{ padding: "14px" }}>
+                  <div className="tiny" style={{ marginBottom: "6px" }}>
+                    {item.feed_name} · {formatNewsTime(item.published_at)}
+                  </div>
+                  <a
+                    href={item.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      color: "#111827",
+                      textDecoration: "none",
+                      fontWeight: 900,
+                      fontSize: "18px",
+                      lineHeight: 1.25,
+                    }}
+                  >
+                    {item.title}
+                  </a>
+                  <p style={{ color: "#475569", lineHeight: 1.45, margin: "8px 0 0" }}>
+                    {item.summary || item.description || "Summary unavailable until the local LLM is online."}
+                  </p>
+                  {item.summary_status !== "ok" && (
+                    <div className="tiny" style={{ marginTop: "8px" }}>
+                      Summary {item.summary_status || "pending"}
+                    </div>
+                  )}
+                </article>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="card">
+          <div className="muted">Summary status</div>
+          <h2 style={{ margin: "6px 0 14px", fontSize: "22px" }}>
+            {newsSummary?.summaries_available ? "Summaries ready" : "Feed text only"}
+          </h2>
+          <div style={{ display: "grid", gap: "10px" }}>
+            <DeviceDetail label="Items" value={newsSummary?.item_count ?? items.length} />
+            <DeviceDetail label="Summarised" value={newsSummary?.summary_count ?? 0} />
+            <DeviceDetail label="LLM unavailable" value={newsSummary?.unavailable_count ?? 0} />
+            <DeviceDetail label="Last refresh" value={formatNewsTime(newsSummary?.refreshed_at)} />
+          </div>
+
+          <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
+
+          <div className="tiny" style={{ lineHeight: 1.5 }}>
+            CASE only summarises RSS title and description text using the local desktop LLM. When that LLM is
+            offline, headlines still load and summaries are marked unavailable.
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
 function MetricBox({ label, value }) {
   return (
     <div className="innerCard" style={{ textAlign: "left" }}>
@@ -4182,6 +4573,16 @@ function DeviceDetail({ label, value }) {
 function formatMetric(value, unit, decimals = 0) {
   if (value === null || value === undefined) return "--";
   return `${Number(value).toFixed(decimals)}${unit}`;
+}
+
+function formatNewsTime(value) {
+  if (!value) return "--";
+
+  return new Date(value).toLocaleString([], {
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function SecurityPage({ securityStatus, assistantStatus, apiBase }) {

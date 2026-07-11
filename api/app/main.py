@@ -27,13 +27,19 @@ from app.services.system_status import get_system_status
 from app.services.refresh_service import refresh_data
 from app.worker import log_energy_snapshot
 from app.worker import poll_gaggimate_snapshot
+from app.worker import poll_news_snapshot
+from app.worker import poll_roborock_snapshot
 from app.services.gaggimate_client import (
     GaggimateUnavailable,
     change_mode as change_gaggimate_mode,
     list_profiles as list_gaggimate_profiles,
     select_profile as select_gaggimate_profile,
 )
+from app.services.home_assistant_client import HomeAssistantUnavailable
+from app.services.news_client import get_news_overview
+from app.services.roborock_client import get_roborock_status, run_roborock_command
 from app.repositories.gaggimate_repository import get_recent_gaggimate_readings
+from app.repositories.news_repository import get_latest_news
 
 from app.routers.task_templates_router import router as task_templates_router
 
@@ -381,6 +387,10 @@ class GaggimateProfileSelectRequest(BaseModel):
 class GaggimateModeRequest(BaseModel):
     mode: str
 
+class RoborockCommandRequest(BaseModel):
+    command: str
+    route: str | None = None
+
 @app.post("/case/ask")
 def case_ask(request: CaseAskRequest):
     return ask_case(request.message)
@@ -456,6 +466,76 @@ def gaggimate_change_mode(request: GaggimateModeRequest):
             status_code=503,
             content={"changed": False, "error": str(exc)},
         )
+
+@app.get("/iot/roborock/status")
+def roborock_status():
+    snapshot = get_snapshot("iot.roborock")
+
+    if snapshot:
+        return {
+            **snapshot["payload"]["snapshot"],
+            "cached": True,
+            "captured_at": snapshot["captured_at"],
+            "status": snapshot["status"],
+            "snapshot_error": snapshot["error"],
+        }
+
+    result = poll_roborock_snapshot()
+    return {
+        **result["payload"]["snapshot"],
+        "cached": False,
+        "captured_at": result["captured_at"],
+        "status": result["status"],
+        "snapshot_error": result["error"],
+    }
+
+@app.post("/iot/roborock/refresh")
+def refresh_roborock_status():
+    result = poll_roborock_snapshot()
+    return {
+        **result["payload"]["snapshot"],
+        "cached": False,
+        "captured_at": result["captured_at"],
+        "status": result["status"],
+        "snapshot_error": result["error"],
+    }
+
+@app.post("/iot/roborock/command")
+def roborock_command(request: RoborockCommandRequest):
+    try:
+        return run_roborock_command(request.command, route=request.route)
+    except HomeAssistantUnavailable as exc:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "ok": False,
+                "command": request.command,
+                "route": request.route,
+                "error": str(exc),
+                "status": get_roborock_status(),
+            },
+        )
+
+@app.get("/news/latest")
+def news_latest(limit: int = 20):
+    bounded_limit = max(1, min(limit, 50))
+    return {"items": get_latest_news(limit=bounded_limit)}
+
+@app.post("/news/refresh")
+def news_refresh():
+    snapshot = poll_news_snapshot()
+    return {
+        **snapshot["payload"],
+        "cached": False,
+        "captured_at": snapshot["captured_at"],
+        "status": snapshot["status"],
+        "snapshot_error": snapshot["error"],
+    }
+
+@app.get("/news/summary")
+def news_summary(limit: int = 8):
+    bounded_limit = max(1, min(limit, 20))
+    return get_news_overview(limit=bounded_limit)
 
 @app.get("/calendar/upcoming")
 def calendar_upcoming():

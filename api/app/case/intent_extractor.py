@@ -35,6 +35,7 @@ Allowed domains:
 - household
 - features
 - iot
+- news
 - navigation
 - refresh
 - time
@@ -59,7 +60,7 @@ Allowed energy metrics:
 
 Schema:
 {
-  "domain": "tasks | lists | calendar | weather | energy | kids | birthdays | household | features | iot | navigation | refresh | time | general",
+  "domain": "tasks | lists | calendar | weather | energy | kids | birthdays | household | features | iot | news | navigation | refresh | time | general",
   "operation": "create | read | update | delete | complete | summarise | clarify",
   "confidence": "high | medium | low",
 
@@ -228,6 +229,16 @@ IoT coffee rules:
 - "set coffee machine to brew/steam/water/standby" => domain=iot, operation=update, category=coffee, target_page=brew/steam/water/standby.
 - "refresh coffee machine" => domain=iot, operation=update, category=coffee_refresh.
 
+IoT Roborock rules:
+- "vacuum", "Roborock", "Qrevo" => domain=iot, category=roborock.
+- "what is the vacuum doing?", "vacuum status", "Roborock battery" => domain=iot, operation=read, category=roborock.
+- "start the vacuum", "pause cleaning", "dock the vacuum" => domain=iot, operation=update, category=roborock, target_page=start/pause/dock.
+- "clean kitchen", "run the kitchen route" => domain=iot, operation=update, category=roborock_route, title=route name.
+
+News rules:
+- "news", "headlines", "ABC News", "what's happening" => domain=news, operation=read.
+- "summarise the news", "what kind of news is there?" => domain=news, operation=summarise.
+
 """
 
     user_prompt = f"""
@@ -282,6 +293,16 @@ def extract_deterministic_intent(message):
 
     if coffee_intent:
         return coffee_intent
+
+    roborock_intent = extract_roborock_intent(text, lower)
+
+    if roborock_intent:
+        return roborock_intent
+
+    news_intent = extract_news_intent(text, lower)
+
+    if news_intent:
+        return news_intent
 
     if re.search(r"\b(we should add|it would be good if case could|case should|add a feature)\b", lower):
         return {
@@ -400,6 +421,98 @@ def infer_coffee_mode(lower):
     return None
 
 
+def extract_roborock_intent(text, lower):
+    room_clean_request = re.search(
+        r"\b(clean|vacuum)\s+(the\s+)?(kitchen|living|lounge|dining|hall|hallway|bedroom|bathroom|office|study)\b",
+        lower,
+    )
+
+    if not any(word in lower for word in ["vacuum", "roborock", "qrevo", "robot cleaner"]) and not room_clean_request:
+        return None
+
+    if re.search(r"\b(show me|open|go to|take me to|navigate to|bring up)\b", lower):
+        return {
+            "domain": "navigation",
+            "operation": "read",
+            "confidence": "high",
+            "clarification_needed": False,
+            "clarification_question": None,
+            "target_page": "iot",
+            "question": text,
+        }
+
+    if any(word in lower for word in ["status", "doing", "battery", "where", "error"]):
+        return {
+            "domain": "iot",
+            "operation": "read",
+            "confidence": "high",
+            "clarification_needed": False,
+            "clarification_question": None,
+            "category": "roborock",
+            "question": text,
+        }
+
+    if any(word in lower for word in ["dock", "base", "return home", "go home"]):
+        return roborock_update_intent(text, "roborock", "dock")
+
+    if any(word in lower for word in ["pause", "stop"]):
+        return roborock_update_intent(text, "roborock", "pause")
+
+    if re.search(r"\b(start|clean|run)\b", lower):
+        route = extract_roborock_route(text, lower)
+        if route:
+            return roborock_update_intent(text, "roborock_route", None, route)
+        return roborock_update_intent(text, "roborock", "start")
+
+    return {
+        "domain": "iot",
+        "operation": "read",
+        "confidence": "high",
+        "clarification_needed": False,
+        "clarification_question": None,
+        "category": "roborock",
+        "question": text,
+    }
+
+
+def roborock_update_intent(text, category, target_page=None, title=None):
+    return {
+        "domain": "iot",
+        "operation": "update",
+        "confidence": "high",
+        "clarification_needed": False,
+        "clarification_question": None,
+        "category": category,
+        "target_page": target_page,
+        "title": title,
+        "question": text,
+    }
+
+
+def extract_roborock_route(text, lower):
+    cleaned = re.sub(
+        r"\b(please|can you|could you|case|the|vacuum|roborock|qrevo|route|routine|clean|start|run)\b",
+        " ",
+        lower,
+    )
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .?!")
+    return cleaned or None
+
+
+def extract_news_intent(text, lower):
+    if not any(word in lower for word in ["news", "headlines", "abc", "what's happening", "whats happening"]):
+        return None
+
+    return {
+        "domain": "news",
+        "operation": "summarise" if any(word in lower for word in ["summary", "summarise", "summarize", "kind of"]) else "read",
+        "confidence": "high",
+        "clarification_needed": False,
+        "clarification_question": None,
+        "question": text,
+    }
+
+
 def clean_prefixed_text(text, prefixes):
     cleaned = text.strip()
 
@@ -420,6 +533,12 @@ def infer_refresh_category(lower):
 
     if "weather" in lower:
         return "weather"
+
+    if any(word in lower for word in ["news", "abc", "headlines"]):
+        return "news"
+
+    if any(word in lower for word in ["vacuum", "roborock", "qrevo"]):
+        return "roborock"
 
     if "bin" in lower:
         return "bins"

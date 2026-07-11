@@ -20,6 +20,8 @@ from app.services.gaggimate_client import (
     offline_status as offline_gaggimate_status,
 )
 from app.services.google_calendar_client import get_calendar_error, get_upcoming_events
+from app.services.news_client import refresh_news
+from app.services.roborock_client import get_roborock_status
 from app.services.sigenergy_client import get_energy_snapshot, read_sigenergy_registers
 from app.services.sigenergy_repository import insert_raw_registers
 from app.services.weather_client import get_weather_summary
@@ -35,6 +37,8 @@ RECURRING_TASK_INTERVAL_SECONDS = int(os.getenv("RECURRING_TASK_INTERVAL", "3600
 RECURRING_TASK_DAYS_AHEAD = int(os.getenv("RECURRING_TASK_DAYS_AHEAD", "21"))
 ENERGY_RETENTION_DAYS = int(os.getenv("ENERGY_RETENTION_DAYS", "0"))
 GAGGIMATE_INTERVAL_SECONDS = int(os.getenv("GAGGIMATE_POLL_INTERVAL", "60"))
+ROBOROCK_INTERVAL_SECONDS = int(os.getenv("ROBOROCK_POLL_INTERVAL", "60"))
+NEWS_INTERVAL_SECONDS = int(os.getenv("NEWS_REFRESH_INTERVAL_SECONDS", "1800"))
 PERTH_TZ = ZoneInfo("Australia/Perth")
 
 
@@ -128,6 +132,8 @@ def poll_worker_status():
             "recurring_task_interval_seconds": RECURRING_TASK_INTERVAL_SECONDS,
             "recurring_task_days_ahead": RECURRING_TASK_DAYS_AHEAD,
             "gaggimate_interval_seconds": GAGGIMATE_INTERVAL_SECONDS,
+            "roborock_interval_seconds": ROBOROCK_INTERVAL_SECONDS,
+            "news_interval_seconds": NEWS_INTERVAL_SECONDS,
         },
     )
 
@@ -169,6 +175,32 @@ def poll_gaggimate_snapshot():
         status=status,
         ttl_seconds=GAGGIMATE_INTERVAL_SECONDS * 3,
         error=snapshot.get("error"),
+    )
+
+
+def poll_roborock_snapshot():
+    snapshot = get_roborock_status()
+    status = "ok" if snapshot.get("available") else "error"
+
+    return upsert_snapshot(
+        "iot.roborock",
+        {"snapshot": snapshot},
+        status=status,
+        ttl_seconds=ROBOROCK_INTERVAL_SECONDS * 3,
+        error=None if snapshot.get("available") else snapshot.get("message"),
+    )
+
+
+def poll_news_snapshot():
+    result = refresh_news()
+    status = "ok" if result.get("ok") else "error"
+
+    return upsert_snapshot(
+        "news.latest",
+        result,
+        status=status,
+        ttl_seconds=NEWS_INTERVAL_SECONDS * 3,
+        error="; ".join(result.get("errors") or []) or None,
     )
 
 
@@ -259,6 +291,18 @@ def worker_loop():
             "name": "gaggimate",
             "interval": GAGGIMATE_INTERVAL_SECONDS,
             "job": poll_gaggimate_snapshot,
+            "next_run": 0,
+        },
+        {
+            "name": "roborock",
+            "interval": ROBOROCK_INTERVAL_SECONDS,
+            "job": poll_roborock_snapshot,
+            "next_run": 0,
+        },
+        {
+            "name": "news",
+            "interval": NEWS_INTERVAL_SECONDS,
+            "job": poll_news_snapshot,
             "next_run": 0,
         },
         {

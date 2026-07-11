@@ -9,6 +9,7 @@ SUPPORTED_DOMAINS = [
     "household",
     "features",
     "iot",
+    "news",
     "navigation",
     "refresh",
     "time",

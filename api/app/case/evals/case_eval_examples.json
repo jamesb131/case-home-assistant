@@ -318,5 +318,30 @@
       "input": "Put sunscreen on the packing list",
       "severity": "critical",
       "expected": { "domain": "lists", "operation": "create" }
+    },
+    {
+      "input": "What is the vacuum doing?",
+      "severity": "important",
+      "expected": { "domain": "iot", "operation": "read", "category": "roborock" }
+    },
+    {
+      "input": "Dock the vacuum",
+      "severity": "important",
+      "expected": { "domain": "iot", "operation": "update", "category": "roborock", "target_page": "dock" }
+    },
+    {
+      "input": "Clean the kitchen",
+      "severity": "important",
+      "expected": { "domain": "iot", "operation": "update", "category": "roborock_route", "title": "kitchen" }
+    },
+    {
+      "input": "What are the ABC headlines?",
+      "severity": "important",
+      "expected": { "domain": "news", "operation": "read" }
+    },
+    {
+      "input": "Summarise the news",
+      "severity": "important",
+      "expected": { "domain": "news", "operation": "summarise" }
     }
   ]

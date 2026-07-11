@@ -1,5 +1,5 @@
 name: CASE Core
-version: "0.1.21"
+version: "0.1.22"
 slug: case_core
 description: Local-first household assistant API, worker and web UI.
 url: https://github.com/jamesb131/case-home-assistant
@@ -54,6 +54,13 @@ options:
   gaggimate_ws_protocol: ws
   gaggimate_timeout: 3
   gaggimate_poll_interval: 60
+  home_assistant_url: http://homeassistant.local:8123
+  home_assistant_token: ""
+  roborock_vacuum_entity_id: ""
+  roborock_route_entities: "{}"
+  roborock_poll_interval: 60
+  news_feeds: "ABC News|https://www.abc.net.au/news/feed/51120/rss.xml"
+  news_refresh_interval_seconds: 1800
 schema:
   postgres_host: str
   postgres_port: port
@@ -85,3 +92,10 @@ schema:
   gaggimate_ws_protocol: list(ws|wss)
   gaggimate_timeout: int(1,30)
   gaggimate_poll_interval: int(30,)
+  home_assistant_url: url
+  home_assistant_token: password?
+  roborock_vacuum_entity_id: str?
+  roborock_route_entities: str
+  roborock_poll_interval: int(30,)
+  news_feeds: str
+  news_refresh_interval_seconds: int(300,)

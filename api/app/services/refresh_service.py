@@ -3,6 +3,8 @@ from app.worker import (
     poll_bins_snapshot,
     poll_calendar_snapshot,
     poll_gaggimate_snapshot,
+    poll_news_snapshot,
+    poll_roborock_snapshot,
     poll_recurring_tasks,
     poll_weather_snapshot,
     poll_worker_status,
@@ -19,12 +21,16 @@ REFRESH_JOBS = {
     "recurring_tasks": poll_recurring_tasks,
     "gaggimate": poll_gaggimate_snapshot,
     "coffee": poll_gaggimate_snapshot,
+    "roborock": poll_roborock_snapshot,
+    "vacuum": poll_roborock_snapshot,
+    "news": poll_news_snapshot,
+    "abc": poll_news_snapshot,
 }
 
 REFRESH_ALIASES = {
-    "all": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks", "gaggimate"],
-    "everything": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks", "gaggimate"],
-    "data": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks", "gaggimate"],
+    "all": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks", "gaggimate", "roborock", "news"],
+    "everything": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks", "gaggimate", "roborock", "news"],
+    "data": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks", "gaggimate", "roborock", "news"],
     "events": ["calendar"],
     "calendar": ["calendar"],
     "solar": ["energy"],
@@ -38,6 +44,10 @@ REFRESH_ALIASES = {
     "coffee": ["gaggimate"],
     "gaggia": ["gaggimate"],
     "gaggimate": ["gaggimate"],
+    "vacuum": ["roborock"],
+    "roborock": ["roborock"],
+    "news": ["news"],
+    "abc": ["news"],
 }
 
 

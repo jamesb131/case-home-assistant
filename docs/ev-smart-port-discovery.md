@@ -2,6 +2,14 @@
 
 CASE does not yet know which local Sigenergy register represents the AC charger.
 
+Active probing is parked for now. The current conclusion is:
+
+- The Sigenergy gateway exposes a small, partial AC charger-looking register block on Modbus slave `2`.
+- Direct Modbus against the suspected charger Wi-Fi IP did not respond usefully, even when the charger app showed `Modbus Native (Slave) Address = 2`.
+- The cloud/web app clearly has charger telemetry, including current, power and delivered energy, but that path is internet-dependent.
+- OCPP is the most likely future local-control path if Sigenergy or the installer can enable a custom/local OCPP server URL.
+- Until that is confirmed, CASE should keep EV charge power as unmapped rather than guessing from whole-house load.
+
 The Sigenergy cloud/web app shows the charger as an AC charger, not generic EV:
 
 - Station serial: `82025112800221`
