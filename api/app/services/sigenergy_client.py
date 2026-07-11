@@ -127,11 +127,21 @@ def looks_interesting_register_value(value):
     return 0 < absolute <= 30000
 
 
-def scan_sigenergy_register_range(device_id, start, end, max_results=200, register_kind="input"):
-    client = ModbusTcpClient(HOST, port=PORT, timeout=1, retries=0)
+def scan_sigenergy_register_range(
+    device_id,
+    start,
+    end,
+    max_results=200,
+    register_kind="input",
+    host=None,
+    port=None,
+):
+    target_host = host or HOST
+    target_port = port or PORT
+    client = ModbusTcpClient(target_host, port=target_port, timeout=1, retries=0)
 
     if not client.connect():
-        raise RuntimeError("Could not connect to Sigenergy")
+        raise RuntimeError(f"Could not connect to Sigenergy at {target_host}:{target_port}")
 
     try:
         results = []
@@ -211,11 +221,20 @@ def scan_sigenergy_register_range(device_id, start, end, max_results=200, regist
         client.close()
 
 
-def read_sigenergy_register_window(device_id, start, end, register_kind="input"):
-    client = ModbusTcpClient(HOST, port=PORT, timeout=1, retries=0)
+def read_sigenergy_register_window(
+    device_id,
+    start,
+    end,
+    register_kind="input",
+    host=None,
+    port=None,
+):
+    target_host = host or HOST
+    target_port = port or PORT
+    client = ModbusTcpClient(target_host, port=target_port, timeout=1, retries=0)
 
     if not client.connect():
-        raise RuntimeError("Could not connect to Sigenergy")
+        raise RuntimeError(f"Could not connect to Sigenergy at {target_host}:{target_port}")
 
     try:
         rows = []

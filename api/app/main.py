@@ -302,10 +302,13 @@ def sigenergy_scan(
     end: int = 32150,
     limit: int = 200,
     register_kind: str = "input",
+    host: str | None = None,
+    port: int | None = None,
 ):
     bounded_start = max(0, start)
     bounded_end = max(bounded_start, min(end, bounded_start + 500))
     bounded_limit = max(1, min(limit, 500))
+    bounded_port = max(1, min(port, 65535)) if port is not None else None
     bounded_register_kind = (
         "holding"
         if register_kind == "holding"
@@ -318,11 +321,15 @@ def sigenergy_scan(
         end=bounded_end,
         max_results=bounded_limit,
         register_kind=bounded_register_kind,
+        host=host,
+        port=bounded_port,
     )
     insert_raw_registers(readings)
 
     return {
         "device_id": device_id,
+        "host": host,
+        "port": bounded_port,
         "start": bounded_start,
         "end": bounded_end,
         "register_kind": bounded_register_kind,
@@ -336,9 +343,12 @@ def sigenergy_register_window(
     start: int,
     end: int,
     register_kind: str = "input",
+    host: str | None = None,
+    port: int | None = None,
 ):
     bounded_start = max(0, start)
     bounded_end = max(bounded_start, min(end, bounded_start + 80))
+    bounded_port = max(1, min(port, 65535)) if port is not None else None
     bounded_register_kind = (
         "holding"
         if register_kind == "holding"
@@ -347,6 +357,8 @@ def sigenergy_register_window(
 
     return {
         "device_id": device_id,
+        "host": host,
+        "port": bounded_port,
         "start": bounded_start,
         "end": bounded_end,
         "register_kind": bounded_register_kind,
@@ -355,6 +367,8 @@ def sigenergy_register_window(
             start=bounded_start,
             end=bounded_end,
             register_kind=bounded_register_kind,
+            host=host,
+            port=bounded_port,
         ),
     }
 

@@ -66,6 +66,13 @@ curl "https://case.home.arpa/api/energy/sigenergy/register-window?device_id=2&st
 curl "https://case.home.arpa/api/energy/sigenergy/register-window?device_id=2&start=32000&end=32025&register_kind=holding"
 ```
 
+CASE Core now also allows temporary diagnostic target overrides on scan/window endpoints. This is useful because the charger app shows `Modbus Native (Slave) Address = 2`, but that slave may need to be queried on the charger TCP endpoint rather than through the main Sigenergy gateway:
+
+```bash
+curl "https://case.home.arpa/api/energy/sigenergy/register-window?host=192.168.0.126&port=502&device_id=2&start=32000&end=32014&register_kind=input"
+curl "https://case.home.arpa/api/energy/sigenergy/register-window?host=192.168.0.126&port=502&device_id=2&start=42000&end=42005&register_kind=holding"
+```
+
 ## Add-on Settings
 
 The gateway endpoint is configurable in CASE Core:
