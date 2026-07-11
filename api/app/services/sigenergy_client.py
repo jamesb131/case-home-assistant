@@ -1,10 +1,12 @@
+import os
+
 from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusIOException
 
 from app.services.sigenergy_registers import SIGENERGY_REGISTERS
 
-HOST = "192.168.0.2"
-PORT = 502
+HOST = os.getenv("SIGENERGY_HOST", "192.168.0.2")
+PORT = int(os.getenv("SIGENERGY_PORT", "502"))
 
 PLANT_ID = 247
 INVERTER_ID = 1
@@ -53,9 +55,27 @@ DECODERS = {
 }
 
 
+def read_modbus_registers(client, register_kind, device_id, address, count):
+    if register_kind == "holding":
+        return client.read_holding_registers(
+            address=address,
+            count=count,
+            device_id=device_id,
+        )
+
+    return client.read_input_registers(
+        address=address,
+        count=count,
+        device_id=device_id,
+    )
+
+
 def read_register_spec(client, spec):
     decoder = DECODERS[spec["decoder"]]
-    raw = client.read_input_registers(
+    register_kind = spec.get("register_kind", "input")
+    raw = read_modbus_registers(
+        client=client,
+        register_kind=register_kind,
         address=spec["address"],
         count=spec["count"],
         device_id=spec["device_id"],
@@ -70,7 +90,7 @@ def read_register_spec(client, spec):
         "device_id": spec["device_id"],
         "register_address": spec["address"],
         "register_count": spec["count"],
-        "register_type": spec["decoder"],
+        "register_type": f"{register_kind}:{spec['decoder']}",
         "raw_registers": raw.registers,
         "decoded_value": decoded,
         "unit": spec.get("unit"),
@@ -107,7 +127,7 @@ def looks_interesting_register_value(value):
     return 0 < absolute <= 30000
 
 
-def scan_sigenergy_register_range(device_id, start, end, max_results=200):
+def scan_sigenergy_register_range(device_id, start, end, max_results=200, register_kind="input"):
     client = ModbusTcpClient(HOST, port=PORT, timeout=1, retries=0)
 
     if not client.connect():
@@ -121,7 +141,9 @@ def scan_sigenergy_register_range(device_id, start, end, max_results=200):
                 break
 
             try:
-                raw = client.read_input_registers(
+                raw = read_modbus_registers(
+                    client=client,
+                    register_kind=register_kind,
                     address=address,
                     count=1,
                     device_id=device_id,
@@ -140,7 +162,7 @@ def scan_sigenergy_register_range(device_id, start, end, max_results=200):
                         "device_id": device_id,
                         "register_address": address,
                         "register_count": 1,
-                        "register_type": register_type,
+                        "register_type": f"{register_kind}:{register_type}",
                         "raw_registers": raw.registers,
                         "decoded_value": decoded,
                         "unit": None,
@@ -151,7 +173,9 @@ def scan_sigenergy_register_range(device_id, start, end, max_results=200):
                 break
 
             try:
-                raw_pair = client.read_input_registers(
+                raw_pair = read_modbus_registers(
+                    client=client,
+                    register_kind=register_kind,
                     address=address,
                     count=2,
                     device_id=device_id,
@@ -175,7 +199,7 @@ def scan_sigenergy_register_range(device_id, start, end, max_results=200):
                         "device_id": device_id,
                         "register_address": address,
                         "register_count": 2,
-                        "register_type": register_type,
+                        "register_type": f"{register_kind}:{register_type}",
                         "raw_registers": raw_pair.registers,
                         "decoded_value": decoded,
                         "unit": "kW" if "kw" in register_type else None,

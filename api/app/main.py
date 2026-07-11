@@ -292,16 +292,28 @@ def sigenergy_register_changes(minutes: int = 30, limit: int = 40):
     }
 
 @app.post("/energy/sigenergy/scan")
-def sigenergy_scan(device_id: int = 247, start: int = 32000, end: int = 32150, limit: int = 200):
+def sigenergy_scan(
+    device_id: int = 247,
+    start: int = 32000,
+    end: int = 32150,
+    limit: int = 200,
+    register_kind: str = "input",
+):
     bounded_start = max(0, start)
     bounded_end = max(bounded_start, min(end, bounded_start + 500))
     bounded_limit = max(1, min(limit, 500))
+    bounded_register_kind = (
+        "holding"
+        if register_kind == "holding"
+        else "input"
+    )
 
     readings = scan_sigenergy_register_range(
         device_id=device_id,
         start=bounded_start,
         end=bounded_end,
         max_results=bounded_limit,
+        register_kind=bounded_register_kind,
     )
     insert_raw_registers(readings)
 
@@ -309,6 +321,7 @@ def sigenergy_scan(device_id: int = 247, start: int = 32000, end: int = 32150, l
         "device_id": device_id,
         "start": bounded_start,
         "end": bounded_end,
+        "register_kind": bounded_register_kind,
         "stored": len(readings),
         "readings": readings,
     }
