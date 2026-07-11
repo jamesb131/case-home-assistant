@@ -16,7 +16,11 @@ from app.services.google_calendar_client import get_calendar_auth_status
 
 from app.routers.lists_router import router as lists_router
 
-from app.services.sigenergy_client import get_energy_snapshot, scan_sigenergy_register_range
+from app.services.sigenergy_client import (
+    get_energy_snapshot,
+    read_sigenergy_register_window,
+    scan_sigenergy_register_range,
+)
 from app.services.sigenergy_repository import get_register_changes, insert_raw_registers
 from app.services.decision_service import get_decision_summary
 from app.services.system_status import get_system_status
@@ -324,6 +328,34 @@ def sigenergy_scan(
         "register_kind": bounded_register_kind,
         "stored": len(readings),
         "readings": readings,
+    }
+
+@app.get("/energy/sigenergy/register-window")
+def sigenergy_register_window(
+    device_id: int,
+    start: int,
+    end: int,
+    register_kind: str = "input",
+):
+    bounded_start = max(0, start)
+    bounded_end = max(bounded_start, min(end, bounded_start + 80))
+    bounded_register_kind = (
+        "holding"
+        if register_kind == "holding"
+        else "input"
+    )
+
+    return {
+        "device_id": device_id,
+        "start": bounded_start,
+        "end": bounded_end,
+        "register_kind": bounded_register_kind,
+        "rows": read_sigenergy_register_window(
+            device_id=device_id,
+            start=bounded_start,
+            end=bounded_end,
+            register_kind=bounded_register_kind,
+        ),
     }
 
 class CaseAskRequest(BaseModel):

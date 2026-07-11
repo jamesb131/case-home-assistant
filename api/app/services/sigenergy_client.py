@@ -211,6 +211,75 @@ def scan_sigenergy_register_range(device_id, start, end, max_results=200, regist
         client.close()
 
 
+def read_sigenergy_register_window(device_id, start, end, register_kind="input"):
+    client = ModbusTcpClient(HOST, port=PORT, timeout=1, retries=0)
+
+    if not client.connect():
+        raise RuntimeError("Could not connect to Sigenergy")
+
+    try:
+        rows = []
+
+        for address in range(start, end + 1):
+            try:
+                raw = read_modbus_registers(
+                    client=client,
+                    register_kind=register_kind,
+                    address=address,
+                    count=1,
+                    device_id=device_id,
+                )
+            except ModbusIOException as exc:
+                rows.append({
+                    "address": address,
+                    "error": str(exc),
+                })
+                continue
+
+            if raw.isError():
+                rows.append({
+                    "address": address,
+                    "error": str(raw),
+                })
+                continue
+
+            row = {
+                "address": address,
+                "raw": raw.registers,
+                "u16": u16(raw.registers),
+                "s16": s16(raw.registers),
+            }
+
+            try:
+                raw_pair = read_modbus_registers(
+                    client=client,
+                    register_kind=register_kind,
+                    address=address,
+                    count=2,
+                    device_id=device_id,
+                )
+
+                if not raw_pair.isError():
+                    row.update({
+                        "u32": u32(raw_pair.registers),
+                        "s32": s32(raw_pair.registers),
+                        "u32_div_10": u32(raw_pair.registers) / 10,
+                        "s32_div_10": s32(raw_pair.registers) / 10,
+                        "u32_div_100": u32(raw_pair.registers) / 100,
+                        "s32_div_100": s32(raw_pair.registers) / 100,
+                        "u32_div_1000": u32(raw_pair.registers) / 1000,
+                        "s32_div_1000": s32(raw_pair.registers) / 1000,
+                    })
+            except ModbusIOException:
+                pass
+
+            rows.append(row)
+
+        return rows
+    finally:
+        client.close()
+
+
 def get_energy_snapshot():
     client = ModbusTcpClient(HOST, port=PORT, timeout=2, retries=0)
 

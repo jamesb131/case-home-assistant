@@ -47,6 +47,25 @@ curl -X POST "https://case.home.arpa/api/energy/sigenergy/scan?device_id=2&start
 
 Only expand a unit ID/range after it responds.
 
+## Local AC Charger Clue
+
+With the charger on and CASE Core `0.1.19`, local Modbus through the working Sigenergy endpoint found a small responding charger-like block:
+
+- Unit/device ID: `2`
+- Register kind: `input` and `holding` both respond similarly
+- Range: `32000-32500`
+- Responding values:
+  - `32000 = 5`
+  - `32009 = 2300` probably voltage scaled as `230.0 V`
+  - `32014/32015 = 65535` sentinel/invalid
+
+CASE Core `0.1.20` adds a raw register-window endpoint because filtered scans hide zeros and sentinel values:
+
+```bash
+curl "https://case.home.arpa/api/energy/sigenergy/register-window?device_id=2&start=32000&end=32025&register_kind=input"
+curl "https://case.home.arpa/api/energy/sigenergy/register-window?device_id=2&start=32000&end=32025&register_kind=holding"
+```
+
 ## Add-on Settings
 
 The gateway endpoint is configurable in CASE Core:
