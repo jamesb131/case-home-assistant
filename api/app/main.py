@@ -177,6 +177,7 @@ def get_recent_energy():
                         date_bin('5 minutes', captured_at, TIMESTAMPTZ '2000-01-01') AS bucket,
                         AVG(solar_kw) AS solar_kw,
                         AVG(house_load_kw) AS house_load_kw,
+                        AVG(ev_kw) AS ev_kw,
                         AVG(grid_kw) AS grid_kw,
                         AVG(battery_soc) AS battery_soc,
                         MAX(house_load_kw) AS house_load_kw_max
@@ -189,6 +190,7 @@ def get_recent_energy():
                     solar_kw,
                     house_load_kw,
                     -house_load_kw AS consumption_kw,
+                    ev_kw,
                     grid_kw,
                     solar_kw - house_load_kw AS net_kw,
                     battery_soc,
@@ -205,10 +207,11 @@ def get_recent_energy():
                     "solar_kw": float(r[1] or 0),
                     "house_load_kw": float(r[2] or 0),
                     "consumption_kw": float(r[3] or 0),
-                    "grid_kw": float(r[4] or 0),
-                    "net_kw": float(r[5] or 0),
-                    "battery_soc": float(r[6] or 0),
-                    "house_load_kw_max": float(r[7] or 0),
+                    "ev_kw": float(r[4] or 0),
+                    "grid_kw": float(r[5] or 0),
+                    "net_kw": float(r[6] or 0),
+                    "battery_soc": float(r[7] or 0),
+                    "house_load_kw_max": float(r[8] or 0),
                 }
                 for r in rows
             ]
@@ -243,6 +246,8 @@ def get_energy_today_summary():
                         captured_at,
                         solar_kw,
                         house_load_kw,
+                        ev_kw,
+                        ev_total_kwh,
                         grid_kw,
                         LEAD(captured_at) OVER (ORDER BY captured_at) AS next_at
                     FROM energy_readings
@@ -270,7 +275,34 @@ def get_energy_today_summary():
                             THEN house_load_kw * EXTRACT(EPOCH FROM (next_at - captured_at)) / 3600
                             ELSE 0
                         END
-                    ), 0) AS house_load_kwh
+                    ), 0) AS house_load_kwh,
+                    COALESCE(
+                        GREATEST(MAX(ev_total_kwh) - MIN(ev_total_kwh), 0),
+                        SUM(
+                            CASE
+                                WHEN ev_kw > 0 AND next_at IS NOT NULL
+                                THEN ev_kw * EXTRACT(EPOCH FROM (next_at - captured_at)) / 3600
+                                ELSE 0
+                            END
+                        ),
+                        0
+                    ) AS ev_charge_kwh,
+                    (
+                        SELECT ev_kw
+                        FROM energy_readings
+                        WHERE captured_at >= date_trunc('day', NOW() AT TIME ZONE 'Australia/Perth') AT TIME ZONE 'Australia/Perth'
+                            AND ev_kw IS NOT NULL
+                        ORDER BY captured_at DESC
+                        LIMIT 1
+                    ) AS latest_ev_kw,
+                    (
+                        SELECT ev_total_kwh
+                        FROM energy_readings
+                        WHERE captured_at >= date_trunc('day', NOW() AT TIME ZONE 'Australia/Perth') AT TIME ZONE 'Australia/Perth'
+                            AND ev_total_kwh IS NOT NULL
+                        ORDER BY captured_at DESC
+                        LIMIT 1
+                    ) AS latest_ev_total_kwh
                 FROM readings;
             """)
 
@@ -280,9 +312,11 @@ def get_energy_today_summary():
                 "grid_import_kwh": round(float(row[0]), 2),
                 "solar_kwh": round(float(row[1]), 2),
                 "house_load_kwh": round(float(row[2]), 2),
-                "ev_kw": None,
-                "ev_charging": None,
-                "ev_status": "smart_port_not_mapped",
+                "ev_charge_kwh": round(float(row[3]), 2),
+                "ev_kw": round(float(row[4]), 2) if row[4] is not None else None,
+                "ev_charging": bool(row[4] is not None and float(row[4]) >= 0.3),
+                "ev_total_kwh": round(float(row[5]), 2) if row[5] is not None else None,
+                "ev_status": "smart_port" if row[4] is not None else "not_recorded",
             }
 
     finally:

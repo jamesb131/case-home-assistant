@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS energy_readings (
     grid_exporting BOOLEAN,
 
     house_load_kw DOUBLE PRECISION,
+    ev_kw DOUBLE PRECISION,
+    ev_total_kwh DOUBLE PRECISION,
 
     ems_work_mode INTEGER,
     grid_sensor_status INTEGER,

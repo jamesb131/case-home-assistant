@@ -7,8 +7,10 @@ Active probing is parked for now. The current conclusion is:
 - The Sigenergy gateway exposes a small, partial AC charger-looking register block on Modbus slave `2`.
 - Direct Modbus against the suspected charger Wi-Fi IP did not respond usefully, even when the charger app showed `Modbus Native (Slave) Address = 2`.
 - The cloud/web app clearly has charger telemetry, including current, power and delivered energy, but that path is internet-dependent.
+- The Home Assistant Sigenergy Local Modbus integration can expose the charger via plant smart load telemetry once the disabled Smart Power entity is enabled.
+- CASE now reads the HA entities `sensor.sigen_plant_smart_load_1_power` and `sensor.sigen_plant_smart_load_1_total_consumption` as the EV/smart-port source.
 - OCPP is the most likely future local-control path if Sigenergy or the installer can enable a custom/local OCPP server URL.
-- Until that is confirmed, CASE should keep EV charge power as unmapped rather than guessing from whole-house load.
+- Until local control is confirmed, CASE should treat the HA smart-load entity as telemetry-only and should not guess from whole-house load.
 
 The Sigenergy cloud/web app shows the charger as an AC charger, not generic EV:
 

@@ -3,10 +3,20 @@ import os
 from pymodbus.client import ModbusTcpClient
 from pymodbus.exceptions import ModbusIOException
 
+from app.services.home_assistant_client import HomeAssistantUnavailable, get_entity_state
 from app.services.sigenergy_registers import SIGENERGY_REGISTERS
 
 HOST = os.getenv("SIGENERGY_HOST", "192.168.0.2")
 PORT = int(os.getenv("SIGENERGY_PORT", "502"))
+EV_POWER_ENTITY_ID = os.getenv(
+    "EV_POWER_ENTITY_ID",
+    "sensor.sigen_plant_smart_load_1_power",
+).strip()
+EV_TOTAL_CONSUMPTION_ENTITY_ID = os.getenv(
+    "EV_TOTAL_CONSUMPTION_ENTITY_ID",
+    "sensor.sigen_plant_smart_load_1_total_consumption",
+).strip()
+EV_CHARGING_THRESHOLD_KW = float(os.getenv("EV_CHARGING_THRESHOLD_KW", "0.3"))
 
 PLANT_ID = 247
 INVERTER_ID = 1
@@ -299,6 +309,68 @@ def read_sigenergy_register_window(
         client.close()
 
 
+def parse_home_assistant_float(entity):
+    state = entity.get("state")
+
+    if state in [None, "", "unknown", "unavailable"]:
+        return None
+
+    try:
+        return float(state)
+    except (TypeError, ValueError):
+        return None
+
+
+def read_ev_smart_port_snapshot():
+    if not EV_POWER_ENTITY_ID:
+        return {
+            "ev_kw": None,
+            "ev_charging": None,
+            "ev_total_kwh": None,
+            "ev_status": "not_configured",
+            "ev_source": None,
+            "ev_total_source": None,
+        }
+
+    try:
+        power_entity = get_entity_state(EV_POWER_ENTITY_ID)
+        power_kw = parse_home_assistant_float(power_entity)
+
+        total_kwh = None
+        if EV_TOTAL_CONSUMPTION_ENTITY_ID:
+            total_entity = get_entity_state(EV_TOTAL_CONSUMPTION_ENTITY_ID)
+            total_kwh = parse_home_assistant_float(total_entity)
+
+        if power_kw is None:
+            return {
+                "ev_kw": None,
+                "ev_charging": None,
+                "ev_total_kwh": total_kwh,
+                "ev_status": "entity_unavailable",
+                "ev_source": EV_POWER_ENTITY_ID,
+                "ev_total_source": EV_TOTAL_CONSUMPTION_ENTITY_ID or None,
+            }
+
+        return {
+            "ev_kw": round(max(power_kw, 0), 2),
+            "ev_charging": power_kw >= EV_CHARGING_THRESHOLD_KW,
+            "ev_total_kwh": round(total_kwh, 2) if total_kwh is not None else None,
+            "ev_status": "smart_port",
+            "ev_source": EV_POWER_ENTITY_ID,
+            "ev_total_source": EV_TOTAL_CONSUMPTION_ENTITY_ID or None,
+        }
+    except HomeAssistantUnavailable as exc:
+        return {
+            "ev_kw": None,
+            "ev_charging": None,
+            "ev_total_kwh": None,
+            "ev_status": "home_assistant_unavailable",
+            "ev_error": str(exc),
+            "ev_source": EV_POWER_ENTITY_ID,
+            "ev_total_source": EV_TOTAL_CONSUMPTION_ENTITY_ID or None,
+        }
+
+
 def get_energy_snapshot():
     client = ModbusTcpClient(HOST, port=PORT, timeout=2, retries=0)
 
@@ -352,10 +424,7 @@ def get_energy_snapshot():
         grid_exporting = grid_kw < -0.2
         grid_connected = on_off_grid_status == 0
 
-        # EV parked for now until reliable charger data source is confirmed.
-        ev_kw = None
-        ev_charging = None
-        ev_status = "not_integrated"
+        ev_snapshot = read_ev_smart_port_snapshot()
 
         return {
             # Solar / inverter
@@ -392,9 +461,7 @@ def get_energy_snapshot():
             "plant_running_state": int(plant_running_state),
 
             # EV placeholder
-            "ev_kw": ev_kw,
-            "ev_charging": ev_charging,
-            "ev_status": ev_status,
+            **ev_snapshot,
         }
 
     finally:

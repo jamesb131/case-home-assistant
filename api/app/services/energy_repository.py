@@ -21,6 +21,8 @@ ENERGY_COLUMNS = [
     "grid_exporting",
 
     "house_load_kw",
+    "ev_kw",
+    "ev_total_kwh",
 
     "ems_work_mode",
     "grid_sensor_status",
@@ -74,6 +76,8 @@ def refresh_energy_daily_rollups(days_back=14):
                             solar_kw,
                             grid_kw,
                             house_load_kw,
+                            ev_kw,
+                            ev_total_kwh,
                             battery_soc,
                             LEAD(captured_at) OVER (
                                 PARTITION BY (captured_at AT TIME ZONE 'Australia/Perth')::date
@@ -101,6 +105,14 @@ def refresh_energy_daily_rollups(days_back=14):
                                 GREATEST(house_load_kw, 0)
                                 * EXTRACT(EPOCH FROM (next_at - captured_at)) / 3600
                             ) FILTER (WHERE next_at IS NOT NULL), 0) AS house_load_kwh,
+                            COALESCE(
+                                GREATEST(MAX(ev_total_kwh) - MIN(ev_total_kwh), 0),
+                                SUM(
+                                    GREATEST(ev_kw, 0)
+                                    * EXTRACT(EPOCH FROM (next_at - captured_at)) / 3600
+                                ) FILTER (WHERE next_at IS NOT NULL),
+                                0
+                            ) AS ev_charge_kwh,
                             MIN(battery_soc) AS battery_soc_min,
                             MAX(battery_soc) AS battery_soc_max,
                             COUNT(*) AS reading_count
@@ -113,6 +125,7 @@ def refresh_energy_daily_rollups(days_back=14):
                         grid_import_kwh,
                         grid_export_kwh,
                         house_load_kwh,
+                        ev_charge_kwh,
                         battery_soc_min,
                         battery_soc_max,
                         reading_count,
@@ -124,6 +137,7 @@ def refresh_energy_daily_rollups(days_back=14):
                         grid_import_kwh,
                         grid_export_kwh,
                         house_load_kwh,
+                        ev_charge_kwh,
                         battery_soc_min,
                         battery_soc_max,
                         reading_count,
@@ -135,6 +149,7 @@ def refresh_energy_daily_rollups(days_back=14):
                         grid_import_kwh = EXCLUDED.grid_import_kwh,
                         grid_export_kwh = EXCLUDED.grid_export_kwh,
                         house_load_kwh = EXCLUDED.house_load_kwh,
+                        ev_charge_kwh = EXCLUDED.ev_charge_kwh,
                         battery_soc_min = EXCLUDED.battery_soc_min,
                         battery_soc_max = EXCLUDED.battery_soc_max,
                         reading_count = EXCLUDED.reading_count,

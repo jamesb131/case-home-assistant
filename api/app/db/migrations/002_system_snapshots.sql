@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS energy_daily_rollups (
     grid_import_kwh DOUBLE PRECISION,
     grid_export_kwh DOUBLE PRECISION,
     house_load_kwh DOUBLE PRECISION,
+    ev_charge_kwh DOUBLE PRECISION,
     battery_soc_min DOUBLE PRECISION,
     battery_soc_max DOUBLE PRECISION,
     reading_count INTEGER NOT NULL DEFAULT 0,

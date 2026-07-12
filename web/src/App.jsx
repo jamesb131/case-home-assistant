@@ -4401,9 +4401,16 @@ function IoTPage({
 
         <section className="card">
           <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
-            <div>
-              <div className="muted">Roborock</div>
-              <h2 style={{ margin: "6px 0 0", fontSize: "26px" }}>Qrevo MaxQ</h2>
+            <div style={{ display: "flex", gap: "12px", alignItems: "center", minWidth: 0 }}>
+              <img
+                className="deviceArtwork large"
+                src="/devices/roborock-qrevo-maxq.png"
+                alt="Roborock Qrevo MaxQ vacuum"
+              />
+              <div style={{ minWidth: 0 }}>
+                <div className="muted">Roborock</div>
+                <h2 style={{ margin: "6px 0 0", fontSize: "26px" }}>Qrevo MaxQ</h2>
+              </div>
             </div>
             <span
               style={{

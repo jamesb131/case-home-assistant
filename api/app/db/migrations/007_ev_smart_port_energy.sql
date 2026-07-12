@@ -1,0 +1,6 @@
+ALTER TABLE energy_readings
+    ADD COLUMN IF NOT EXISTS ev_kw DOUBLE PRECISION,
+    ADD COLUMN IF NOT EXISTS ev_total_kwh DOUBLE PRECISION;
+
+ALTER TABLE energy_daily_rollups
+    ADD COLUMN IF NOT EXISTS ev_charge_kwh DOUBLE PRECISION;
