@@ -1,5 +1,5 @@
 name: CASE Core
-version: "0.1.24"
+version: "0.1.25"
 slug: case_core
 description: Local-first household assistant API, worker and web UI.
 url: https://github.com/jamesb131/case-home-assistant
@@ -60,6 +60,7 @@ options:
   ev_total_consumption_entity_id: sensor.sigen_plant_smart_load_1_total_consumption
   ev_charging_threshold_kw: 0.3
   roborock_vacuum_entity_id: ""
+  roborock_battery_entity_id: ""
   roborock_route_entities: "{}"
   roborock_poll_interval: 60
   news_feeds: "ABC News|https://www.abc.net.au/news/feed/51120/rss.xml"
@@ -101,6 +102,7 @@ schema:
   ev_total_consumption_entity_id: str?
   ev_charging_threshold_kw: float(0,)
   roborock_vacuum_entity_id: str?
+  roborock_battery_entity_id: str?
   roborock_route_entities: str
   roborock_poll_interval: int(30,)
   news_feeds: str

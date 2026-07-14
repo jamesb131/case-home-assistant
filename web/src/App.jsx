@@ -179,6 +179,8 @@ function App() {
   const [weather, setWeather] = useState(null);
   const [error, setError] = useState(null);
   const [todaySummary, setTodaySummary] = useState(null);
+  const [energyFlowPeriod, setEnergyFlowPeriod] = useState("now");
+  const [energyFlowSummary, setEnergyFlowSummary] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
 
   const [tasks, setTasks] = useState([]);
@@ -680,6 +682,17 @@ function App() {
     }
   }
 
+  async function loadEnergyFlowSummary(period = energyFlowPeriod) {
+    try {
+      const res = await apiFetch(`${API_BASE}/energy/flow-summary?period=${encodeURIComponent(period)}`);
+      if (!res.ok) throw new Error(`Energy flow API returned ${res.status}`);
+      const json = await res.json();
+      setEnergyFlowSummary(json);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   async function loadWeather() {
     try {
       const res = await apiFetch(`${API_BASE}/weather/summary`);
@@ -903,6 +916,7 @@ function App() {
       loadData(),
       loadRecentEnergy(),
       loadTodaySummary(),
+      loadEnergyFlowSummary(),
       loadWeather(),
       loadCalendarEvents(),
       loadTasks(),
@@ -921,6 +935,7 @@ function App() {
     const initialLoad = setTimeout(() => {
       loadData();
       loadRecentEnergy();
+      loadEnergyFlowSummary();
       loadWeather();
       loadTodaySummary();
       loadCalendarEvents();
@@ -981,6 +996,16 @@ function App() {
       clearInterval(newsInterval);
     };
   }, []);
+
+  useEffect(() => {
+    loadEnergyFlowSummary(energyFlowPeriod);
+
+    const flowInterval = setInterval(() => {
+      loadEnergyFlowSummary(energyFlowPeriod);
+    }, 5000);
+
+    return () => clearInterval(flowInterval);
+  }, [energyFlowPeriod]);
 
   useEffect(() => {
     if (activePage === "IoT") {
@@ -1563,14 +1588,27 @@ function App() {
                 <div className="card energyTrendCard">
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                     <div>
-                      <div className="muted">Energy trend</div>
-                      <h2 style={{ margin: "2px 0 0", fontSize: "24px" }}>Today</h2>
+                      <div className="muted">{isMobile ? "Energy flow" : "Energy trend"}</div>
+                      <h2 style={{ margin: "2px 0 0", fontSize: "24px" }}>
+                        {isMobile ? periodLabel(energyFlowPeriod) : "Today"}
+                      </h2>
                     </div>
-                    <div className="muted">15-minute view</div>
+                    <div className="muted">{isMobile ? energyFlowSummary?.unit || "kW" : "15-minute view"}</div>
                   </div>
 
                   <div style={{ width: "100%", minWidth: 0 }}>
-                    <EnergyDayChart data={recentEnergy} isMobile={isMobile} />
+                    {isMobile ? (
+                      <EnergyFlowCard
+                        summary={energyFlowSummary}
+                        activePeriod={energyFlowPeriod}
+                        onPeriodChange={(period) => {
+                          setEnergyFlowPeriod(period);
+                          loadEnergyFlowSummary(period);
+                        }}
+                      />
+                    ) : (
+                      <EnergyDayChart data={recentEnergy} isMobile={isMobile} />
+                    )}
                   </div>
                 </div>
               </section>
@@ -2714,6 +2752,208 @@ function EnergyCard({ icon, label, value, unit, subtext, inlineSubtext, color = 
   );
 }
 
+function periodLabel(period) {
+  return {
+    now: "Now",
+    today: "Today",
+    yesterday: "Yesterday",
+    week: "This week",
+  }[period] || "Today";
+}
+
+function EnergyFlowCard({ summary, activePeriod, onPeriodChange }) {
+  const unit = summary?.unit || (activePeriod === "now" ? "kW" : "kWh");
+  const values = summary?.values || {};
+  const sources = [
+    { id: "solar", label: "Solar", value: values.solar || 0, color: "#facc15" },
+    { id: "battery", label: "Battery", value: values.battery_discharge || 0, color: "#2dd4bf" },
+    { id: "grid", label: "Grid", value: values.grid_import || 0, color: "#60a5fa" },
+  ].filter((item) => item.value > 0.01);
+  const homeLoad = Math.max(0, (values.home_load || 0) - (values.ev || 0));
+  const sinks = [
+    {
+      id: "battery",
+      label: "Battery",
+      value: values.battery_charge || 0,
+      percent: values.battery_soc ? `${Number(values.battery_soc).toFixed(0)}%` : null,
+      color: "#14b8a6",
+    },
+    { id: "load", label: "Load", value: homeLoad, color: "#a855f7" },
+    { id: "ev", label: "EV", value: values.ev || 0, color: "#14b8a6" },
+    { id: "grid", label: "Grid", value: values.grid_export || 0, color: "#4f46e5" },
+  ].filter((item) => item.value > 0.01);
+
+  const fallbackSource = [{ id: "none-source", label: "No source", value: 0, color: "#e2e8f0" }];
+  const fallbackSink = [{ id: "none-sink", label: "No load", value: 0, color: "#e2e8f0" }];
+  const visibleSources = sources.length ? sources : fallbackSource;
+  const visibleSinks = sinks.length ? sinks : fallbackSink;
+  const totalSource = Math.max(visibleSources.reduce((sum, item) => sum + item.value, 0), 1);
+  const totalSink = Math.max(visibleSinks.reduce((sum, item) => sum + item.value, 0), 1);
+
+  const sourceBlocks = layoutFlowBlocks(visibleSources, totalSource, 760);
+  const sinkBlocks = layoutFlowBlocks(visibleSinks, totalSink, 760);
+  const flows = pairFlowBlocks(sourceBlocks, sinkBlocks);
+
+  return (
+    <div>
+      <svg viewBox="0 0 560 800" style={{ width: "100%", display: "block", marginTop: "10px" }}>
+        <defs>
+          {flows.map((flow, index) => (
+            <linearGradient key={`flow-gradient-${index}`} id={`flow-gradient-${index}`} x1="0" x2="1">
+              <stop offset="0%" stopColor={flow.source.color} stopOpacity="0.58" />
+              <stop offset="100%" stopColor={flow.sink.color} stopOpacity="0.58" />
+            </linearGradient>
+          ))}
+        </defs>
+
+        {flows.map((flow, index) => (
+          <path
+            key={`flow-${index}`}
+            d={`M 132 ${flow.sourceY} C 250 ${flow.sourceY}, 310 ${flow.sinkY}, 428 ${flow.sinkY}`}
+            fill="none"
+            stroke={`url(#flow-gradient-${index})`}
+            strokeWidth={Math.max(5, flow.width)}
+            strokeLinecap="round"
+            opacity="0.7"
+          />
+        ))}
+
+        {sourceBlocks.map((item) => (
+          <EnergyFlowNode key={item.id} item={item} x={10} width={128} unit={unit} align="left" />
+        ))}
+
+        {sinkBlocks.map((item) => (
+          <EnergyFlowNode key={item.id} item={item} x={422} width={128} unit={unit} align="right" />
+        ))}
+      </svg>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+          gap: "8px",
+          marginTop: "8px",
+        }}
+      >
+        {["now", "today", "yesterday", "week"].map((period) => (
+          <button
+            key={period}
+            className="button"
+            onClick={() => onPeriodChange(period)}
+            style={{
+              minHeight: "42px",
+              padding: "8px 6px",
+              borderRadius: "14px",
+              fontSize: "12px",
+              background: activePeriod === period ? "#111827" : "#e5e7eb",
+              color: activePeriod === period ? "white" : "#111827",
+            }}
+          >
+            {periodLabel(period)}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function layoutFlowBlocks(items, total, availableHeight) {
+  const gap = 10;
+  const minHeight = 124;
+  const maxHeight = 300;
+  let y = 20;
+
+  return items.map((item) => {
+    const height = Math.max(minHeight, Math.min(maxHeight, (item.value / total) * (availableHeight - gap * (items.length - 1))));
+    const block = { ...item, y, height, midY: y + height / 2 };
+    y += height + gap;
+    return block;
+  });
+}
+
+function pairFlowBlocks(sources, sinks) {
+  if (!sources.length || !sinks.length) return [];
+
+  const flows = [];
+  const sourceState = sources.map((item) => ({ ...item, remaining: item.value, cursor: item.y }));
+  const sinkState = sinks.map((item) => ({ ...item, remaining: item.value, cursor: item.y }));
+  let sinkIndex = 0;
+  const maxTotal = Math.max(
+    sourceState.reduce((sum, item) => sum + item.value, 0),
+    sinkState.reduce((sum, item) => sum + item.value, 0),
+    1
+  );
+
+  sourceState.forEach((source) => {
+    while (source.remaining > 0.01 && sinkIndex < sinkState.length) {
+      const sink = sinkState[sinkIndex];
+      const amount = Math.min(source.remaining, sink.remaining);
+      const sourceHeight = Math.max(3, (amount / Math.max(source.value, 1)) * source.height);
+      const sinkHeight = Math.max(3, (amount / Math.max(sink.value, 1)) * sink.height);
+
+      flows.push({
+        source,
+        sink,
+        sourceY: source.cursor + sourceHeight / 2,
+        sinkY: sink.cursor + sinkHeight / 2,
+        width: Math.max(6, (amount / maxTotal) * 130),
+      });
+
+      source.cursor += sourceHeight;
+      sink.cursor += sinkHeight;
+      source.remaining -= amount;
+      sink.remaining -= amount;
+
+      if (sink.remaining <= 0.01) {
+        sinkIndex += 1;
+      }
+    }
+  });
+
+  return flows;
+}
+
+function EnergyFlowNode({ item, x, width, unit, align }) {
+  const textX = align === "right" ? x + width - 10 : x + 10;
+  const textAnchor = align === "right" ? "end" : "start";
+
+  return (
+    <g>
+      <rect
+        x={x}
+        y={item.y}
+        width={width}
+        height={item.height}
+        rx="7"
+        fill={item.color}
+        opacity="0.9"
+      />
+      <rect
+        x={x + 10}
+        y={item.y + 10}
+        width={width - 20}
+        height="34"
+        rx="6"
+        fill="rgba(255,255,255,0.64)"
+      />
+      <text x={textX} y={item.y + 33} textAnchor={textAnchor} fontSize="20" fontWeight="900" fill="#111827">
+        {item.label}
+      </text>
+      <text x={textX} y={item.y + 78} textAnchor={textAnchor} fontSize="32" fontWeight="900" fill="#111827">
+        {item.value > 0 ? Number(item.value).toFixed(item.value >= 10 ? 1 : 2) : "--"}
+      </text>
+      <text x={textX} y={item.y + 110} textAnchor={textAnchor} fontSize="20" fill="#111827">
+        {item.value > 0 ? unit : ""}
+      </text>
+      {item.percent && (
+        <text x={textX} y={item.y + item.height - 16} textAnchor={textAnchor} fontSize="22" fill="#111827">
+          {item.percent}
+        </text>
+      )}
+    </g>
+  );
+}
+
 function TinyTempLine({ points, color }) {
   if (!points || points.length < 2) {
     return null;
@@ -2811,6 +3051,7 @@ function EnergyDayChart({ data, isMobile = false }) {
         count: 0,
         solar_kw: 0,
         house_load_kw: 0,
+        ev_kw: 0,
         grid_kw: 0,
         battery_soc: 0,
         time: key,
@@ -2823,6 +3064,7 @@ function EnergyDayChart({ data, isMobile = false }) {
     g.count += 1;
     g.solar_kw += row.solar_kw || 0;
     g.house_load_kw += row.house_load_kw || 0;
+    g.ev_kw += row.ev_kw || 0;
     g.grid_kw += row.grid_kw || 0;
     g.battery_soc += row.battery_soc || 0;
   });
@@ -2831,6 +3073,7 @@ function EnergyDayChart({ data, isMobile = false }) {
     ...g,
     solar_kw: g.solar_kw / g.count,
     house_load_kw: g.house_load_kw / g.count,
+    ev_kw: g.ev_kw / g.count,
     grid_kw: g.grid_kw / g.count,
     battery_soc: g.battery_soc / g.count,
   }));
@@ -2843,6 +3086,7 @@ function EnergyDayChart({ data, isMobile = false }) {
     { type: "bar", color: "#fbbf24", label: "Solar production", compactLabel: "Solar" },
     { type: "thin", color: "#92400e", label: "Into house/battery", compactLabel: "To home" },
     { type: "bar", color: "#93c5fd", label: "Consumption", compactLabel: "Use" },
+    { type: "bar", color: "#14b8a6", label: "EV charging", compactLabel: "EV" },
     { type: "thin", color: "#2563eb", label: "Covered by PV/battery", compactLabel: "Covered" },
     { type: "line", color: "rgba(100,116,139,0.35)", label: "Battery SoC", compactLabel: "Battery" },
   ];
@@ -2963,6 +3207,7 @@ function EnergyDayChart({ data, isMobile = false }) {
         {actualRows.map((row) => {
           const x = xFromDate(row.date);
           const consumption = Math.max(0, row.house_load_kw || 0);
+          const evKw = clamp(Math.max(0, row.ev_kw || 0), 0, consumption);
           const importKw = Math.max(0, row.grid_kw || 0);
 
           const suppliedBySolarOrBattery = clamp(consumption - importKw, 0, consumption);
@@ -2972,10 +3217,25 @@ function EnergyDayChart({ data, isMobile = false }) {
 
           const innerH = barHeight(suppliedBySolarOrBattery);
           const innerY = zeroY;
+          const evH = barHeight(evKw);
+          const evY = zeroY + Math.max(0, h - evH);
 
           return (
             <g key={`consumption-${row.time}`}>
               <RoundedBar x={x} y={y} width={8} height={h} fill="#93c5fd" opacity={0.5} />
+
+              {evKw > 0 && (
+                <rect
+                  x={x - 4}
+                  y={evY}
+                  width={8}
+                  height={evH}
+                  rx={4}
+                  ry={4}
+                  fill="#14b8a6"
+                  opacity={0.78}
+                />
+              )}
 
               {suppliedBySolarOrBattery > 0 && (
                 <rect
@@ -3033,7 +3293,7 @@ function EnergyDayChart({ data, isMobile = false }) {
       <div
         style={{
           display: isMobile ? "grid" : "flex",
-          gridTemplateColumns: isMobile ? "repeat(5, minmax(0, auto))" : undefined,
+          gridTemplateColumns: isMobile ? "repeat(3, minmax(0, auto))" : undefined,
           gap: isMobile ? "8px" : "14px",
           rowGap: isMobile ? "6px" : undefined,
           columnGap: isMobile ? "8px" : undefined,
@@ -4274,6 +4534,7 @@ function IoTPage({
   const roborockRoutes = roborockStatus?.routes || [];
   const [selectedRoborockRoute, setSelectedRoborockRoute] = useState(roborockRoutes[0] || "");
   const activeRoborockRoute = selectedRoborockRoute || roborockRoutes[0] || "";
+  const roborockState = compactRoborockState(roborockStatus);
 
   return (
     <div>
@@ -4434,10 +4695,13 @@ function IoTPage({
               marginTop: "18px",
             }}
           >
-            <MetricBox label="State" value={roborockStatus?.state || "--"} />
-            <MetricBox label="Battery" value={formatMetric(roborockStatus?.battery_level, "%")} />
-            <MetricBox label="Activity" value={roborockStatus?.activity || "--"} />
-            <MetricBox label="Dock" value={roborockStatus?.dock_state || "--"} />
+            <MetricBox label="Status" value={roborockState || "--"} />
+            <MetricBox
+              label="Battery"
+              value={roborockStatus?.battery_level === null || roborockStatus?.battery_level === undefined
+                ? "--"
+                : formatMetric(roborockStatus?.battery_level, "%")}
+            />
           </div>
 
           <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
@@ -4480,16 +4744,7 @@ function IoTPage({
             </div>
           )}
 
-          <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
-
-          <div style={{ display: "grid", gap: "10px" }}>
-            <DeviceDetail label="Entity" value={roborockStatus?.entity_id || "--"} />
-            <DeviceDetail label="Cleaned area" value={formatMetric(roborockStatus?.cleaned_area, " m²")} />
-            <DeviceDetail label="Cleaning time" value={formatMetric(roborockStatus?.cleaning_time, " min")} />
-            <DeviceDetail label="Error" value={roborockStatus?.error || "--"} />
-          </div>
-
-          {(roborockError || roborockStatus?.message) && (
+          {(roborockError || roborockStatus?.error || roborockStatus?.available === false) && (
             <div
               style={{
                 marginTop: "16px",
@@ -4502,7 +4757,7 @@ function IoTPage({
                 lineHeight: 1.4,
               }}
             >
-              {roborockError || roborockStatus?.message}
+              {roborockError || roborockStatus?.error || roborockStatus?.message || "Roborock is unavailable."}
             </div>
           )}
 
@@ -4656,6 +4911,24 @@ function DeviceDetail({ label, value }) {
 function formatMetric(value, unit, decimals = 0) {
   if (value === null || value === undefined) return "--";
   return `${Number(value).toFixed(decimals)}${unit}`;
+}
+
+function compactRoborockState(status) {
+  if (!status) return "--";
+
+  const state = (status.state || "").replaceAll("_", " ");
+  const activity = (status.activity || "").replaceAll("_", " ");
+  const dock = (status.dock_state || "").replaceAll("_", " ");
+
+  if (dock && ["docked", "charging", "returning", "probably docked"].includes(dock.toLowerCase())) {
+    return dock;
+  }
+
+  if (activity && activity.toLowerCase() !== state.toLowerCase()) {
+    return activity;
+  }
+
+  return state || "--";
 }
 
 function formatNewsTime(value) {

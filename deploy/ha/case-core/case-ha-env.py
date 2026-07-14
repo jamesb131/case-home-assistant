@@ -43,6 +43,7 @@ OPTION_ENV_MAP = {
     "ev_total_consumption_entity_id": "EV_TOTAL_CONSUMPTION_ENTITY_ID",
     "ev_charging_threshold_kw": "EV_CHARGING_THRESHOLD_KW",
     "roborock_vacuum_entity_id": "ROBOROCK_VACUUM_ENTITY_ID",
+    "roborock_battery_entity_id": "ROBOROCK_BATTERY_ENTITY_ID",
     "roborock_route_entities": "ROBOROCK_ROUTE_ENTITIES",
     "roborock_poll_interval": "ROBOROCK_POLL_INTERVAL",
     "news_feeds": "NEWS_FEEDS",

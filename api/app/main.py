@@ -1,4 +1,6 @@
 import os
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -317,6 +319,131 @@ def get_energy_today_summary():
                 "ev_charging": bool(row[4] is not None and float(row[4]) >= 0.3),
                 "ev_total_kwh": round(float(row[5]), 2) if row[5] is not None else None,
                 "ev_status": "smart_port" if row[4] is not None else "not_recorded",
+            }
+
+    finally:
+        conn.close()
+
+@app.get("/energy/flow-summary")
+def get_energy_flow_summary(period: str = "today"):
+    allowed_periods = {"now", "today", "yesterday", "week"}
+    selected_period = period if period in allowed_periods else "today"
+    perth = ZoneInfo("Australia/Perth")
+    now_local = datetime.now(perth)
+
+    if selected_period == "yesterday":
+        start_local = datetime.combine(now_local.date() - timedelta(days=1), time.min, tzinfo=perth)
+        end_local = datetime.combine(now_local.date(), time.min, tzinfo=perth)
+    elif selected_period == "week":
+        monday = now_local.date() - timedelta(days=now_local.weekday())
+        start_local = datetime.combine(monday, time.min, tzinfo=perth)
+        end_local = now_local
+    else:
+        start_local = datetime.combine(now_local.date(), time.min, tzinfo=perth)
+        end_local = now_local
+
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            if selected_period == "now":
+                cur.execute("""
+                    SELECT
+                        captured_at,
+                        COALESCE(solar_kw, 0),
+                        COALESCE(house_load_kw, 0),
+                        COALESCE(ev_kw, 0),
+                        COALESCE(grid_kw, 0),
+                        COALESCE(battery_kw, 0),
+                        battery_soc
+                    FROM energy_readings
+                    ORDER BY captured_at DESC
+                    LIMIT 1;
+                """)
+                row = cur.fetchone()
+
+                if not row:
+                    return {
+                        "period": selected_period,
+                        "unit": "kW",
+                        "source": "latest",
+                        "captured_at": None,
+                        "values": {},
+                    }
+
+                battery_kw = float(row[5] or 0)
+                grid_kw = float(row[4] or 0)
+
+                return {
+                    "period": selected_period,
+                    "unit": "kW",
+                    "source": "latest",
+                    "captured_at": row[0].isoformat(),
+                    "values": {
+                        "solar": round(float(row[1] or 0), 2),
+                        "home_load": round(float(row[2] or 0), 2),
+                        "ev": round(float(row[3] or 0), 2),
+                        "grid_import": round(max(grid_kw, 0), 2),
+                        "grid_export": round(max(-grid_kw, 0), 2),
+                        "battery_charge": round(max(battery_kw, 0), 2),
+                        "battery_discharge": round(max(-battery_kw, 0), 2),
+                        "battery_soc": round(float(row[6]), 1) if row[6] is not None else None,
+                    },
+                }
+
+            cur.execute("""
+                WITH readings AS (
+                    SELECT
+                        captured_at,
+                        COALESCE(solar_kw, 0) AS solar_kw,
+                        COALESCE(house_load_kw, 0) AS house_load_kw,
+                        COALESCE(ev_kw, 0) AS ev_kw,
+                        COALESCE(grid_kw, 0) AS grid_kw,
+                        COALESCE(battery_kw, 0) AS battery_kw,
+                        LEAD(captured_at) OVER (ORDER BY captured_at) AS next_at
+                    FROM energy_readings
+                    WHERE captured_at >= %(start_at)s
+                        AND captured_at < %(end_at)s
+                ),
+                intervals AS (
+                    SELECT
+                        solar_kw,
+                        house_load_kw,
+                        ev_kw,
+                        grid_kw,
+                        battery_kw,
+                        LEAST(EXTRACT(EPOCH FROM (next_at - captured_at)), 1800) / 3600 AS hours
+                    FROM readings
+                    WHERE next_at IS NOT NULL
+                )
+                SELECT
+                    COALESCE(SUM(GREATEST(solar_kw, 0) * hours), 0) AS solar_kwh,
+                    COALESCE(SUM(GREATEST(house_load_kw, 0) * hours), 0) AS home_load_kwh,
+                    COALESCE(SUM(GREATEST(ev_kw, 0) * hours), 0) AS ev_kwh,
+                    COALESCE(SUM(GREATEST(grid_kw, 0) * hours), 0) AS grid_import_kwh,
+                    COALESCE(SUM(GREATEST(-grid_kw, 0) * hours), 0) AS grid_export_kwh,
+                    COALESCE(SUM(GREATEST(battery_kw, 0) * hours), 0) AS battery_charge_kwh,
+                    COALESCE(SUM(GREATEST(-battery_kw, 0) * hours), 0) AS battery_discharge_kwh
+                FROM intervals;
+            """, {"start_at": start_local, "end_at": end_local})
+
+            row = cur.fetchone()
+
+            return {
+                "period": selected_period,
+                "unit": "kWh",
+                "source": "energy_readings",
+                "start_at": start_local.isoformat(),
+                "end_at": end_local.isoformat(),
+                "values": {
+                    "solar": round(float(row[0] or 0), 2),
+                    "home_load": round(float(row[1] or 0), 2),
+                    "ev": round(float(row[2] or 0), 2),
+                    "grid_import": round(float(row[3] or 0), 2),
+                    "grid_export": round(float(row[4] or 0), 2),
+                    "battery_charge": round(float(row[5] or 0), 2),
+                    "battery_discharge": round(float(row[6] or 0), 2),
+                },
             }
 
     finally:

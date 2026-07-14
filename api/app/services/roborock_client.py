@@ -15,6 +15,7 @@ def get_roborock_config():
     return {
         **get_home_assistant_config(),
         "vacuum_entity_id": os.getenv("ROBOROCK_VACUUM_ENTITY_ID", "").strip(),
+        "battery_entity_id": os.getenv("ROBOROCK_BATTERY_ENTITY_ID", "").strip(),
         "route_entities": route_entities,
     }
 
@@ -50,6 +51,10 @@ def get_roborock_status():
     attributes = state.get("attributes") or {}
     raw_state = state.get("state") or "unknown"
     battery = attributes.get("battery_level")
+
+    if battery is None and config["battery_entity_id"]:
+        battery = read_roborock_battery_entity(config["battery_entity_id"])
+
     activity = attributes.get("status") or attributes.get("state") or raw_state
     error = attributes.get("error") or attributes.get("error_code")
 
@@ -57,6 +62,7 @@ def get_roborock_status():
         "configured": True,
         "available": raw_state not in ["unavailable", "unknown"],
         "entity_id": config["vacuum_entity_id"],
+        "battery_entity_id": config["battery_entity_id"],
         "friendly_name": attributes.get("friendly_name") or "Roborock",
         "state": raw_state,
         "activity": activity,
@@ -70,6 +76,20 @@ def get_roborock_status():
         "routes": sorted(config["route_entities"].keys()),
         "message": "Roborock status loaded.",
     }
+
+
+def read_roborock_battery_entity(entity_id):
+    try:
+        state = get_entity_state(entity_id)
+    except HomeAssistantUnavailable:
+        return None
+
+    raw_value = state.get("state")
+
+    try:
+        return round(float(raw_value), 1)
+    except (TypeError, ValueError):
+        return None
 
 
 def run_roborock_command(command, route=None):
