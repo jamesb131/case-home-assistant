@@ -1203,7 +1203,27 @@ function App() {
               marginBottom: isMobile && !mobileMenuOpen ? 0 : isMobile ? "14px" : "34px",
             }}
           >
-            <div style={{ fontWeight: "900", fontSize: isMobile ? "26px" : "22px" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                fontWeight: "900",
+                fontSize: isMobile ? "26px" : "22px",
+              }}
+            >
+              <img
+                src="/case-house.png"
+                alt=""
+                aria-hidden="true"
+                style={{
+                  width: isMobile ? "44px" : "38px",
+                  height: isMobile ? "34px" : "30px",
+                  objectFit: "contain",
+                  borderRadius: "6px",
+                  background: "rgba(255,255,255,0.08)",
+                }}
+              />
               CASE
             </div>
 
@@ -3191,15 +3211,15 @@ function layoutFlowBlocks(items, top, bottom) {
 function buildEnergyFlowRibbons(sources, sinks) {
   if (!sources.length || !sinks.length) return [];
 
-  const flows = [];
   const sourceState = Object.fromEntries(
-    sources.map((item) => [item.id, { ...item, remaining: Math.max(0, item.value || 0), cursor: item.y }]),
+    sources.map((item) => [item.id, { ...item, remaining: Math.max(0, item.value || 0) }]),
   );
   const sinkState = Object.fromEntries(
-    sinks.map((item) => [item.id, { ...item, remaining: Math.max(0, item.value || 0), cursor: item.y }]),
+    sinks.map((item) => [item.id, { ...item, remaining: Math.max(0, item.value || 0) }]),
   );
+  const allocations = [];
 
-  function connect(sourceId, sinkId, requestedAmount = null) {
+  function allocate(sourceId, sinkId, requestedAmount = null) {
     const source = sourceState[sourceId];
     const sink = sinkState[sinkId];
     if (!source || !sink || source.remaining <= 0.01 || sink.remaining <= 0.01) {
@@ -3215,33 +3235,51 @@ function buildEnergyFlowRibbons(sources, sinks) {
       return;
     }
 
-    const sourceHeight = (amount / Math.max(source.value, 0.01)) * source.height;
-    const sinkHeight = (amount / Math.max(sink.value, 0.01)) * sink.height;
-    const sourceTop = source.cursor;
-    const sourceBottom = source.cursor + sourceHeight;
-    const sinkTop = sink.cursor;
-    const sinkBottom = sink.cursor + sinkHeight;
-
-    flows.push({
-      source,
-      sink,
-      path: ribbonPath(132, 428, sourceTop, sourceBottom, sinkTop, sinkBottom),
-    });
-
-    source.cursor += sourceHeight;
-    sink.cursor += sinkHeight;
+    allocations.push({ sourceId, sinkId, amount });
     source.remaining -= amount;
     sink.remaining -= amount;
   }
 
-  connect("battery", "load");
-  connect("grid", "load");
-  connect("solar", "battery");
-  connect("solar", "load");
-  connect("solar", "ev");
-  connect("solar", "grid");
-  connect("grid", "ev");
-  connect("battery", "ev");
+  allocate("battery", "load");
+  allocate("grid", "load");
+  allocate("solar", "battery");
+  allocate("solar", "load");
+  allocate("solar", "ev");
+  allocate("solar", "grid");
+  allocate("grid", "ev");
+  allocate("battery", "ev");
+
+  const flows = [];
+  const sourceCursor = Object.fromEntries(sources.map((item) => [item.id, item.y]));
+  const sinkCursor = Object.fromEntries(sinks.map((item) => [item.id, item.y]));
+  const sourceOrder = Object.fromEntries(sources.map((item, index) => [item.id, index]));
+  const sinkOrder = Object.fromEntries(sinks.map((item, index) => [item.id, index]));
+
+  allocations
+    .sort(
+      (a, b) =>
+        (sourceOrder[a.sourceId] ?? 0) - (sourceOrder[b.sourceId] ?? 0) ||
+        (sinkOrder[a.sinkId] ?? 0) - (sinkOrder[b.sinkId] ?? 0),
+    )
+    .forEach(({ sourceId, sinkId, amount }) => {
+      const source = sourceState[sourceId];
+      const sink = sinkState[sinkId];
+      const sourceHeight = (amount / Math.max(source.value, 0.01)) * source.height;
+      const sinkHeight = (amount / Math.max(sink.value, 0.01)) * sink.height;
+      const sourceTop = sourceCursor[sourceId];
+      const sourceBottom = sourceTop + sourceHeight;
+      const sinkTop = sinkCursor[sinkId];
+      const sinkBottom = sinkTop + sinkHeight;
+
+      flows.push({
+        source,
+        sink,
+        path: ribbonPath(132, 428, sourceTop, sourceBottom, sinkTop, sinkBottom),
+      });
+
+      sourceCursor[sourceId] += sourceHeight;
+      sinkCursor[sinkId] += sinkHeight;
+    });
 
   return flows;
 }

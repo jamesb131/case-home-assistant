@@ -1,0 +1,17 @@
+{
+  "name": "CASE",
+  "short_name": "CASE",
+  "description": "Local household assistant",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#111827",
+  "icons": [
+    {
+      "src": "/case-house.png",
+      "sizes": "1448x1086",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
