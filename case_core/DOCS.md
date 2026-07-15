@@ -49,6 +49,17 @@ Upload Google auth files to the Home Assistant share path:
 /share/case/google/token.json
 ```
 
+If the Home Assistant `share` folder is mounted on your Mac, the auth helper can
+create and export the files in one run:
+
+```bash
+cd api
+python3 auth_google_calendar.py --export-dir /Volumes/share/case/google
+```
+
+You can use any mounted path that maps to `/share/case/google` on Home
+Assistant.
+
 On startup, CASE Core imports those files into:
 
 ```text

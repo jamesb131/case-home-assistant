@@ -36,6 +36,14 @@ Google calendar auth files should be uploaded to:
 /share/case/google/token.json
 ```
 
+If the Home Assistant share is mounted on your Mac, run the helper with an
+export directory and it will copy both files for you:
+
+```bash
+cd /Users/jamesbaverstock/Documents/repos/Case/api
+python3 auth_google_calendar.py --export-dir /Volumes/share/case/google
+```
+
 If hostnames are not ready yet, use the device IP addresses for the first trial.
 
 On HA OS, the web UI may also be exposed through HA app `webui` or ingress once
