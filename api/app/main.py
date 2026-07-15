@@ -40,6 +40,7 @@ from app.services.gaggimate_client import (
 from app.services.home_assistant_client import HomeAssistantUnavailable
 from app.services.news_client import get_news_overview
 from app.services.roborock_client import get_roborock_status, run_roborock_command
+from app.services.airtouch_client import get_airtouch_status, run_airtouch_command
 from app.repositories.gaggimate_repository import get_recent_gaggimate_readings
 from app.repositories.news_repository import get_latest_news
 
@@ -178,10 +179,11 @@ def get_recent_energy():
                     SELECT
                         date_bin('5 minutes', captured_at, TIMESTAMPTZ '2000-01-01') AS bucket,
                         AVG(solar_kw) AS solar_kw,
-                        AVG(house_load_kw) AS house_load_kw,
-                        AVG(ev_kw) AS ev_kw,
-                        AVG(grid_kw) AS grid_kw,
-                        AVG(battery_soc) AS battery_soc,
+                    AVG(house_load_kw) AS house_load_kw,
+                    AVG(GREATEST(COALESCE(house_load_kw, 0) - COALESCE(ev_kw, 0), 0)) AS house_load_net_kw,
+                    AVG(ev_kw) AS ev_kw,
+                    AVG(grid_kw) AS grid_kw,
+                    AVG(battery_soc) AS battery_soc,
                         MAX(house_load_kw) AS house_load_kw_max
                     FROM energy_readings
                     WHERE captured_at >= date_trunc('day', NOW() AT TIME ZONE 'Australia/Perth') AT TIME ZONE 'Australia/Perth'
@@ -191,10 +193,11 @@ def get_recent_energy():
                     bucket,
                     solar_kw,
                     house_load_kw,
-                    -house_load_kw AS consumption_kw,
+                    house_load_net_kw,
+                    -house_load_net_kw AS consumption_kw,
                     ev_kw,
                     grid_kw,
-                    solar_kw - house_load_kw AS net_kw,
+                    solar_kw - house_load_net_kw - ev_kw AS net_kw,
                     battery_soc,
                     house_load_kw_max
                 FROM bucketed
@@ -208,12 +211,13 @@ def get_recent_energy():
                     "time": r[0].isoformat(),
                     "solar_kw": float(r[1] or 0),
                     "house_load_kw": float(r[2] or 0),
-                    "consumption_kw": float(r[3] or 0),
-                    "ev_kw": float(r[4] or 0),
-                    "grid_kw": float(r[5] or 0),
-                    "net_kw": float(r[6] or 0),
-                    "battery_soc": float(r[7] or 0),
-                    "house_load_kw_max": float(r[8] or 0),
+                    "house_load_net_kw": float(r[3] or 0),
+                    "consumption_kw": float(r[4] or 0),
+                    "ev_kw": float(r[5] or 0),
+                    "grid_kw": float(r[6] or 0),
+                    "net_kw": float(r[7] or 0),
+                    "battery_soc": float(r[8] or 0),
+                    "house_load_kw_max": float(r[9] or 0),
                 }
                 for r in rows
             ]
@@ -273,11 +277,18 @@ def get_energy_today_summary():
                     ), 0) AS solar_kwh,
                     COALESCE(SUM(
                         CASE
+                            WHEN GREATEST(COALESCE(house_load_kw, 0) - COALESCE(ev_kw, 0), 0) > 0 AND next_at IS NOT NULL
+                            THEN GREATEST(COALESCE(house_load_kw, 0) - COALESCE(ev_kw, 0), 0) * EXTRACT(EPOCH FROM (next_at - captured_at)) / 3600
+                            ELSE 0
+                        END
+                    ), 0) AS house_load_net_kwh,
+                    COALESCE(SUM(
+                        CASE
                             WHEN house_load_kw > 0 AND next_at IS NOT NULL
                             THEN house_load_kw * EXTRACT(EPOCH FROM (next_at - captured_at)) / 3600
                             ELSE 0
                         END
-                    ), 0) AS house_load_kwh,
+                    ), 0) AS house_load_total_kwh,
                     COALESCE(
                         GREATEST(MAX(ev_total_kwh) - MIN(ev_total_kwh), 0),
                         SUM(
@@ -314,11 +325,14 @@ def get_energy_today_summary():
                 "grid_import_kwh": round(float(row[0]), 2),
                 "solar_kwh": round(float(row[1]), 2),
                 "house_load_kwh": round(float(row[2]), 2),
-                "ev_charge_kwh": round(float(row[3]), 2),
-                "ev_kw": round(float(row[4]), 2) if row[4] is not None else None,
-                "ev_charging": bool(row[4] is not None and float(row[4]) >= 0.3),
-                "ev_total_kwh": round(float(row[5]), 2) if row[5] is not None else None,
-                "ev_status": "smart_port" if row[4] is not None else "not_recorded",
+                "house_load_net_kwh": round(float(row[2]), 2),
+                "house_load_total_kwh": round(float(row[3]), 2),
+                "ev_charge_kwh": round(float(row[4]), 2),
+                "metered_device_kwh": round(float(row[4]), 2),
+                "ev_kw": round(float(row[5]), 2) if row[5] is not None else None,
+                "ev_charging": bool(row[5] is not None and float(row[5]) >= 0.3),
+                "ev_total_kwh": round(float(row[6]), 2) if row[6] is not None else None,
+                "ev_status": "smart_port" if row[5] is not None else "not_recorded",
             }
 
     finally:
@@ -373,6 +387,9 @@ def get_energy_flow_summary(period: str = "today"):
 
                 battery_kw = float(row[5] or 0)
                 grid_kw = float(row[4] or 0)
+                home_load_total = float(row[2] or 0)
+                ev_load = float(row[3] or 0)
+                home_load_net = max(home_load_total - ev_load, 0)
 
                 return {
                     "period": selected_period,
@@ -381,8 +398,11 @@ def get_energy_flow_summary(period: str = "today"):
                     "captured_at": row[0].isoformat(),
                     "values": {
                         "solar": round(float(row[1] or 0), 2),
-                        "home_load": round(float(row[2] or 0), 2),
-                        "ev": round(float(row[3] or 0), 2),
+                        "home_load": round(home_load_net, 2),
+                        "home_load_net": round(home_load_net, 2),
+                        "home_load_total": round(home_load_total, 2),
+                        "ev": round(ev_load, 2),
+                        "metered_devices": round(ev_load, 2),
                         "grid_import": round(max(grid_kw, 0), 2),
                         "grid_export": round(max(-grid_kw, 0), 2),
                         "battery_charge": round(max(battery_kw, 0), 2),
@@ -418,7 +438,8 @@ def get_energy_flow_summary(period: str = "today"):
                 )
                 SELECT
                     COALESCE(SUM(GREATEST(solar_kw, 0) * hours), 0) AS solar_kwh,
-                    COALESCE(SUM(GREATEST(house_load_kw, 0) * hours), 0) AS home_load_kwh,
+                    COALESCE(SUM(GREATEST(house_load_kw - ev_kw, 0) * hours), 0) AS home_load_net_kwh,
+                    COALESCE(SUM(GREATEST(house_load_kw, 0) * hours), 0) AS home_load_total_kwh,
                     COALESCE(SUM(GREATEST(ev_kw, 0) * hours), 0) AS ev_kwh,
                     COALESCE(SUM(GREATEST(grid_kw, 0) * hours), 0) AS grid_import_kwh,
                     COALESCE(SUM(GREATEST(-grid_kw, 0) * hours), 0) AS grid_export_kwh,
@@ -438,11 +459,14 @@ def get_energy_flow_summary(period: str = "today"):
                 "values": {
                     "solar": round(float(row[0] or 0), 2),
                     "home_load": round(float(row[1] or 0), 2),
-                    "ev": round(float(row[2] or 0), 2),
-                    "grid_import": round(float(row[3] or 0), 2),
-                    "grid_export": round(float(row[4] or 0), 2),
-                    "battery_charge": round(float(row[5] or 0), 2),
-                    "battery_discharge": round(float(row[6] or 0), 2),
+                    "home_load_net": round(float(row[1] or 0), 2),
+                    "home_load_total": round(float(row[2] or 0), 2),
+                    "ev": round(float(row[3] or 0), 2),
+                    "metered_devices": round(float(row[3] or 0), 2),
+                    "grid_import": round(float(row[4] or 0), 2),
+                    "grid_export": round(float(row[5] or 0), 2),
+                    "battery_charge": round(float(row[6] or 0), 2),
+                    "battery_discharge": round(float(row[7] or 0), 2),
                 },
             }
 
@@ -551,6 +575,11 @@ class GaggimateModeRequest(BaseModel):
 class RoborockCommandRequest(BaseModel):
     command: str
     route: str | None = None
+
+class AirtouchCommandRequest(BaseModel):
+    command: str
+    mode: str | None = None
+    zone: str | None = None
 
 @app.post("/case/ask")
 def case_ask(request: CaseAskRequest):
@@ -674,6 +703,31 @@ def roborock_command(request: RoborockCommandRequest):
                 "route": request.route,
                 "error": str(exc),
                 "status": get_roborock_status(),
+            },
+        )
+
+@app.get("/iot/airtouch/status")
+def airtouch_status():
+    return get_airtouch_status()
+
+@app.post("/iot/airtouch/refresh")
+def refresh_airtouch_status():
+    return get_airtouch_status()
+
+@app.post("/iot/airtouch/command")
+def airtouch_command(request: AirtouchCommandRequest):
+    try:
+        return run_airtouch_command(request.command, mode=request.mode, zone=request.zone)
+    except HomeAssistantUnavailable as exc:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "ok": False,
+                "command": request.command,
+                "mode": request.mode,
+                "zone": request.zone,
+                "error": str(exc),
+                "status": get_airtouch_status(),
             },
         )
 

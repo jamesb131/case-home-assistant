@@ -4,6 +4,7 @@ psycopg2-binary
 pymodbus
 requests
 websocket-client
+pyairtouch==3.3.0
 
 google-api-python-client
 google-auth-httplib2

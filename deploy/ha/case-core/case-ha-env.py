@@ -46,6 +46,10 @@ OPTION_ENV_MAP = {
     "roborock_battery_entity_id": "ROBOROCK_BATTERY_ENTITY_ID",
     "roborock_route_entities": "ROBOROCK_ROUTE_ENTITIES",
     "roborock_poll_interval": "ROBOROCK_POLL_INTERVAL",
+    "airtouch_backend": "AIRTOUCH_BACKEND",
+    "airtouch_host": "AIRTOUCH_HOST",
+    "airtouch_ac_entity_id": "AIRTOUCH_AC_ENTITY_ID",
+    "airtouch_zone_entities": "AIRTOUCH_ZONE_ENTITIES",
     "news_feeds": "NEWS_FEEDS",
     "news_refresh_interval_seconds": "NEWS_REFRESH_INTERVAL_SECONDS",
 }

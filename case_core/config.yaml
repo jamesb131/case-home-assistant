@@ -1,5 +1,5 @@
 name: CASE Core
-version: "0.1.25"
+version: "0.1.26"
 slug: case_core
 description: Local-first household assistant API, worker and web UI.
 url: https://github.com/jamesb131/case-home-assistant
@@ -63,6 +63,10 @@ options:
   roborock_battery_entity_id: ""
   roborock_route_entities: "{}"
   roborock_poll_interval: 60
+  airtouch_backend: auto
+  airtouch_host: ""
+  airtouch_ac_entity_id: climate.ac_0
+  airtouch_zone_entities: '{"Living":"climate.living","James & Chris":"climate.james_chris","Leo":"climate.leo","Benny":"climate.benny","Lounge":"climate.lounge","Study":"climate.study","Cinema":"climate.cinema","Guest":"climate.guest"}'
   news_feeds: "ABC News|https://www.abc.net.au/news/feed/51120/rss.xml"
   news_refresh_interval_seconds: 1800
 schema:
@@ -105,5 +109,9 @@ schema:
   roborock_battery_entity_id: str?
   roborock_route_entities: str
   roborock_poll_interval: int(30,)
+  airtouch_backend: list(auto|direct|home_assistant)
+  airtouch_host: str?
+  airtouch_ac_entity_id: str?
+  airtouch_zone_entities: str
   news_feeds: str
   news_refresh_interval_seconds: int(300,)

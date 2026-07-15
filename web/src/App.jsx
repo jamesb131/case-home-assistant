@@ -214,6 +214,8 @@ function App() {
   const [gaggimateError, setGaggimateError] = useState(null);
   const [roborockStatus, setRoborockStatus] = useState(null);
   const [roborockError, setRoborockError] = useState(null);
+  const [airtouchStatus, setAirtouchStatus] = useState(null);
+  const [airtouchError, setAirtouchError] = useState(null);
   const [newsItems, setNewsItems] = useState([]);
   const [newsSummary, setNewsSummary] = useState(null);
   const [newsError, setNewsError] = useState(null);
@@ -860,6 +862,64 @@ function App() {
     }
   }
 
+  async function loadAirtouchStatus() {
+    try {
+      const res = await apiFetch(`${API_BASE}/iot/airtouch/status`);
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || json.message || `AirTouch API returned ${res.status}`);
+
+      setAirtouchStatus(json);
+      setAirtouchError(json.available === false ? json.message || null : null);
+    } catch (err) {
+      console.error(err);
+      setAirtouchError(err.message);
+      setAirtouchStatus((current) => ({
+        ...(current || {}),
+        available: false,
+        message: err.message,
+      }));
+    }
+  }
+
+  async function refreshAirtouch() {
+    try {
+      const res = await apiFetch(`${API_BASE}/iot/airtouch/refresh`, {
+        method: "POST",
+      });
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || json.message || `AirTouch refresh returned ${res.status}`);
+
+      setAirtouchStatus(json);
+      setAirtouchError(json.available === false ? json.message || null : null);
+    } catch (err) {
+      console.error(err);
+      setAirtouchError(err.message);
+    }
+  }
+
+  async function runAirtouchCommand(command, details = {}) {
+    try {
+      const res = await apiFetch(`${API_BASE}/iot/airtouch/command`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ command, ...details }),
+      });
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || `AirTouch command returned ${res.status}`);
+
+      setAirtouchStatus(json.status || json);
+      setAirtouchError(null);
+    } catch (err) {
+      console.error(err);
+      setAirtouchError(err.message);
+    }
+  }
+
   async function loadNews() {
     try {
       const res = await apiFetch(`${API_BASE}/news/latest`);
@@ -927,6 +987,7 @@ function App() {
       loadGaggimateStatus(),
       loadGaggimateProfiles(),
       loadRoborockStatus(),
+      loadAirtouchStatus(),
       loadNewsSummary(),
     ]);
   }
@@ -947,6 +1008,7 @@ function App() {
       loadGaggimateStatus();
       loadGaggimateProfiles();
       loadRoborockStatus();
+      loadAirtouchStatus();
       loadNewsSummary();
     }, 0);
 
@@ -980,6 +1042,10 @@ function App() {
       loadRoborockStatus();
     }, 60000);
 
+    const airtouchInterval = setInterval(() => {
+      loadAirtouchStatus();
+    }, 60000);
+
     const newsInterval = setInterval(() => {
       loadNewsSummary();
     }, 300000);
@@ -993,6 +1059,7 @@ function App() {
       clearInterval(systemStatusInterval);
       clearInterval(gaggimateInterval);
       clearInterval(roborockInterval);
+      clearInterval(airtouchInterval);
       clearInterval(newsInterval);
     };
   }, []);
@@ -1057,6 +1124,8 @@ function App() {
   const messages = data.messages || [];
   const topMessages = messages.slice(0, 2);
 
+  const liveEvKw = Math.max(0, Number(state.ev_kw || 0));
+  const liveHouseLoadNetKw = Math.max(0, Number(state.house_load_kw || 0) - liveEvKw);
   const gridValue = state.grid_kw;
   const gridIsExporting = gridValue < 0;
   const assistantAvailability = assistantStatus?.available;
@@ -1464,7 +1533,7 @@ function App() {
                 }}
               >
                 <EnergyCard icon="☀️" label="Production" value={formatKw(state.solar_kw)} unit="kW" />
-                <EnergyCard icon="🏠" label="Consumption" value={formatKw(state.house_load_kw)} unit="kW" />
+                <EnergyCard icon="🏠" label="Consumption" value={formatKw(liveHouseLoadNetKw)} unit="kW" />
                 <EnergyCard
                   icon="☀️"
                   label="Solar today"
@@ -1474,7 +1543,7 @@ function App() {
                 <EnergyCard
                   icon="🏡"
                   label="Usage today"
-                  value={(todaySummary?.house_load_kwh ?? 0).toFixed(1)}
+                  value={(todaySummary?.house_load_net_kwh ?? todaySummary?.house_load_kwh ?? 0).toFixed(1)}
                   unit="kWh"
                 />
                 <EnergyCard
@@ -1876,6 +1945,10 @@ function App() {
               roborockError={roborockError}
               refreshRoborock={refreshRoborock}
               runRoborockCommand={runRoborockCommand}
+              airtouchStatus={airtouchStatus}
+              airtouchError={airtouchError}
+              refreshAirtouch={refreshAirtouch}
+              runAirtouchCommand={runAirtouchCommand}
             />
           )}
           {activePage === "News" && (
@@ -2768,35 +2841,29 @@ function EnergyFlowCard({ summary, activePeriod, onPeriodChange }) {
     { id: "solar", label: "Solar", value: values.solar || 0, color: "#facc15" },
     { id: "battery", label: "Battery", value: values.battery_discharge || 0, color: "#2dd4bf" },
     { id: "grid", label: "Grid", value: values.grid_import || 0, color: "#60a5fa" },
-  ].filter((item) => item.value > 0.01);
-  const homeLoad = Math.max(0, (values.home_load || 0) - (values.ev || 0));
+  ];
+  const homeLoad = Math.max(0, values.home_load_net ?? values.home_load ?? 0);
   const sinks = [
+    { id: "load", label: "Load", value: homeLoad, color: "#a855f7" },
     {
       id: "battery",
       label: "Battery",
       value: values.battery_charge || 0,
       percent: values.battery_soc ? `${Number(values.battery_soc).toFixed(0)}%` : null,
       color: "#14b8a6",
+      optional: true,
     },
-    { id: "load", label: "Load", value: homeLoad, color: "#a855f7" },
     { id: "ev", label: "EV", value: values.ev || 0, color: "#14b8a6" },
     { id: "grid", label: "Grid", value: values.grid_export || 0, color: "#4f46e5" },
-  ].filter((item) => item.value > 0.01);
+  ].filter((item) => !item.optional || item.value > 0.01);
 
-  const fallbackSource = [{ id: "none-source", label: "No source", value: 0, color: "#e2e8f0" }];
-  const fallbackSink = [{ id: "none-sink", label: "No load", value: 0, color: "#e2e8f0" }];
-  const visibleSources = sources.length ? sources : fallbackSource;
-  const visibleSinks = sinks.length ? sinks : fallbackSink;
-  const totalSource = Math.max(visibleSources.reduce((sum, item) => sum + item.value, 0), 1);
-  const totalSink = Math.max(visibleSinks.reduce((sum, item) => sum + item.value, 0), 1);
-
-  const sourceBlocks = layoutFlowBlocks(visibleSources, totalSource, 760);
-  const sinkBlocks = layoutFlowBlocks(visibleSinks, totalSink, 760);
+  const sourceBlocks = layoutFlowBlocks(sources, 22, 718);
+  const sinkBlocks = layoutFlowBlocks(sinks, 22, 718);
   const flows = pairFlowBlocks(sourceBlocks, sinkBlocks);
 
   return (
     <div>
-      <svg viewBox="0 0 560 800" style={{ width: "100%", display: "block", marginTop: "10px" }}>
+      <svg viewBox="0 0 560 760" style={{ width: "100%", display: "block", marginTop: "10px" }}>
         <defs>
           {flows.map((flow, index) => (
             <linearGradient key={`flow-gradient-${index}`} id={`flow-gradient-${index}`} x1="0" x2="1">
@@ -2809,12 +2876,9 @@ function EnergyFlowCard({ summary, activePeriod, onPeriodChange }) {
         {flows.map((flow, index) => (
           <path
             key={`flow-${index}`}
-            d={`M 132 ${flow.sourceY} C 250 ${flow.sourceY}, 310 ${flow.sinkY}, 428 ${flow.sinkY}`}
-            fill="none"
-            stroke={`url(#flow-gradient-${index})`}
-            strokeWidth={Math.max(5, flow.width)}
-            strokeLinecap="round"
-            opacity="0.7"
+            d={flow.path}
+            fill={`url(#flow-gradient-${index})`}
+            opacity="0.62"
           />
         ))}
 
@@ -2857,14 +2921,20 @@ function EnergyFlowCard({ summary, activePeriod, onPeriodChange }) {
   );
 }
 
-function layoutFlowBlocks(items, total, availableHeight) {
+function layoutFlowBlocks(items, top, bottom) {
   const gap = 10;
   const minHeight = 124;
-  const maxHeight = 300;
-  let y = 20;
+  const totalHeight = bottom - top;
+  const usableHeight = totalHeight - gap * (items.length - 1);
+  const values = items.map((item) => Math.max(0, item.value || 0));
+  const valueTotal = values.reduce((sum, value) => sum + value, 0);
+  const minTotal = minHeight * items.length;
+  const extraHeight = Math.max(0, usableHeight - minTotal);
+  let y = top;
 
-  return items.map((item) => {
-    const height = Math.max(minHeight, Math.min(maxHeight, (item.value / total) * (availableHeight - gap * (items.length - 1))));
+  return items.map((item, index) => {
+    const weight = valueTotal > 0 ? values[index] / valueTotal : 1 / items.length;
+    const height = minHeight + extraHeight * weight;
     const block = { ...item, y, height, midY: y + height / 2 };
     y += height + gap;
     return block;
@@ -2875,28 +2945,29 @@ function pairFlowBlocks(sources, sinks) {
   if (!sources.length || !sinks.length) return [];
 
   const flows = [];
-  const sourceState = sources.map((item) => ({ ...item, remaining: item.value, cursor: item.y }));
-  const sinkState = sinks.map((item) => ({ ...item, remaining: item.value, cursor: item.y }));
+  const sourceState = sources
+    .filter((item) => item.value > 0.01)
+    .map((item) => ({ ...item, remaining: item.value, cursor: item.y }));
+  const sinkState = sinks
+    .filter((item) => item.value > 0.01)
+    .map((item) => ({ ...item, remaining: item.value, cursor: item.y }));
   let sinkIndex = 0;
-  const maxTotal = Math.max(
-    sourceState.reduce((sum, item) => sum + item.value, 0),
-    sinkState.reduce((sum, item) => sum + item.value, 0),
-    1
-  );
 
   sourceState.forEach((source) => {
     while (source.remaining > 0.01 && sinkIndex < sinkState.length) {
       const sink = sinkState[sinkIndex];
       const amount = Math.min(source.remaining, sink.remaining);
-      const sourceHeight = Math.max(3, (amount / Math.max(source.value, 1)) * source.height);
-      const sinkHeight = Math.max(3, (amount / Math.max(sink.value, 1)) * sink.height);
+      const sourceHeight = (amount / Math.max(source.value, 0.01)) * source.height;
+      const sinkHeight = (amount / Math.max(sink.value, 0.01)) * sink.height;
+      const sourceTop = source.cursor;
+      const sourceBottom = source.cursor + sourceHeight;
+      const sinkTop = sink.cursor;
+      const sinkBottom = sink.cursor + sinkHeight;
 
       flows.push({
         source,
         sink,
-        sourceY: source.cursor + sourceHeight / 2,
-        sinkY: sink.cursor + sinkHeight / 2,
-        width: Math.max(6, (amount / maxTotal) * 130),
+        path: ribbonPath(132, 428, sourceTop, sourceBottom, sinkTop, sinkBottom),
       });
 
       source.cursor += sourceHeight;
@@ -2911,6 +2982,19 @@ function pairFlowBlocks(sources, sinks) {
   });
 
   return flows;
+}
+
+function ribbonPath(x1, x2, sourceTop, sourceBottom, sinkTop, sinkBottom) {
+  const c1 = x1 + 112;
+  const c2 = x2 - 112;
+
+  return [
+    `M ${x1} ${sourceTop}`,
+    `C ${c1} ${sourceTop}, ${c2} ${sinkTop}, ${x2} ${sinkTop}`,
+    `L ${x2} ${sinkBottom}`,
+    `C ${c2} ${sinkBottom}, ${c1} ${sourceBottom}, ${x1} ${sourceBottom}`,
+    "Z",
+  ].join(" ");
 }
 
 function EnergyFlowNode({ item, x, width, unit, align }) {
@@ -2940,10 +3024,10 @@ function EnergyFlowNode({ item, x, width, unit, align }) {
         {item.label}
       </text>
       <text x={textX} y={item.y + 78} textAnchor={textAnchor} fontSize="32" fontWeight="900" fill="#111827">
-        {item.value > 0 ? Number(item.value).toFixed(item.value >= 10 ? 1 : 2) : "--"}
+        {Number(item.value || 0).toFixed((item.value || 0) >= 10 ? 1 : 2)}
       </text>
       <text x={textX} y={item.y + 110} textAnchor={textAnchor} fontSize="20" fill="#111827">
-        {item.value > 0 ? unit : ""}
+        {unit}
       </text>
       {item.percent && (
         <text x={textX} y={item.y + item.height - 16} textAnchor={textAnchor} fontSize="22" fill="#111827">
@@ -3206,11 +3290,12 @@ function EnergyDayChart({ data, isMobile = false }) {
 
         {actualRows.map((row) => {
           const x = xFromDate(row.date);
-          const consumption = Math.max(0, row.house_load_kw || 0);
-          const evKw = clamp(Math.max(0, row.ev_kw || 0), 0, consumption);
+          const evKw = Math.max(0, row.ev_kw || 0);
+          const consumption = Math.max(0, row.house_load_net_kw ?? (row.house_load_kw || 0) - evKw);
+          const totalMeteredLoad = consumption + evKw;
           const importKw = Math.max(0, row.grid_kw || 0);
 
-          const suppliedBySolarOrBattery = clamp(consumption - importKw, 0, consumption);
+          const suppliedBySolarOrBattery = clamp(totalMeteredLoad - importKw, 0, totalMeteredLoad);
 
           const h = barHeight(consumption);
           const y = zeroY;
@@ -3218,7 +3303,7 @@ function EnergyDayChart({ data, isMobile = false }) {
           const innerH = barHeight(suppliedBySolarOrBattery);
           const innerY = zeroY;
           const evH = barHeight(evKw);
-          const evY = zeroY + Math.max(0, h - evH);
+          const evY = zeroY + h;
 
           return (
             <g key={`consumption-${row.time}`}>
@@ -4525,6 +4610,10 @@ function IoTPage({
   roborockError,
   refreshRoborock,
   runRoborockCommand,
+  airtouchStatus,
+  airtouchError,
+  refreshAirtouch,
+  runAirtouchCommand,
 }) {
   const online = gaggimateStatus?.online === true;
   const currentTemp = gaggimateStatus?.current_temp_c;
@@ -4535,6 +4624,7 @@ function IoTPage({
   const [selectedRoborockRoute, setSelectedRoborockRoute] = useState(roborockRoutes[0] || "");
   const activeRoborockRoute = selectedRoborockRoute || roborockRoutes[0] || "";
   const roborockState = compactRoborockState(roborockStatus);
+  const airtouchModes = ["off", "cool", "heat", "fan_only", "dry", "auto"];
 
   return (
     <div>
@@ -4765,6 +4855,133 @@ function IoTPage({
             Refresh vacuum
           </button>
         </section>
+
+        <section className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
+            <div>
+              <div className="muted">AirTouch 5</div>
+              <h2 style={{ margin: "6px 0 0", fontSize: "26px" }}>Air conditioning</h2>
+              <div className="tiny" style={{ marginTop: "6px" }}>
+                {airtouchStatus?.backend === "direct" ? "Direct local" : "Home Assistant bridge"}
+              </div>
+            </div>
+            <span
+              style={{
+                borderRadius: "999px",
+                padding: "7px 10px",
+                fontSize: "12px",
+                fontWeight: 900,
+                background: airtouchStatus?.available ? "#dcfce7" : "#fee2e2",
+                color: airtouchStatus?.available ? "#15803d" : "#b91c1c",
+              }}
+            >
+              {airtouchStatus?.available ? "Online" : airtouchStatus?.configured === false ? "Setup needed" : "Offline"}
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              gap: "10px",
+              marginTop: "18px",
+            }}
+          >
+            <MetricBox label="Mode" value={formatAirtouchMode(airtouchStatus?.mode)} />
+            <MetricBox label="Target" value={formatMetric(airtouchStatus?.target_temperature, "°C")} />
+            <MetricBox label="Zones" value={`${airtouchStatus?.active_zone_count ?? 0} on`} />
+          </div>
+
+          <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
+
+          <div className="muted" style={{ marginBottom: "10px" }}>Mode</div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              gap: "8px",
+            }}
+          >
+            {airtouchModes.map((mode) => {
+              const active = normaliseAirtouchMode(airtouchStatus?.mode) === mode;
+
+              return (
+                <button
+                  key={mode}
+                  className="button"
+                  onClick={() => runAirtouchCommand("set_mode", { mode })}
+                  disabled={!airtouchStatus?.available}
+                  style={{
+                    minHeight: "42px",
+                    padding: "8px 6px",
+                    borderRadius: "14px",
+                    fontSize: "12px",
+                    background: active ? "#111827" : "#e5e7eb",
+                    color: active ? "white" : "#111827",
+                  }}
+                >
+                  {formatAirtouchMode(mode)}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="muted" style={{ margin: "18px 0 10px" }}>Rooms</div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: "8px",
+            }}
+          >
+            {(airtouchStatus?.zones || []).map((zone) => (
+              <button
+                key={zone.entity_id || zone.name}
+                onClick={() => runAirtouchCommand(zone.on ? "zone_off" : "zone_on", { zone: zone.name })}
+                disabled={!zone.available}
+                style={{
+                  border: "1px solid #dbe3ef",
+                  borderRadius: "14px",
+                  padding: "12px",
+                  minHeight: "64px",
+                  textAlign: "left",
+                  background: zone.on ? "#dcfce7" : "#f8fafc",
+                  color: zone.on ? "#14532d" : "#475569",
+                  cursor: zone.available ? "pointer" : "not-allowed",
+                }}
+              >
+                <div style={{ fontWeight: 900, fontSize: "14px", lineHeight: 1.15 }}>{zone.name}</div>
+                <div className="tiny" style={{ color: "inherit", marginTop: "5px" }}>
+                  {zone.on ? "Open" : "Closed"}
+                  {zone.current_temperature !== null && zone.current_temperature !== undefined
+                    ? ` · ${Number(zone.current_temperature).toFixed(0)}°C`
+                    : ""}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          {(airtouchError || airtouchStatus?.available === false) && (
+            <div
+              style={{
+                marginTop: "16px",
+                borderRadius: "14px",
+                padding: "12px",
+                background: "#fef2f2",
+                color: "#991b1b",
+                fontSize: "13px",
+                fontWeight: 700,
+                lineHeight: 1.4,
+              }}
+            >
+              {airtouchError || airtouchStatus?.message || "AirTouch is unavailable."}
+            </div>
+          )}
+
+          <button className="button" onClick={refreshAirtouch} style={{ marginTop: "16px", width: "100%" }}>
+            Refresh aircon
+          </button>
+        </section>
         <section className="card">
           <div className="muted">IoT notes</div>
           <h2 style={{ margin: "6px 0 14px", fontSize: "22px" }}>Guardrails</h2>
@@ -4929,6 +5146,27 @@ function compactRoborockState(status) {
   }
 
   return state || "--";
+}
+
+function normaliseAirtouchMode(mode) {
+  const value = (mode || "off").toLowerCase();
+
+  if (value === "fan") return "fan_only";
+
+  return value;
+}
+
+function formatAirtouchMode(mode) {
+  const labels = {
+    off: "Off",
+    cool: "Cool",
+    heat: "Heat",
+    fan_only: "Fan",
+    dry: "Dry",
+    auto: "Auto",
+  };
+
+  return labels[normaliseAirtouchMode(mode)] || "--";
 }
 
 function formatNewsTime(value) {
