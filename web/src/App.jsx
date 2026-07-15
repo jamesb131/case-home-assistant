@@ -5287,15 +5287,14 @@ function AirTouchCard({ status, error, onCommand, onRefresh, compact = false }) 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: compact ? "repeat(2, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
           gap: "10px",
           marginTop: "18px",
         }}
       >
-        <MetricBox label="Mode" value={formatAirtouchMode(status?.mode)} />
+        <MetricBox label="Current" value={formatMetric(status?.current_temperature, "°C")} />
         <MetricBox label="Target" value={formatMetric(status?.target_temperature, "°C")} />
-        {!compact && <MetricBox label="Zones" value={`${status?.active_zone_count ?? 0} on`} />}
-        {compact && <MetricBox label="Current" value={formatMetric(status?.current_temperature, "°C")} />}
+        <MetricBox label="Zones" value={`${status?.active_zone_count ?? 0} on`} />
       </div>
 
       <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
