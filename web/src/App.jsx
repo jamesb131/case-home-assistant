@@ -3234,14 +3234,14 @@ function buildEnergyFlowRibbons(sources, sinks) {
     sink.remaining -= amount;
   }
 
+  connect("battery", "load");
+  connect("grid", "load");
   connect("solar", "battery");
-  connect("solar", "grid");
   connect("solar", "load");
   connect("solar", "ev");
-  connect("battery", "load");
-  connect("battery", "ev");
-  connect("grid", "load");
+  connect("solar", "grid");
   connect("grid", "ev");
+  connect("battery", "ev");
 
   return flows;
 }
