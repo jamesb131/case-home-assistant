@@ -580,6 +580,7 @@ class AirtouchCommandRequest(BaseModel):
     command: str
     mode: str | None = None
     zone: str | None = None
+    target_temperature: float | None = None
 
 @app.post("/case/ask")
 def case_ask(request: CaseAskRequest):
@@ -717,7 +718,12 @@ def refresh_airtouch_status():
 @app.post("/iot/airtouch/command")
 def airtouch_command(request: AirtouchCommandRequest):
     try:
-        return run_airtouch_command(request.command, mode=request.mode, zone=request.zone)
+        return run_airtouch_command(
+            request.command,
+            mode=request.mode,
+            zone=request.zone,
+            target_temperature=request.target_temperature,
+        )
     except HomeAssistantUnavailable as exc:
         return JSONResponse(
             status_code=503,
@@ -726,6 +732,7 @@ def airtouch_command(request: AirtouchCommandRequest):
                 "command": request.command,
                 "mode": request.mode,
                 "zone": request.zone,
+                "target_temperature": request.target_temperature,
                 "error": str(exc),
                 "status": get_airtouch_status(),
             },

@@ -798,6 +798,7 @@ function App() {
         cached: false,
       });
       setGaggimateError(null);
+      setTimeout(loadGaggimateStatus, 1800);
     } catch (err) {
       console.error(err);
       setGaggimateError(err.message);
@@ -856,6 +857,7 @@ function App() {
 
       setRoborockStatus(json.status || json);
       setRoborockError(null);
+      setTimeout(loadRoborockStatus, 2500);
     } catch (err) {
       console.error(err);
       setRoborockError(err.message);
@@ -914,6 +916,7 @@ function App() {
 
       setAirtouchStatus(json.status || json);
       setAirtouchError(null);
+      setTimeout(loadAirtouchStatus, 2500);
     } catch (err) {
       console.error(err);
       setAirtouchError(err.message);
@@ -1477,6 +1480,7 @@ function App() {
                   </div>
                 )}
 
+                {!isMobile && (
                 <div className="card">
                   <div className="muted" style={{ marginBottom: "16px" }}>
                     Recommendations
@@ -1522,76 +1526,105 @@ function App() {
                     ))
                   )}
                 </div>
+                )}
               </section>
 
-              <section
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile ? "repeat(2, minmax(0, 1fr))" : "repeat(4, minmax(0, 1fr))",
-                  gap: "14px",
-                  marginBottom: "18px",
-                }}
-              >
-                <EnergyCard icon="☀️" label="Production" value={formatKw(state.solar_kw)} unit="kW" />
-                <EnergyCard icon="🏠" label="Consumption" value={formatKw(liveHouseLoadNetKw)} unit="kW" />
-                <EnergyCard
-                  icon="☀️"
-                  label="Solar today"
-                  value={(todaySummary?.solar_kwh ?? 0).toFixed(1)}
-                  unit="kWh"
-                />
-                <EnergyCard
-                  icon="🏡"
-                  label="Usage today"
-                  value={(todaySummary?.house_load_net_kwh ?? todaySummary?.house_load_kwh ?? 0).toFixed(1)}
-                  unit="kWh"
-                />
-                <EnergyCard
-                  icon="🚗"
-                  label="Car"
-                  value={todaySummary?.ev_kw === null || todaySummary?.ev_kw === undefined ? "--" : Number(todaySummary.ev_kw).toFixed(2)}
-                  unit="kW"
-                  subtext={todaySummary?.ev_status === "smart_port_not_mapped" ? "Not mapped yet" : undefined}
-                  color={todaySummary?.ev_charging ? "#16a34a" : "#111827"}
-                />
-                <EnergyCard
-                  icon="⚡"
-                  label="Grid"
-                  value={`${gridIsExporting ? "+" : "-"}${Math.abs(gridValue).toFixed(2)}`}
-                  unit="kW"
-                  color={gridIsExporting ? "#16a34a" : "#dc2626"}
-                />
-                <EnergyCard
-                  icon="🔌"
-                  label="Battery flow"
-                  value={`${state.battery_kw >= 0 ? "+" : "-"}${Math.abs(state.battery_kw).toFixed(2)}`}
-                  unit="kW"
-                  color={state.battery_kw >= 0 ? "#16a34a" : "#dc2626"}
-                />
-                <EnergyCard
-                  icon="🔋"
-                  label="Battery"
-                  value={state.battery_usable_kwh.toFixed(1)}
-                  unit="kWh"
-                  inlineSubtext={`${Math.round(state.battery_soc)}%`}
-                  color={state.battery_usable_kwh <= 0.2 ? "#dc2626" : "#16a34a"}
-                />
-                <EnergyCard
-                  icon="🔻"
-                  label="Grid today"
-                  value={(todaySummary?.grid_import_kwh ?? 0).toFixed(2)}
-                  unit="kWh"
-                />
-              </section>
+              {isMobile && (
+                <>
+                  <HomeTaskEventsCard
+                    tasks={tasks}
+                    calendarEvents={calendarEvents}
+                    newTaskTitle={newTaskTitle}
+                    setNewTaskTitle={setNewTaskTitle}
+                    createTask={createTask}
+                    completeTask={completeTask}
+                    setSelectedTask={setSelectedTask}
+                    setTaskModalOpen={setTaskModalOpen}
+                  />
+                  <HomeRecommendationsCard topMessages={topMessages} />
+                </>
+              )}
 
-              <CoffeeMachineHomeCard
-                status={gaggimateStatus}
-                profiles={gaggimateProfiles}
-                onOpen={() => setActivePage("IoT")}
-                onRefresh={refreshGaggimate}
-                onModeChange={changeGaggimateMode}
-                onProfileSelect={selectGaggimateProfile}
-              />
+              {!isMobile && (
+                <>
+                  <section
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                      gap: "14px",
+                      marginBottom: "18px",
+                    }}
+                  >
+                    <EnergyCard icon="☀️" label="Production" value={formatKw(state.solar_kw)} unit="kW" />
+                    <EnergyCard icon="🏠" label="Consumption" value={formatKw(liveHouseLoadNetKw)} unit="kW" />
+                    <EnergyCard
+                      icon="☀️"
+                      label="Solar today"
+                      value={(todaySummary?.solar_kwh ?? 0).toFixed(1)}
+                      unit="kWh"
+                    />
+                    <EnergyCard
+                      icon="🏡"
+                      label="Usage today"
+                      value={(todaySummary?.house_load_net_kwh ?? todaySummary?.house_load_kwh ?? 0).toFixed(1)}
+                      unit="kWh"
+                    />
+                    <EnergyCard
+                      icon="🚗"
+                      label="Car"
+                      value={todaySummary?.ev_kw === null || todaySummary?.ev_kw === undefined ? "--" : Number(todaySummary.ev_kw).toFixed(2)}
+                      unit="kW"
+                      subtext={todaySummary?.ev_status === "smart_port_not_mapped" ? "Not mapped yet" : undefined}
+                      color={todaySummary?.ev_charging ? "#16a34a" : "#111827"}
+                    />
+                    <EnergyCard
+                      icon="⚡"
+                      label="Grid"
+                      value={`${gridIsExporting ? "+" : "-"}${Math.abs(gridValue).toFixed(2)}`}
+                      unit="kW"
+                      color={gridIsExporting ? "#16a34a" : "#dc2626"}
+                    />
+                    <EnergyCard
+                      icon="🔌"
+                      label="Battery flow"
+                      value={`${state.battery_kw >= 0 ? "+" : "-"}${Math.abs(state.battery_kw).toFixed(2)}`}
+                      unit="kW"
+                      color={state.battery_kw >= 0 ? "#16a34a" : "#dc2626"}
+                    />
+                    <EnergyCard
+                      icon="🔋"
+                      label="Battery"
+                      value={state.battery_usable_kwh.toFixed(1)}
+                      unit="kWh"
+                      inlineSubtext={`${Math.round(state.battery_soc)}%`}
+                      color={state.battery_usable_kwh <= 0.2 ? "#dc2626" : "#16a34a"}
+                    />
+                    <EnergyCard
+                      icon="🔻"
+                      label="Grid today"
+                      value={(todaySummary?.grid_import_kwh ?? 0).toFixed(2)}
+                      unit="kWh"
+                    />
+                  </section>
+
+                  <CoffeeMachineHomeCard
+                    status={gaggimateStatus}
+                    profiles={gaggimateProfiles}
+                    onOpen={() => setActivePage("IoT")}
+                    onRefresh={refreshGaggimate}
+                    onModeChange={changeGaggimateMode}
+                    onProfileSelect={selectGaggimateProfile}
+                  />
+
+                  <AirTouchCard
+                    status={airtouchStatus}
+                    error={airtouchError}
+                    onCommand={runAirtouchCommand}
+                    onRefresh={refreshAirtouch}
+                    compact
+                  />
+                </>
+              )}
 
               <section
                 style={{
@@ -1602,7 +1635,7 @@ function App() {
                 }}
               >
                 {weather && (
-                  <div className="card compactSolar">
+                  <div className="card compactSolar" style={{ order: isMobile ? 2 : 0 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
                       <div>
                         <div className="muted">Solar window</div>
@@ -1654,7 +1687,7 @@ function App() {
                   </div>
                 )}
 
-                <div className="card energyTrendCard">
+                <div className="card energyTrendCard" style={{ order: isMobile ? 1 : 0 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                     <div>
                       <div className="muted">{isMobile ? "Energy flow" : "Energy trend"}</div>
@@ -1681,8 +1714,34 @@ function App() {
                   </div>
                 </div>
               </section>
+
+              {isMobile && (
+                <>
+                  <CoffeeMachineHomeCard
+                    status={gaggimateStatus}
+                    profiles={gaggimateProfiles}
+                    onOpen={() => setActivePage("IoT")}
+                    onRefresh={refreshGaggimate}
+                    onModeChange={changeGaggimateMode}
+                    onProfileSelect={selectGaggimateProfile}
+                  />
+
+                  <AirTouchCard
+                    status={airtouchStatus}
+                    error={airtouchError}
+                    onCommand={runAirtouchCommand}
+                    onRefresh={refreshAirtouch}
+                    compact
+                  />
+
+                  <section className="card">
+                    <SystemStatusPanel items={systemStatusItems} compact />
+                  </section>
+                </>
+              )}
             </div>
 
+            {!isMobile && (
             <aside
               style={{
                 display: "flex",
@@ -1929,6 +1988,7 @@ function App() {
                 <SystemStatusPanel items={systemStatusItems} compact />
               </section>
             </aside>
+            )}
           </div>
           </>
 )}
@@ -2825,6 +2885,193 @@ function EnergyCard({ icon, label, value, unit, subtext, inlineSubtext, color = 
   );
 }
 
+function HomeRecommendationsCard({ topMessages }) {
+  return (
+    <div className="card" style={{ marginBottom: "18px" }}>
+      <div className="muted" style={{ marginBottom: "16px" }}>
+        Recommendations
+      </div>
+
+      {topMessages.length === 0 ? (
+        <div style={{ fontSize: "20px", fontWeight: "800" }}>
+          All good. No actions needed.
+        </div>
+      ) : (
+        topMessages.map((m, i) => (
+          <div
+            key={i}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              padding: "14px",
+              borderRadius: "16px",
+              background:
+                m.level === "warning"
+                  ? "rgba(251,191,36,0.16)"
+                  : "rgba(34,197,94,0.12)",
+              marginBottom: "12px",
+            }}
+          >
+            <div
+              style={{
+                width: "30px",
+                height: "30px",
+                borderRadius: "50%",
+                display: "grid",
+                placeItems: "center",
+                background: m.level === "warning" ? "#f59e0b" : "#22c55e",
+                color: "white",
+                fontWeight: 900,
+              }}
+            >
+              {m.level === "warning" ? "!" : "✓"}
+            </div>
+            <div style={{ fontWeight: 800, lineHeight: 1.25 }}>{m.text}</div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+function HomeTaskEventsCard({
+  tasks,
+  calendarEvents,
+  newTaskTitle,
+  setNewTaskTitle,
+  createTask,
+  completeTask,
+  setSelectedTask,
+  setTaskModalOpen,
+}) {
+  return (
+    <section className="card" style={{ marginBottom: "18px" }}>
+      <div style={{ marginBottom: "18px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: "12px",
+          }}
+        >
+          <div className="muted">Tasks</div>
+
+          <button
+            onClick={() => {
+              setSelectedTask(createBlankTask());
+              setTaskModalOpen(true);
+            }}
+            style={{
+              border: "none",
+              background: "#111827",
+              color: "white",
+              borderRadius: "999px",
+              width: "28px",
+              height: "28px",
+              cursor: "pointer",
+              fontWeight: 900,
+            }}
+          >
+            +
+          </button>
+        </div>
+
+        <input
+          value={newTaskTitle}
+          onChange={(e) => setNewTaskTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              createTask();
+            }
+          }}
+          placeholder="Quick add task..."
+          style={{
+            width: "100%",
+            boxSizing: "border-box",
+            border: "1px solid #d1d5db",
+            borderRadius: "12px",
+            padding: "10px 12px",
+            marginBottom: "14px",
+            fontSize: "14px",
+          }}
+        />
+
+        {tasks.length === 0 ? (
+          <div className="tiny">No household tasks yet.</div>
+        ) : (
+          <div>
+            {tasks.slice(0, 4).map((task, index) => {
+              const theme = getPersonTheme(task.assigned_to);
+
+              return (
+                <div
+                  key={task.id || `${task.title}-${index}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "10px",
+                    padding: "10px 12px",
+                    borderRadius: "14px",
+                    background: task.source === "recurring" ? "#f8fafc" : theme.soft,
+                    border: task.source === "recurring" ? "1px solid #cbd5e1" : `1px solid ${theme.border}`,
+                    marginBottom: "8px",
+                  }}
+                >
+                  <button
+                    onClick={() => completeTask(task.id)}
+                    style={{
+                      width: "20px",
+                      height: "20px",
+                      borderRadius: "999px",
+                      border: "2px solid #cbd5e1",
+                      background: "white",
+                      cursor: "pointer",
+                      marginTop: "2px",
+                      flex: "0 0 auto",
+                    }}
+                  />
+
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: "14px", fontWeight: 700, lineHeight: 1.3 }}>{task.title}</div>
+                    {(task.assigned_to || task.due_date) && (
+                      <div className="tiny">
+                        {task.assigned_to && `${task.assigned_to}`}
+                        {task.assigned_to && task.due_date && " · "}
+                        {task.due_date &&
+                          new Date(task.due_date).toLocaleDateString([], {
+                            weekday: "short",
+                            day: "numeric",
+                            month: "short",
+                          })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
+
+      <div>
+        <div className="muted" style={{ marginBottom: "12px" }}>
+          Upcoming events
+        </div>
+
+        {calendarEvents.length === 0 ? (
+          <div style={{ color: "#667085" }}>No upcoming events found.</div>
+        ) : (
+          <EventList events={calendarEvents.slice(0, 5)} />
+        )}
+      </div>
+    </section>
+  );
+}
+
 function periodLabel(period) {
   return {
     now: "Now",
@@ -2853,7 +3100,7 @@ function EnergyFlowCard({ summary, activePeriod, onPeriodChange }) {
       color: "#14b8a6",
       optional: true,
     },
-    { id: "ev", label: "EV", value: values.ev || 0, color: "#14b8a6" },
+    { id: "ev", label: "EV", value: values.ev || 0, color: "#ef4444" },
     { id: "grid", label: "Grid", value: values.grid_export || 0, color: "#4f46e5" },
   ].filter((item) => !item.optional || item.value > 0.01);
 
@@ -3000,6 +3247,7 @@ function ribbonPath(x1, x2, sourceTop, sourceBottom, sinkTop, sinkBottom) {
 function EnergyFlowNode({ item, x, width, unit, align }) {
   const textX = align === "right" ? x + width - 10 : x + 10;
   const textAnchor = align === "right" ? "end" : "start";
+  const textColor = getEnergyFlowTextColor(item.color);
 
   return (
     <g>
@@ -3012,30 +3260,40 @@ function EnergyFlowNode({ item, x, width, unit, align }) {
         fill={item.color}
         opacity="0.9"
       />
-      <rect
-        x={x + 10}
-        y={item.y + 10}
-        width={width - 20}
-        height="34"
-        rx="6"
-        fill="rgba(255,255,255,0.64)"
-      />
-      <text x={textX} y={item.y + 33} textAnchor={textAnchor} fontSize="20" fontWeight="900" fill="#111827">
+      <text x={textX} y={item.y + 33} textAnchor={textAnchor} fontSize="20" fontWeight="900" fill={textColor}>
         {item.label}
       </text>
-      <text x={textX} y={item.y + 78} textAnchor={textAnchor} fontSize="32" fontWeight="900" fill="#111827">
+      <text x={textX} y={item.y + 78} textAnchor={textAnchor} fontSize="32" fontWeight="900" fill={textColor}>
         {Number(item.value || 0).toFixed((item.value || 0) >= 10 ? 1 : 2)}
       </text>
-      <text x={textX} y={item.y + 110} textAnchor={textAnchor} fontSize="20" fill="#111827">
+      <text x={textX} y={item.y + 110} textAnchor={textAnchor} fontSize="20" fill={textColor}>
         {unit}
       </text>
       {item.percent && (
-        <text x={textX} y={item.y + item.height - 16} textAnchor={textAnchor} fontSize="22" fill="#111827">
+        <text x={textX} y={item.y + item.height - 16} textAnchor={textAnchor} fontSize="22" fill={textColor}>
           {item.percent}
         </text>
       )}
     </g>
   );
+}
+
+function getEnergyFlowTextColor(color) {
+  const hex = String(color || "").replace("#", "");
+  if (hex.length !== 6) {
+    return "#111827";
+  }
+
+  const channels = [0, 2, 4].map((index) => parseInt(hex.slice(index, index + 2), 16) / 255);
+  if (channels.some((channel) => Number.isNaN(channel))) {
+    return "#111827";
+  }
+
+  const [r, g, b] = channels.map((channel) =>
+    channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4,
+  );
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance < 0.34 ? "#ffffff" : "#111827";
 }
 
 function TinyTempLine({ points, color }) {
@@ -3170,7 +3428,7 @@ function EnergyDayChart({ data, isMobile = false }) {
     { type: "bar", color: "#fbbf24", label: "Solar production", compactLabel: "Solar" },
     { type: "thin", color: "#92400e", label: "Into house/battery", compactLabel: "To home" },
     { type: "bar", color: "#93c5fd", label: "Consumption", compactLabel: "Use" },
-    { type: "bar", color: "#14b8a6", label: "EV charging", compactLabel: "EV" },
+    { type: "bar", color: "#ef4444", label: "EV charging", compactLabel: "EV" },
     { type: "thin", color: "#2563eb", label: "Covered by PV/battery", compactLabel: "Covered" },
     { type: "line", color: "rgba(100,116,139,0.35)", label: "Battery SoC", compactLabel: "Battery" },
   ];
@@ -3317,7 +3575,7 @@ function EnergyDayChart({ data, isMobile = false }) {
                   height={evH}
                   rx={4}
                   ry={4}
-                  fill="#14b8a6"
+                  fill="#ef4444"
                   opacity={0.78}
                 />
               )}
@@ -4624,7 +4882,6 @@ function IoTPage({
   const [selectedRoborockRoute, setSelectedRoborockRoute] = useState(roborockRoutes[0] || "");
   const activeRoborockRoute = selectedRoborockRoute || roborockRoutes[0] || "";
   const roborockState = compactRoborockState(roborockStatus);
-  const airtouchModes = ["off", "cool", "heat", "fan_only", "dry", "auto"];
 
   return (
     <div>
@@ -4856,132 +5113,12 @@ function IoTPage({
           </button>
         </section>
 
-        <section className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
-            <div>
-              <div className="muted">AirTouch 5</div>
-              <h2 style={{ margin: "6px 0 0", fontSize: "26px" }}>Air conditioning</h2>
-              <div className="tiny" style={{ marginTop: "6px" }}>
-                {airtouchStatus?.backend === "direct" ? "Direct local" : "Home Assistant bridge"}
-              </div>
-            </div>
-            <span
-              style={{
-                borderRadius: "999px",
-                padding: "7px 10px",
-                fontSize: "12px",
-                fontWeight: 900,
-                background: airtouchStatus?.available ? "#dcfce7" : "#fee2e2",
-                color: airtouchStatus?.available ? "#15803d" : "#b91c1c",
-              }}
-            >
-              {airtouchStatus?.available ? "Online" : airtouchStatus?.configured === false ? "Setup needed" : "Offline"}
-            </span>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-              gap: "10px",
-              marginTop: "18px",
-            }}
-          >
-            <MetricBox label="Mode" value={formatAirtouchMode(airtouchStatus?.mode)} />
-            <MetricBox label="Target" value={formatMetric(airtouchStatus?.target_temperature, "°C")} />
-            <MetricBox label="Zones" value={`${airtouchStatus?.active_zone_count ?? 0} on`} />
-          </div>
-
-          <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
-
-          <div className="muted" style={{ marginBottom: "10px" }}>Mode</div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-              gap: "8px",
-            }}
-          >
-            {airtouchModes.map((mode) => {
-              const active = normaliseAirtouchMode(airtouchStatus?.mode) === mode;
-
-              return (
-                <button
-                  key={mode}
-                  className="button"
-                  onClick={() => runAirtouchCommand("set_mode", { mode })}
-                  disabled={!airtouchStatus?.available}
-                  style={{
-                    minHeight: "42px",
-                    padding: "8px 6px",
-                    borderRadius: "14px",
-                    fontSize: "12px",
-                    background: active ? "#111827" : "#e5e7eb",
-                    color: active ? "white" : "#111827",
-                  }}
-                >
-                  {formatAirtouchMode(mode)}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="muted" style={{ margin: "18px 0 10px" }}>Rooms</div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: "8px",
-            }}
-          >
-            {(airtouchStatus?.zones || []).map((zone) => (
-              <button
-                key={zone.entity_id || zone.name}
-                onClick={() => runAirtouchCommand(zone.on ? "zone_off" : "zone_on", { zone: zone.name })}
-                disabled={!zone.available}
-                style={{
-                  border: "1px solid #dbe3ef",
-                  borderRadius: "14px",
-                  padding: "12px",
-                  minHeight: "64px",
-                  textAlign: "left",
-                  background: zone.on ? "#dcfce7" : "#f8fafc",
-                  color: zone.on ? "#14532d" : "#475569",
-                  cursor: zone.available ? "pointer" : "not-allowed",
-                }}
-              >
-                <div style={{ fontWeight: 900, fontSize: "14px", lineHeight: 1.15 }}>{zone.name}</div>
-                <div className="tiny" style={{ color: "inherit", marginTop: "5px" }}>
-                  {zone.on ? "Open" : "Closed"}
-                  {zone.current_temperature !== null && zone.current_temperature !== undefined
-                    ? ` · ${Number(zone.current_temperature).toFixed(0)}°C`
-                    : ""}
-                </div>
-              </button>
-            ))}
-          </div>
-
-          {(airtouchError || airtouchStatus?.available === false) && (
-            <div
-              style={{
-                marginTop: "16px",
-                borderRadius: "14px",
-                padding: "12px",
-                background: "#fef2f2",
-                color: "#991b1b",
-                fontSize: "13px",
-                fontWeight: 700,
-                lineHeight: 1.4,
-              }}
-            >
-              {airtouchError || airtouchStatus?.message || "AirTouch is unavailable."}
-            </div>
-          )}
-
-          <button className="button" onClick={refreshAirtouch} style={{ marginTop: "16px", width: "100%" }}>
-            Refresh aircon
-          </button>
-        </section>
+        <AirTouchCard
+          status={airtouchStatus}
+          error={airtouchError}
+          onCommand={runAirtouchCommand}
+          onRefresh={refreshAirtouch}
+        />
         <section className="card">
           <div className="muted">IoT notes</div>
           <h2 style={{ margin: "6px 0 14px", fontSize: "22px" }}>Guardrails</h2>
@@ -5103,6 +5240,219 @@ function NewsPage({ newsItems, newsSummary, newsError, newsLoading, refreshNews 
       </div>
     </div>
   );
+}
+
+const AIRTOUCH_MODES = ["off", "cool", "heat", "fan_only", "dry", "auto"];
+
+function AirTouchCard({ status, error, onCommand, onRefresh, compact = false }) {
+  return (
+    <section className="card">
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
+        <div>
+          <div className="muted">AirTouch 5</div>
+          <h2 style={{ margin: "6px 0 0", fontSize: compact ? "22px" : "26px" }}>Air conditioning</h2>
+          <div className="tiny" style={{ marginTop: "6px" }}>
+            {status?.backend === "direct" ? "Direct local" : "Home Assistant bridge"}
+          </div>
+        </div>
+        <span
+          style={{
+            borderRadius: "999px",
+            padding: "7px 10px",
+            fontSize: "12px",
+            fontWeight: 900,
+            background: status?.available ? "#dcfce7" : "#fee2e2",
+            color: status?.available ? "#15803d" : "#b91c1c",
+          }}
+        >
+          {status?.available ? "Online" : status?.configured === false ? "Setup needed" : "Offline"}
+        </span>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: compact ? "repeat(2, minmax(0, 1fr))" : "repeat(3, minmax(0, 1fr))",
+          gap: "10px",
+          marginTop: "18px",
+        }}
+      >
+        <MetricBox label="Mode" value={formatAirtouchMode(status?.mode)} />
+        <MetricBox label="Target" value={formatMetric(status?.target_temperature, "°C")} />
+        {!compact && <MetricBox label="Zones" value={`${status?.active_zone_count ?? 0} on`} />}
+        {compact && <MetricBox label="Current" value={formatMetric(status?.current_temperature, "°C")} />}
+      </div>
+
+      <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
+
+      <AirtouchModeButtons status={status} onCommand={onCommand} />
+      <AirtouchTemperatureControl status={status} onCommand={onCommand} />
+
+      {!compact && (
+        <>
+          <div className="muted" style={{ margin: "18px 0 10px" }}>Rooms</div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+              gap: "8px",
+            }}
+          >
+            {(status?.zones || []).map((zone) => (
+              <button
+                key={zone.entity_id || zone.name}
+                onClick={() => onCommand(zone.on ? "zone_off" : "zone_on", { zone: zone.name })}
+                disabled={!zone.available}
+                style={{
+                  border: "1px solid #dbe3ef",
+                  borderRadius: "14px",
+                  padding: "12px",
+                  minHeight: "64px",
+                  textAlign: "left",
+                  background: zone.on ? "#dcfce7" : "#f8fafc",
+                  color: zone.on ? "#14532d" : "#475569",
+                  cursor: zone.available ? "pointer" : "not-allowed",
+                }}
+              >
+                <div style={{ fontWeight: 900, fontSize: "14px", lineHeight: 1.15 }}>{zone.name}</div>
+                <div className="tiny" style={{ color: "inherit", marginTop: "5px" }}>
+                  {zone.on ? "Open" : "Closed"}
+                  {zone.current_temperature !== null && zone.current_temperature !== undefined
+                    ? ` · ${Number(zone.current_temperature).toFixed(0)}°C`
+                    : ""}
+                </div>
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      {(error || status?.available === false) && (
+        <div
+          style={{
+            marginTop: "16px",
+            borderRadius: "14px",
+            padding: "12px",
+            background: "#fef2f2",
+            color: "#991b1b",
+            fontSize: "13px",
+            fontWeight: 700,
+            lineHeight: 1.4,
+          }}
+        >
+          {error || status?.message || "AirTouch is unavailable."}
+        </div>
+      )}
+
+      <button className="button" onClick={onRefresh} style={{ marginTop: "16px", width: "100%" }}>
+        Refresh aircon
+      </button>
+    </section>
+  );
+}
+
+function AirtouchModeButtons({ status, onCommand }) {
+  return (
+    <>
+      <div className="muted" style={{ marginBottom: "10px" }}>Mode</div>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          gap: "8px",
+        }}
+      >
+        {AIRTOUCH_MODES.map((mode) => {
+          const active = normaliseAirtouchMode(status?.mode) === mode;
+
+          return (
+            <button
+              key={mode}
+              className="button"
+              onClick={() => onCommand("set_mode", { mode })}
+              disabled={!status?.available}
+              style={{
+                minHeight: "42px",
+                padding: "8px 6px",
+                borderRadius: "14px",
+                fontSize: "12px",
+                background: active ? "#111827" : "#e5e7eb",
+                color: active ? "white" : "#111827",
+              }}
+            >
+              {formatAirtouchMode(mode)}
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function AirtouchTemperatureControl({ status, onCommand }) {
+  const currentTarget = clampAirtouchTemperature(status?.target_temperature ?? 24);
+  const [draftTemp, setDraftTemp] = useState(currentTarget);
+
+  useEffect(() => {
+    setDraftTemp(currentTarget);
+  }, [currentTarget]);
+
+  const disabled = !status?.available;
+
+  function submitTemperature(value) {
+    const target = clampAirtouchTemperature(value);
+    setDraftTemp(target);
+    onCommand("set_temperature", { target_temperature: target });
+  }
+
+  return (
+    <div style={{ marginTop: "18px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px" }}>
+        <div className="muted">Target temp</div>
+        <strong>{Number(draftTemp).toFixed(draftTemp % 1 === 0 ? 0 : 1)}°C</strong>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "44px minmax(0, 1fr) 44px", gap: "8px", marginTop: "10px" }}>
+        <button
+          className="button"
+          disabled={disabled}
+          onClick={() => submitTemperature(draftTemp - 0.5)}
+          style={{ padding: 0, minHeight: "42px", borderRadius: "14px" }}
+        >
+          -
+        </button>
+        <input
+          type="range"
+          min="16"
+          max="32"
+          step="0.5"
+          value={draftTemp}
+          disabled={disabled}
+          onChange={(event) => setDraftTemp(Number(event.target.value))}
+          onPointerUp={(event) => submitTemperature(Number(event.currentTarget.value))}
+          onKeyUp={(event) => {
+            if (event.key === "Enter") submitTemperature(Number(event.currentTarget.value));
+          }}
+          style={{ width: "100%" }}
+        />
+        <button
+          className="button"
+          disabled={disabled}
+          onClick={() => submitTemperature(draftTemp + 0.5)}
+          style={{ padding: 0, minHeight: "42px", borderRadius: "14px" }}
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function clampAirtouchTemperature(value) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed)) return 24;
+
+  return Math.max(16, Math.min(32, Math.round(parsed * 2) / 2));
 }
 
 function MetricBox({ label, value }) {

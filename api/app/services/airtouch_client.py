@@ -215,20 +215,33 @@ def read_zone_status(name, entity_id):
     }
 
 
-def run_airtouch_command(command, mode=None, zone=None):
+def run_airtouch_command(command, mode=None, zone=None, target_temperature=None):
     config = get_airtouch_config()
 
     if should_use_direct_airtouch(config):
-        return run_direct_airtouch_command(config, command, mode=mode, zone=zone)
+        return run_direct_airtouch_command(
+            config,
+            command,
+            mode=mode,
+            zone=zone,
+            target_temperature=target_temperature,
+        )
 
-    return run_home_assistant_airtouch_command(command, mode=mode, zone=zone)
+    return run_home_assistant_airtouch_command(
+        command,
+        mode=mode,
+        zone=zone,
+        target_temperature=target_temperature,
+    )
 
 
-def run_home_assistant_airtouch_command(command, mode=None, zone=None):
+def run_home_assistant_airtouch_command(command, mode=None, zone=None, target_temperature=None):
     normalised = (command or "").strip().lower()
 
     if normalised == "set_mode":
         result = set_airtouch_mode(mode)
+    elif normalised == "set_temperature":
+        result = set_airtouch_target_temperature(target_temperature)
     elif normalised in ["turn_on", "on"]:
         result = call_airtouch_service("turn_on")
         normalised = "turn_on"
@@ -243,7 +256,7 @@ def run_home_assistant_airtouch_command(command, mode=None, zone=None):
         result = toggle_airtouch_zone(zone)
     else:
         raise HomeAssistantUnavailable(
-            "Unsupported AirTouch command. Use set_mode, turn_on, turn_off, zone_on, zone_off or toggle_zone."
+            "Unsupported AirTouch command. Use set_mode, set_temperature, turn_on, turn_off, zone_on, zone_off or toggle_zone."
         )
 
     return {
@@ -251,18 +264,25 @@ def run_home_assistant_airtouch_command(command, mode=None, zone=None):
         "command": normalised,
         "mode": mode,
         "zone": zone,
+        "target_temperature": target_temperature,
         "backend": "home_assistant",
         "home_assistant_result": result,
         "status": get_airtouch_status(),
     }
 
 
-def run_direct_airtouch_command(config, command, mode=None, zone=None):
+def run_direct_airtouch_command(config, command, mode=None, zone=None, target_temperature=None):
     normalised = (command or "").strip().lower()
 
     try:
         result = run_airtouch_async(
-            write_direct_airtouch_command(config, normalised, mode=mode, zone=zone)
+            write_direct_airtouch_command(
+                config,
+                normalised,
+                mode=mode,
+                zone=zone,
+                target_temperature=target_temperature,
+            )
         )
     except Exception as exc:
         raise HomeAssistantUnavailable(f"Direct AirTouch command failed: {exc}") from exc
@@ -272,12 +292,13 @@ def run_direct_airtouch_command(config, command, mode=None, zone=None):
         "command": result.get("command", normalised),
         "mode": mode,
         "zone": zone,
+        "target_temperature": target_temperature,
         "backend": "direct",
         "status": get_airtouch_status(),
     }
 
 
-async def write_direct_airtouch_command(config, command, mode=None, zone=None):
+async def write_direct_airtouch_command(config, command, mode=None, zone=None, target_temperature=None):
     async def write_command(airtouch, pyairtouch):
         aircon = first_air_conditioner(airtouch)
         normalised_mode = (mode or "").strip().lower()
@@ -292,6 +313,8 @@ async def write_direct_airtouch_command(config, command, mode=None, zone=None):
                     "AirTouch mode",
                 )
                 await aircon.set_mode(enum_mode, power_on=True)
+        elif command == "set_temperature":
+            await aircon.set_target_temperature(normalise_target_temperature(target_temperature))
         elif command in ["turn_on", "on"]:
             await aircon.set_power(pyairtouch.AcPowerControl.TURN_ON)
             command = "turn_on"
@@ -319,6 +342,34 @@ async def write_direct_airtouch_command(config, command, mode=None, zone=None):
         return {"command": command}
 
     return await with_direct_airtouch(config, write_command)
+
+
+def set_airtouch_target_temperature(target_temperature):
+    config = get_airtouch_config()
+
+    if not config["ac_entity_id"]:
+        raise HomeAssistantUnavailable("AIRTOUCH_AC_ENTITY_ID is not configured.")
+
+    return call_home_assistant_service(
+        "climate",
+        "set_temperature",
+        {
+            "entity_id": config["ac_entity_id"],
+            "temperature": normalise_target_temperature(target_temperature),
+        },
+    )
+
+
+def normalise_target_temperature(target_temperature):
+    try:
+        value = float(target_temperature)
+    except (TypeError, ValueError) as exc:
+        raise HomeAssistantUnavailable("Target temperature must be a number.") from exc
+
+    if value < 16 or value > 32:
+        raise HomeAssistantUnavailable("Target temperature must be between 16°C and 32°C.")
+
+    return round(value * 2) / 2
 
 
 def set_airtouch_mode(mode):
