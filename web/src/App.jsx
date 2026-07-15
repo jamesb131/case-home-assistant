@@ -3106,7 +3106,7 @@ function EnergyFlowCard({ summary, activePeriod, onPeriodChange }) {
 
   const sourceBlocks = layoutFlowBlocks(sources, 22, 718);
   const sinkBlocks = layoutFlowBlocks(sinks, 22, 718);
-  const flows = pairFlowBlocks(sourceBlocks, sinkBlocks);
+  const flows = buildEnergyFlowRibbons(sourceBlocks, sinkBlocks);
 
   return (
     <div>
@@ -3188,45 +3188,60 @@ function layoutFlowBlocks(items, top, bottom) {
   });
 }
 
-function pairFlowBlocks(sources, sinks) {
+function buildEnergyFlowRibbons(sources, sinks) {
   if (!sources.length || !sinks.length) return [];
 
   const flows = [];
-  const sourceState = sources
-    .filter((item) => item.value > 0.01)
-    .map((item) => ({ ...item, remaining: item.value, cursor: item.y }));
-  const sinkState = sinks
-    .filter((item) => item.value > 0.01)
-    .map((item) => ({ ...item, remaining: item.value, cursor: item.y }));
-  let sinkIndex = 0;
+  const sourceState = Object.fromEntries(
+    sources.map((item) => [item.id, { ...item, remaining: Math.max(0, item.value || 0), cursor: item.y }]),
+  );
+  const sinkState = Object.fromEntries(
+    sinks.map((item) => [item.id, { ...item, remaining: Math.max(0, item.value || 0), cursor: item.y }]),
+  );
 
-  sourceState.forEach((source) => {
-    while (source.remaining > 0.01 && sinkIndex < sinkState.length) {
-      const sink = sinkState[sinkIndex];
-      const amount = Math.min(source.remaining, sink.remaining);
-      const sourceHeight = (amount / Math.max(source.value, 0.01)) * source.height;
-      const sinkHeight = (amount / Math.max(sink.value, 0.01)) * sink.height;
-      const sourceTop = source.cursor;
-      const sourceBottom = source.cursor + sourceHeight;
-      const sinkTop = sink.cursor;
-      const sinkBottom = sink.cursor + sinkHeight;
-
-      flows.push({
-        source,
-        sink,
-        path: ribbonPath(132, 428, sourceTop, sourceBottom, sinkTop, sinkBottom),
-      });
-
-      source.cursor += sourceHeight;
-      sink.cursor += sinkHeight;
-      source.remaining -= amount;
-      sink.remaining -= amount;
-
-      if (sink.remaining <= 0.01) {
-        sinkIndex += 1;
-      }
+  function connect(sourceId, sinkId, requestedAmount = null) {
+    const source = sourceState[sourceId];
+    const sink = sinkState[sinkId];
+    if (!source || !sink || source.remaining <= 0.01 || sink.remaining <= 0.01) {
+      return;
     }
-  });
+
+    const amount = Math.min(
+      source.remaining,
+      sink.remaining,
+      requestedAmount == null ? Number.POSITIVE_INFINITY : Math.max(0, requestedAmount),
+    );
+    if (amount <= 0.01) {
+      return;
+    }
+
+    const sourceHeight = (amount / Math.max(source.value, 0.01)) * source.height;
+    const sinkHeight = (amount / Math.max(sink.value, 0.01)) * sink.height;
+    const sourceTop = source.cursor;
+    const sourceBottom = source.cursor + sourceHeight;
+    const sinkTop = sink.cursor;
+    const sinkBottom = sink.cursor + sinkHeight;
+
+    flows.push({
+      source,
+      sink,
+      path: ribbonPath(132, 428, sourceTop, sourceBottom, sinkTop, sinkBottom),
+    });
+
+    source.cursor += sourceHeight;
+    sink.cursor += sinkHeight;
+    source.remaining -= amount;
+    sink.remaining -= amount;
+  }
+
+  connect("solar", "battery");
+  connect("solar", "grid");
+  connect("solar", "load");
+  connect("solar", "ev");
+  connect("battery", "load");
+  connect("battery", "ev");
+  connect("grid", "load");
+  connect("grid", "ev");
 
   return flows;
 }
