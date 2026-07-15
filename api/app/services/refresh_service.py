@@ -59,10 +59,17 @@ def refresh_data(scope="all"):
         job = REFRESH_JOBS[target]
 
         try:
+            result = job()
+            job_status = result.get("status") if isinstance(result, dict) else None
+            job_error = result.get("error") if isinstance(result, dict) else None
+
             results[target] = {
-                "status": "ok",
-                "result": job(),
+                "status": "error" if job_status == "error" or job_error else "ok",
+                "result": result,
             }
+
+            if results[target]["status"] == "error":
+                results[target]["error"] = job_error or f"{target} refresh returned an error status."
         except Exception as exc:
             results[target] = {
                 "status": "error",

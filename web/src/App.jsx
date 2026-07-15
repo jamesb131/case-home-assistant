@@ -1687,9 +1687,18 @@ function App() {
                         Coming days
                       </div>
 
-                      <div style={{ display: "grid", gap: "8px" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" }}>
                         {(weather.daily_solar_outlook || []).slice(1, 4).map((day) => (
-                          <div key={day.date} className="solarRow">
+                          <div
+                            key={day.date}
+                            className="solarRow"
+                            style={{
+                              display: "grid",
+                              justifyItems: "center",
+                              gap: "4px",
+                              textAlign: "center",
+                            }}
+                          >
                             <span>
                               {new Date(day.date).toLocaleDateString([], { weekday: "short" })}
                             </span>
@@ -3104,9 +3113,17 @@ function periodLabel(period) {
 function EnergyFlowCard({ summary, activePeriod, onPeriodChange }) {
   const unit = summary?.unit || (activePeriod === "now" ? "kW" : "kWh");
   const values = summary?.values || {};
+  const batterySoc = Number(values.battery_soc);
+  const showBatterySoc = unit === "kW" && Number.isFinite(batterySoc);
   const sources = [
     { id: "solar", label: "Solar", value: values.solar || 0, color: "#facc15" },
-    { id: "battery", label: "Battery", value: values.battery_discharge || 0, color: "#2dd4bf" },
+    {
+      id: "battery",
+      label: "Battery",
+      value: values.battery_discharge || 0,
+      soc: showBatterySoc ? batterySoc : null,
+      color: "#2dd4bf",
+    },
     { id: "grid", label: "Grid", value: values.grid_import || 0, color: "#60a5fa" },
   ];
   const homeLoad = Math.max(0, values.home_load_net ?? values.home_load ?? 0);
@@ -3301,6 +3318,11 @@ function EnergyFlowNode({ item, x, width, unit, align }) {
   const textX = align === "right" ? x + width - 10 : x + 10;
   const textAnchor = align === "right" ? "end" : "start";
   const textColor = getEnergyFlowTextColor(item.color);
+  const soc = Number(item.soc);
+  const hasSoc = Number.isFinite(soc);
+  const batteryFill = Math.max(0, Math.min(100, soc));
+  const gaugeX = align === "right" ? x + width - 88 : x + 48;
+  const gaugeY = item.y + 96;
 
   return (
     <g>
@@ -3322,6 +3344,30 @@ function EnergyFlowNode({ item, x, width, unit, align }) {
       <text x={textX} y={item.y + 110} textAnchor={textAnchor} fontSize="20" fill={textColor}>
         {unit}
       </text>
+      {hasSoc && (
+        <g>
+          <rect x={gaugeX} y={gaugeY} width="30" height="14" rx="4" fill="none" stroke={textColor} strokeWidth="2" />
+          <rect
+            x={gaugeX + 3}
+            y={gaugeY + 3}
+            width={(24 * batteryFill) / 100}
+            height="8"
+            rx="2"
+            fill={textColor}
+          />
+          <rect x={gaugeX + 31} y={gaugeY + 4} width="3" height="6" rx="1.5" fill={textColor} />
+          <text
+            x={align === "right" ? gaugeX - 6 : gaugeX + 42}
+            y={gaugeY + 12}
+            textAnchor={align === "right" ? "end" : "start"}
+            fontSize="15"
+            fontWeight="900"
+            fill={textColor}
+          >
+            {Math.round(batteryFill)}
+          </text>
+        </g>
+      )}
       {item.percent && (
         <text x={textX} y={item.y + item.height - 16} textAnchor={textAnchor} fontSize="22" fill={textColor}>
           {item.percent}
@@ -5297,15 +5343,34 @@ function NewsPage({ newsItems, newsSummary, newsError, newsLoading, refreshNews 
 
 const AIRTOUCH_MODES = ["off", "cool", "heat", "fan_only", "dry", "auto"];
 
+const AIRTOUCH_MODE_THEMES = {
+  off: { color: "#111827", soft: "#e5e7eb" },
+  cool: { color: "#2563eb", soft: "#dbeafe" },
+  heat: { color: "#f97316", soft: "#ffedd5" },
+  fan_only: { color: "#38bdf8", soft: "#e0f2fe" },
+  dry: { color: "#eab308", soft: "#fef3c7" },
+  auto: { color: "#22c55e", soft: "#dcfce7" },
+};
+
 function AirTouchCard({ status, error, onCommand, onRefresh, compact = false }) {
+  const modeTheme = getAirtouchModeTheme(status?.mode);
+
   return (
     <section className="card">
       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
-        <div>
-          <div className="muted">AirTouch 5</div>
-          <h2 style={{ margin: "6px 0 0", fontSize: compact ? "22px" : "26px" }}>Air conditioning</h2>
-          <div className="tiny" style={{ marginTop: "6px" }}>
-            {status?.backend === "direct" ? "Direct local" : "Home Assistant bridge"}
+        <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0 }}>
+          <img
+            src="/devices/airtouch-ac.png"
+            alt=""
+            aria-hidden="true"
+            className={compact ? "deviceArtwork" : "deviceArtwork large"}
+          />
+          <div style={{ minWidth: 0 }}>
+            <div className="muted">AirTouch 5</div>
+            <h2 style={{ margin: "6px 0 0", fontSize: compact ? "22px" : "26px" }}>Air conditioning</h2>
+            <div className="tiny" style={{ marginTop: "6px" }}>
+              {status?.backend === "direct" ? "Direct local" : "Home Assistant bridge"}
+            </div>
           </div>
         </div>
         <span
@@ -5338,7 +5403,7 @@ function AirTouchCard({ status, error, onCommand, onRefresh, compact = false }) 
       <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
 
       <AirtouchModeButtons status={status} onCommand={onCommand} />
-      <AirtouchTemperatureControl status={status} onCommand={onCommand} />
+      <AirtouchTemperatureControl status={status} onCommand={onCommand} modeTheme={modeTheme} />
 
       {!compact && (
         <>
@@ -5404,6 +5469,8 @@ function AirTouchCard({ status, error, onCommand, onRefresh, compact = false }) 
 }
 
 function AirtouchModeButtons({ status, onCommand }) {
+  const activeMode = normaliseAirtouchMode(status?.mode);
+
   return (
     <>
       <div className="muted" style={{ marginBottom: "10px" }}>Mode</div>
@@ -5415,7 +5482,9 @@ function AirtouchModeButtons({ status, onCommand }) {
         }}
       >
         {AIRTOUCH_MODES.map((mode) => {
-          const active = normaliseAirtouchMode(status?.mode) === mode;
+          const active = activeMode === mode;
+          const modeTheme = getAirtouchModeTheme(mode);
+          const textColor = getEnergyFlowTextColor(modeTheme.color);
 
           return (
             <button
@@ -5428,8 +5497,8 @@ function AirtouchModeButtons({ status, onCommand }) {
                 padding: "8px 6px",
                 borderRadius: "14px",
                 fontSize: "12px",
-                background: active ? "#111827" : "#e5e7eb",
-                color: active ? "white" : "#111827",
+                background: active ? modeTheme.color : "#e5e7eb",
+                color: active ? textColor : "#111827",
               }}
             >
               {formatAirtouchMode(mode)}
@@ -5441,7 +5510,7 @@ function AirtouchModeButtons({ status, onCommand }) {
   );
 }
 
-function AirtouchTemperatureControl({ status, onCommand }) {
+function AirtouchTemperatureControl({ status, onCommand, modeTheme }) {
   const currentTarget = clampAirtouchTemperature(status?.target_temperature ?? 24);
   const [draftTemp, setDraftTemp] = useState(currentTarget);
 
@@ -5450,6 +5519,8 @@ function AirtouchTemperatureControl({ status, onCommand }) {
   }, [currentTarget]);
 
   const disabled = !status?.available;
+  const rangeProgress = ((draftTemp - 16) / 16) * 100;
+  const activeTheme = modeTheme || getAirtouchModeTheme(status?.mode);
 
   function submitTemperature(value) {
     const target = clampAirtouchTemperature(value);
@@ -5484,7 +5555,12 @@ function AirtouchTemperatureControl({ status, onCommand }) {
           onKeyUp={(event) => {
             if (event.key === "Enter") submitTemperature(Number(event.currentTarget.value));
           }}
-          style={{ width: "100%" }}
+          style={{
+            width: "100%",
+            accentColor: activeTheme.color,
+            background: `linear-gradient(90deg, ${activeTheme.color} 0%, ${activeTheme.color} ${rangeProgress}%, #e5e7eb ${rangeProgress}%, #e5e7eb 100%)`,
+            borderRadius: "999px",
+          }}
         />
         <button
           className="button"
@@ -5556,6 +5632,10 @@ function normaliseAirtouchMode(mode) {
   if (value === "fan") return "fan_only";
 
   return value;
+}
+
+function getAirtouchModeTheme(mode) {
+  return AIRTOUCH_MODE_THEMES[normaliseAirtouchMode(mode)] || AIRTOUCH_MODE_THEMES.off;
 }
 
 function formatAirtouchMode(mode) {
