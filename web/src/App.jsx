@@ -2413,20 +2413,16 @@ function App() {
         }
 
         .deviceArtwork {
-          width: 64px;
-          height: 64px;
-          border-radius: 16px;
+          width: 78px;
+          height: 78px;
           object-fit: contain;
-          background: #f8fafc;
-          border: 1px solid #e5e7eb;
-          padding: 5px;
+          flex: 0 0 auto;
+          filter: drop-shadow(0 10px 14px rgba(15, 23, 42, 0.1));
         }
 
         .deviceArtwork.large {
-          width: 96px;
-          height: 96px;
-          border-radius: 18px;
-          padding: 7px;
+          width: 112px;
+          height: 112px;
         }
 
         .coffeeRefreshButton {
@@ -2557,8 +2553,13 @@ function App() {
           }
 
           .deviceArtwork {
-            width: 54px;
-            height: 54px;
+            width: 76px;
+            height: 76px;
+          }
+
+          .deviceArtwork.large {
+            width: 96px;
+            height: 96px;
           }
 
           .coffeeModeControl.compact {

@@ -41,6 +41,7 @@ export directory and it will copy both files for you:
 
 ```bash
 cd /Users/jamesbaverstock/Documents/repos/Case/api
+python3 -m pip install -r requirements.txt
 python3 auth_google_calendar.py --export-dir /Volumes/share/case/google
 ```
 

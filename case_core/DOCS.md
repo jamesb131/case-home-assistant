@@ -54,6 +54,7 @@ create and export the files in one run:
 
 ```bash
 cd api
+python3 -m pip install -r requirements.txt
 python3 auth_google_calendar.py --export-dir /Volumes/share/case/google
 ```
 

@@ -3,7 +3,17 @@ import os
 import shutil
 from pathlib import Path
 
-from google_auth_oauthlib.flow import InstalledAppFlow
+try:
+    from google_auth_oauthlib.flow import InstalledAppFlow
+except ModuleNotFoundError as exc:
+    if exc.name != "google_auth_oauthlib":
+        raise
+
+    raise SystemExit(
+        "Missing Google auth dependency. From the api directory, run:\n"
+        "  python3 -m pip install -r requirements.txt\n"
+        "Then retry auth_google_calendar.py."
+    ) from exc
 
 SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 DEFAULT_PORT = 8086
