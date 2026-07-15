@@ -21,7 +21,8 @@ permissions:
 
 env:
   CASE_HA_IMAGE_REGISTRY: ghcr.io/jamesb131/case-home-assistant
-  CASE_HA_IMAGE_PLATFORMS: linux/arm64,linux/amd64
+  CASE_HA_IMAGE_PLATFORMS: linux/arm64
+  CASE_HA_BUILDX_CACHE_ARGS: "--cache-from type=gha --cache-to type=gha,mode=max"
 
 jobs:
   publish:

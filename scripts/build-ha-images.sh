@@ -7,6 +7,7 @@ CONFIG_VERSION="$(sed -n 's/^version: "\([^"]*\)"/\1/p' case_core/config.yaml)"
 VERSION="${CASE_HA_IMAGE_VERSION:-$CONFIG_VERSION}"
 REGISTRY="${CASE_HA_IMAGE_REGISTRY:-ghcr.io/jamesb131/case-home-assistant}"
 PLATFORMS="${CASE_HA_IMAGE_PLATFORMS:-linux/arm64,linux/amd64}"
+BUILDX_CACHE_ARGS="${CASE_HA_BUILDX_CACHE_ARGS:-}"
 
 if [ -z "$VERSION" ]; then
     echo "Could not determine CASE HA image version." >&2
@@ -59,6 +60,7 @@ case "$MODE" in
         if should_build "https-proxy"; then
             docker buildx build \
                 --platform "$PLATFORMS" \
+                $BUILDX_CACHE_ARGS \
                 -f deploy/ha/case-https-proxy/Dockerfile \
                 --build-arg BUILD_VERSION="$VERSION" \
                 -t "$REGISTRY/case-https-proxy:$VERSION" \
@@ -69,6 +71,7 @@ case "$MODE" in
         if should_build "postgres"; then
             docker buildx build \
                 --platform "$PLATFORMS" \
+                $BUILDX_CACHE_ARGS \
                 -f deploy/ha/case-postgres/Dockerfile \
                 --build-arg BUILD_VERSION="$VERSION" \
                 -t "$REGISTRY/case-postgres:$VERSION" \
@@ -79,6 +82,7 @@ case "$MODE" in
         if should_build "core"; then
             docker buildx build \
                 --platform "$PLATFORMS" \
+                $BUILDX_CACHE_ARGS \
                 -f deploy/ha/case-core/Dockerfile \
                 --build-arg BUILD_VERSION="$VERSION" \
                 -t "$REGISTRY/case-core:$VERSION" \
