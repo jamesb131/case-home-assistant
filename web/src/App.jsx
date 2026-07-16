@@ -3176,12 +3176,24 @@ function EnergyFlowCard({ summary, activePeriod, onPeriodChange }) {
         </defs>
 
         {flows.map((flow, index) => (
-          <path
-            key={`flow-${index}`}
-            d={flow.path}
-            fill={`url(#flow-gradient-${index})`}
-            opacity="0.62"
-          />
+          flow.thin ? (
+            <path
+              key={`flow-${index}`}
+              d={flow.path}
+              fill="none"
+              stroke={`url(#flow-gradient-${index})`}
+              strokeWidth={flow.strokeWidth}
+              strokeLinecap="round"
+              opacity="0.62"
+            />
+          ) : (
+            <path
+              key={`flow-${index}`}
+              d={flow.path}
+              fill={`url(#flow-gradient-${index})`}
+              opacity="0.62"
+            />
+          )
         ))}
 
         {sourceBlocks.map((item) => (
@@ -3305,11 +3317,16 @@ function buildEnergyFlowRibbons(sources, sinks) {
       const sourceBottom = sourceTop + sourceHeight;
       const sinkTop = sinkCursor[sinkId];
       const sinkBottom = sinkTop + sinkHeight;
+      const thin = Math.min(sourceHeight, sinkHeight) < 5;
 
       flows.push({
         source,
         sink,
-        path: ribbonPath(132, 428, sourceTop, sourceBottom, sinkTop, sinkBottom),
+        thin,
+        strokeWidth: Math.max(2, Math.min(4, Math.max(sourceHeight, sinkHeight) * 0.12)),
+        path: thin
+          ? flowLinePath(132, 428, (sourceTop + sourceBottom) / 2, (sinkTop + sinkBottom) / 2)
+          : ribbonPath(132, 428, sourceTop, sourceBottom, sinkTop, sinkBottom),
       });
 
       sourceCursor[sourceId] += sourceHeight;
@@ -3332,12 +3349,19 @@ function ribbonPath(x1, x2, sourceTop, sourceBottom, sinkTop, sinkBottom) {
   ].join(" ");
 }
 
+function flowLinePath(x1, x2, sourceY, sinkY) {
+  const c1 = x1 + 112;
+  const c2 = x2 - 112;
+
+  return `M ${x1} ${sourceY} C ${c1} ${sourceY}, ${c2} ${sinkY}, ${x2} ${sinkY}`;
+}
+
 function EnergyFlowNode({ item, x, width, align }) {
   const textX = align === "right" ? x + width - 10 : x + 10;
   const textAnchor = align === "right" ? "end" : "start";
   const textColor = getEnergyFlowTextColor(item.color);
   const soc = Number(item.soc);
-  const hasSoc = Number.isFinite(soc);
+  const hasSoc = item.soc !== null && item.soc !== undefined && Number.isFinite(soc);
   const batteryFill = Math.max(0, Math.min(100, soc));
 
   return (
@@ -3376,10 +3400,10 @@ function EnergyFlowBatteryGauge({ x, y, width, align, fill, color }) {
     return null;
   }
 
-  const gaugeX = x + width - 28;
-  const gaugeY = y + 24;
-  const gaugeHeight = 52;
-  const fillHeight = (44 * fill) / 100;
+  const gaugeX = x + width - 25;
+  const gaugeY = y + 15;
+  const gaugeHeight = 58;
+  const fillHeight = (50 * fill) / 100;
 
   return (
     <g>
@@ -3387,13 +3411,13 @@ function EnergyFlowBatteryGauge({ x, y, width, align, fill, color }) {
       <rect x={gaugeX} y={gaugeY} width="18" height={gaugeHeight} rx="5" fill="none" stroke={color} strokeWidth="2" />
       <rect
         x={gaugeX + 4}
-        y={gaugeY + 4 + (44 - fillHeight)}
+        y={gaugeY + 4 + (50 - fillHeight)}
         width="10"
         height={fillHeight}
         rx="3"
         fill={color}
       />
-      <text x={gaugeX + 9} y={gaugeY + gaugeHeight + 17} textAnchor="middle" fontSize="15" fontWeight="900" fill={color}>
+      <text x={gaugeX - 5} y={gaugeY + 36} textAnchor="end" fontSize="14" fontWeight="900" fill={color}>
         {Math.round(fill)}
       </text>
     </g>
