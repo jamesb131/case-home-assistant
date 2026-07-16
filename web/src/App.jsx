@@ -1724,7 +1724,25 @@ function App() {
                         {isMobile ? periodLabel(energyFlowPeriod) : "Today"}
                       </h2>
                     </div>
-                    <div className="muted">{isMobile ? energyFlowSummary?.unit || "kW" : "15-minute view"}</div>
+                    <div
+                      className={isMobile ? "" : "muted"}
+                      style={
+                        isMobile
+                          ? {
+                              alignSelf: "flex-start",
+                              borderRadius: "999px",
+                              padding: "6px 10px",
+                              background: "#111827",
+                              color: "white",
+                              fontSize: "13px",
+                              fontWeight: 900,
+                              letterSpacing: 0,
+                            }
+                          : undefined
+                      }
+                    >
+                      {isMobile ? energyFlowSummary?.unit || "kW" : "15-minute view"}
+                    </div>
                   </div>
 
                   <div style={{ width: "100%", minWidth: 0 }}>
@@ -3115,7 +3133,7 @@ function EnergyFlowCard({ summary, activePeriod, onPeriodChange }) {
   const unit = summary?.unit || (activePeriod === "now" ? "kW" : "kWh");
   const values = summary?.values || {};
   const batterySoc = Number(values.battery_soc);
-  const showBatterySoc = unit === "kW" && Number.isFinite(batterySoc);
+  const showBatterySoc = activePeriod === "now" && unit === "kW" && Number.isFinite(batterySoc);
   const sources = [
     { id: "solar", label: "Solar", value: values.solar || 0, color: "#facc15" },
     {
@@ -3134,7 +3152,6 @@ function EnergyFlowCard({ summary, activePeriod, onPeriodChange }) {
       id: "battery",
       label: "Battery",
       value: values.battery_charge || 0,
-      percent: values.battery_soc ? `${Number(values.battery_soc).toFixed(0)}%` : null,
       color: "#14b8a6",
       optional: true,
     },
@@ -3168,11 +3185,11 @@ function EnergyFlowCard({ summary, activePeriod, onPeriodChange }) {
         ))}
 
         {sourceBlocks.map((item) => (
-          <EnergyFlowNode key={item.id} item={item} x={10} width={128} unit={unit} align="left" />
+          <EnergyFlowNode key={item.id} item={item} x={10} width={128} align="left" />
         ))}
 
         {sinkBlocks.map((item) => (
-          <EnergyFlowNode key={item.id} item={item} x={422} width={128} unit={unit} align="right" />
+          <EnergyFlowNode key={item.id} item={item} x={422} width={128} align="right" />
         ))}
       </svg>
 
@@ -3208,7 +3225,7 @@ function EnergyFlowCard({ summary, activePeriod, onPeriodChange }) {
 
 function layoutFlowBlocks(items, top, bottom) {
   const gap = 10;
-  const minHeight = 124;
+  const minHeight = 104;
   const totalHeight = bottom - top;
   const usableHeight = totalHeight - gap * (items.length - 1);
   const values = items.map((item) => Math.max(0, item.value || 0));
@@ -3315,15 +3332,13 @@ function ribbonPath(x1, x2, sourceTop, sourceBottom, sinkTop, sinkBottom) {
   ].join(" ");
 }
 
-function EnergyFlowNode({ item, x, width, unit, align }) {
+function EnergyFlowNode({ item, x, width, align }) {
   const textX = align === "right" ? x + width - 10 : x + 10;
   const textAnchor = align === "right" ? "end" : "start";
   const textColor = getEnergyFlowTextColor(item.color);
   const soc = Number(item.soc);
   const hasSoc = Number.isFinite(soc);
   const batteryFill = Math.max(0, Math.min(100, soc));
-  const gaugeX = align === "right" ? x + width - 88 : x + 48;
-  const gaugeY = item.y + 96;
 
   return (
     <g>
@@ -3336,44 +3351,51 @@ function EnergyFlowNode({ item, x, width, unit, align }) {
         fill={item.color}
         opacity="0.9"
       />
-      <text x={textX} y={item.y + 33} textAnchor={textAnchor} fontSize="20" fontWeight="900" fill={textColor}>
+      <text x={textX} y={item.y + 31} textAnchor={textAnchor} fontSize="20" fontWeight="900" fill={textColor}>
         {item.label}
       </text>
-      <text x={textX} y={item.y + 78} textAnchor={textAnchor} fontSize="32" fontWeight="900" fill={textColor}>
+      <text x={textX} y={item.y + 70} textAnchor={textAnchor} fontSize="32" fontWeight="900" fill={textColor}>
         {Number(item.value || 0).toFixed((item.value || 0) >= 10 ? 1 : 2)}
       </text>
-      <text x={textX} y={item.y + 110} textAnchor={textAnchor} fontSize="20" fill={textColor}>
-        {unit}
-      </text>
       {hasSoc && (
-        <g>
-          <rect x={gaugeX} y={gaugeY} width="30" height="14" rx="4" fill="none" stroke={textColor} strokeWidth="2" />
-          <rect
-            x={gaugeX + 3}
-            y={gaugeY + 3}
-            width={(24 * batteryFill) / 100}
-            height="8"
-            rx="2"
-            fill={textColor}
-          />
-          <rect x={gaugeX + 31} y={gaugeY + 4} width="3" height="6" rx="1.5" fill={textColor} />
-          <text
-            x={align === "right" ? gaugeX - 6 : gaugeX + 42}
-            y={gaugeY + 12}
-            textAnchor={align === "right" ? "end" : "start"}
-            fontSize="15"
-            fontWeight="900"
-            fill={textColor}
-          >
-            {Math.round(batteryFill)}
-          </text>
-        </g>
+        <EnergyFlowBatteryGauge
+          x={x}
+          y={item.y}
+          width={width}
+          align={align}
+          fill={batteryFill}
+          color={textColor}
+        />
       )}
-      {item.percent && (
-        <text x={textX} y={item.y + item.height - 16} textAnchor={textAnchor} fontSize="22" fill={textColor}>
-          {item.percent}
-        </text>
-      )}
+    </g>
+  );
+}
+
+function EnergyFlowBatteryGauge({ x, y, width, align, fill, color }) {
+  if (align === "right") {
+    return null;
+  }
+
+  const gaugeX = x + width - 28;
+  const gaugeY = y + 24;
+  const gaugeHeight = 52;
+  const fillHeight = (44 * fill) / 100;
+
+  return (
+    <g>
+      <rect x={gaugeX + 5} y={gaugeY - 4} width="8" height="4" rx="2" fill={color} opacity="0.95" />
+      <rect x={gaugeX} y={gaugeY} width="18" height={gaugeHeight} rx="5" fill="none" stroke={color} strokeWidth="2" />
+      <rect
+        x={gaugeX + 4}
+        y={gaugeY + 4 + (44 - fillHeight)}
+        width="10"
+        height={fillHeight}
+        rx="3"
+        fill={color}
+      />
+      <text x={gaugeX + 9} y={gaugeY + gaugeHeight + 17} textAnchor="middle" fontSize="15" fontWeight="900" fill={color}>
+        {Math.round(fill)}
+      </text>
     </g>
   );
 }
