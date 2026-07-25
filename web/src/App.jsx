@@ -1457,6 +1457,7 @@ function App() {
         <main
           style={{
             flex: 1,
+            position: "relative",
             padding: isMobile ? "16px 12px" : "22px 28px",
             maxWidth: "none",
             minWidth: 0,
@@ -2886,11 +2887,14 @@ function TopNavigation({
       className="topCaseNav"
       style={{
         display: "flex",
+        position: isMobile ? "static" : "absolute",
+        top: isMobile ? undefined : "22px",
+        right: isMobile ? undefined : "28px",
+        zIndex: isMobile ? undefined : 20,
         alignItems: isMobile ? "center" : "flex-end",
         justifyContent: isMobile ? "space-between" : "flex-end",
         gap: "16px",
-        minHeight: isMobile ? undefined : "76px",
-        marginBottom: isMobile ? "16px" : "12px",
+        marginBottom: isMobile ? "16px" : 0,
       }}
     >
       {isMobile && (
