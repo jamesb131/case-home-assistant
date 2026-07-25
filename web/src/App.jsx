@@ -2013,6 +2013,7 @@ function App() {
                 gap: "14px",
                 position: isMobile ? "static" : "sticky",
                 top: isMobile ? undefined : "20px",
+                marginTop: isMobile ? undefined : "78px",
               }}
             >
               <section className="card">
@@ -2885,10 +2886,11 @@ function TopNavigation({
       className="topCaseNav"
       style={{
         display: "flex",
-        alignItems: "center",
+        alignItems: isMobile ? "center" : "flex-end",
         justifyContent: isMobile ? "space-between" : "flex-end",
         gap: "16px",
-        marginBottom: isMobile ? "16px" : "10px",
+        minHeight: isMobile ? undefined : "76px",
+        marginBottom: isMobile ? "16px" : "12px",
       }}
     >
       {isMobile && (
