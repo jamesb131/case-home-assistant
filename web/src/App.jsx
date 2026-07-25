@@ -1468,6 +1468,14 @@ function App() {
           activePage={activePage}
           setActivePage={setActivePage}
           isMobile={isMobile}
+          assistantAvailable={assistantAvailable}
+          assistantPhase={assistantPhase}
+          assistantPhaseText={assistantPhaseText}
+          voiceAvailable={voiceAvailable}
+          voiceUnavailableTitle={voiceUnavailableTitle}
+          isListening={isListening}
+          startVoiceRecognition={startVoiceRecognition}
+          onOpenAssistant={() => setAssistantOpen(!assistantOpen)}
         />
         {activePage === "Home" && (
           <>
@@ -2007,101 +2015,6 @@ function App() {
                 top: isMobile ? undefined : "20px",
               }}
             >
-              <section
-                style={{
-                  borderRadius: "20px",
-                  background: "#111827",
-                  color: "white",
-                  padding: "10px 12px",
-                  boxShadow: "0 14px 40px rgba(15, 23, 42, 0.16)",
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "12px",
-                  }}
-                >
-                  <button
-                    onClick={() => setAssistantOpen(!assistantOpen)}
-                    style={{
-                      flex: 1,
-                      border: "none",
-                      background: "transparent",
-                      color: "inherit",
-                      padding: 0,
-                      fontWeight: 900,
-                      fontSize: "14px",
-                      cursor: "pointer",
-                      textAlign: "left",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <span>Ask CASE</span>
-                    <div
-                      className={`assistantStatusPill ${assistantPhase}`}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                        padding: "5px 8px",
-                        borderRadius: "999px",
-                        background: assistantAvailable
-                          ? "rgba(34, 197, 94, 0.16)"
-                          : "rgba(248, 113, 113, 0.18)",
-                        color: assistantAvailable ? "#bbf7d0" : "#fecaca",
-                        fontSize: "11px",
-                        fontWeight: 800,
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: "7px",
-                          height: "7px",
-                          borderRadius: "999px",
-                          background: assistantAvailable ? "#22c55e" : "#ef4444",
-                        }}
-                      />
-                      {assistantPhaseText}
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={startVoiceRecognition}
-                    className={`voiceOrb ${assistantPhase}`}
-                    style={{
-                      width: "46px",
-                      height: "46px",
-                      flex: "0 0 46px",
-                      borderRadius: "999px",
-                      border: "none",
-                      cursor: "pointer",
-                      background: !voiceAvailable
-                        ? "rgba(255, 255, 255, 0.08)"
-                        : isListening
-                          ? "#ef4444"
-                          : "rgba(255, 255, 255, 0.14)",
-                      color: voiceAvailable ? "white" : "rgba(255, 255, 255, 0.45)",
-                      fontSize: "22px",
-                    }}
-                    title={
-                      !voiceAvailable
-                        ? voiceUnavailableTitle
-                        : isListening
-                          ? "Listening..."
-                          : "Speak to CASE"
-                    }
-                  >
-                    🎤
-                  </button>
-                </div>
-              </section>
-
               <section className="card">
               <div style={{ marginBottom: "18px" }}>
                 <div
@@ -2951,7 +2864,20 @@ function App() {
   );
 }
 
-function TopNavigation({ navItems, activePage, setActivePage, isMobile }) {
+function TopNavigation({
+  navItems,
+  activePage,
+  setActivePage,
+  isMobile,
+  assistantAvailable,
+  assistantPhase,
+  assistantPhaseText,
+  voiceAvailable,
+  voiceUnavailableTitle,
+  isListening,
+  startVoiceRecognition,
+  onOpenAssistant,
+}) {
   const items = isMobile ? navItems : [...navItems].reverse();
 
   return (
@@ -2959,10 +2885,10 @@ function TopNavigation({ navItems, activePage, setActivePage, isMobile }) {
       className="topCaseNav"
       style={{
         display: "flex",
-        alignItems: isMobile ? "center" : "flex-start",
+        alignItems: "flex-start",
         justifyContent: "space-between",
         gap: "16px",
-        marginBottom: isMobile ? "16px" : "10px",
+        marginBottom: isMobile ? "16px" : "18px",
       }}
     >
       <button
@@ -2994,44 +2920,175 @@ function TopNavigation({ navItems, activePage, setActivePage, isMobile }) {
         </span>
       </button>
 
-      <nav
+      <div
         style={{
           display: isMobile ? "none" : "flex",
-          alignItems: "center",
+          alignItems: "flex-end",
           justifyContent: "flex-end",
-          gap: isMobile ? "6px" : "8px",
+          gap: "10px",
           flexWrap: "wrap",
-          marginTop: isMobile ? 0 : "42px",
+          marginTop: "46px",
         }}
-        aria-label="Primary"
       >
-        {items.map(([icon, item]) => (
-          <button
-            key={item}
-            onClick={() => setActivePage(item)}
-            aria-label={item}
-            title={item}
-            className="topNavIconButton"
+        <nav
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: "8px",
+            flexWrap: "wrap",
+          }}
+          aria-label="Primary"
+        >
+          {items.map(([icon, item]) => (
+            <button
+              key={item}
+              onClick={() => setActivePage(item)}
+              aria-label={item}
+              title={item}
+              className="topNavIconButton"
+              style={{
+                width: "42px",
+                height: "42px",
+                borderRadius: "14px",
+                border: "1px solid #e2e8f0",
+                background: activePage === item ? "#111827" : "white",
+                color: activePage === item ? "white" : "#111827",
+                boxShadow: activePage === item ? "0 8px 18px rgba(15, 23, 42, 0.18)" : "none",
+                cursor: "pointer",
+                fontSize: "19px",
+                fontWeight: 900,
+                display: "grid",
+                placeItems: "center",
+              }}
+            >
+              {icon}
+            </button>
+          ))}
+        </nav>
+
+        <CompactAskCase
+          assistantAvailable={assistantAvailable}
+          assistantPhase={assistantPhase}
+          assistantPhaseText={assistantPhaseText}
+          voiceAvailable={voiceAvailable}
+          voiceUnavailableTitle={voiceUnavailableTitle}
+          isListening={isListening}
+          startVoiceRecognition={startVoiceRecognition}
+          onOpenAssistant={onOpenAssistant}
+        />
+      </div>
+    </header>
+  );
+}
+
+function CompactAskCase({
+  assistantAvailable,
+  assistantPhase,
+  assistantPhaseText,
+  voiceAvailable,
+  voiceUnavailableTitle,
+  isListening,
+  startVoiceRecognition,
+  onOpenAssistant,
+}) {
+  return (
+    <section
+      style={{
+        width: "330px",
+        borderRadius: "18px",
+        background: "#111827",
+        color: "white",
+        padding: "10px 12px",
+        boxShadow: "0 14px 40px rgba(15, 23, 42, 0.16)",
+        flex: "0 0 330px",
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "12px",
+        }}
+      >
+        <button
+          onClick={onOpenAssistant}
+          style={{
+            flex: 1,
+            border: "none",
+            background: "transparent",
+            color: "inherit",
+            padding: 0,
+            fontWeight: 900,
+            fontSize: "14px",
+            cursor: "pointer",
+            textAlign: "left",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            flexWrap: "wrap",
+          }}
+        >
+          <span>Ask CASE</span>
+          <div
+            className={`assistantStatusPill ${assistantPhase}`}
             style={{
-              width: isMobile ? "40px" : "42px",
-              height: isMobile ? "40px" : "42px",
-              borderRadius: "14px",
-              border: "1px solid #e2e8f0",
-              background: activePage === item ? "#111827" : "white",
-              color: activePage === item ? "white" : "#111827",
-              boxShadow: activePage === item ? "0 8px 18px rgba(15, 23, 42, 0.18)" : "none",
-              cursor: "pointer",
-              fontSize: "19px",
-              fontWeight: 900,
-              display: "grid",
-              placeItems: "center",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "5px 8px",
+              borderRadius: "999px",
+              background: assistantAvailable
+                ? "rgba(34, 197, 94, 0.16)"
+                : "rgba(248, 113, 113, 0.18)",
+              color: assistantAvailable ? "#bbf7d0" : "#fecaca",
+              fontSize: "11px",
+              fontWeight: 800,
             }}
           >
-            {icon}
-          </button>
-        ))}
-      </nav>
-    </header>
+            <span
+              style={{
+                width: "7px",
+                height: "7px",
+                borderRadius: "999px",
+                background: assistantAvailable ? "#22c55e" : "#ef4444",
+              }}
+            />
+            {assistantPhaseText}
+          </div>
+        </button>
+
+        <button
+          onClick={startVoiceRecognition}
+          className={`voiceOrb ${assistantPhase}`}
+          style={{
+            width: "46px",
+            height: "46px",
+            flex: "0 0 46px",
+            borderRadius: "999px",
+            border: "none",
+            cursor: "pointer",
+            background: !voiceAvailable
+              ? "rgba(255, 255, 255, 0.08)"
+              : isListening
+                ? "#ef4444"
+                : "rgba(255, 255, 255, 0.14)",
+            color: voiceAvailable ? "white" : "rgba(255, 255, 255, 0.45)",
+            fontSize: "22px",
+          }}
+          title={
+            !voiceAvailable
+              ? voiceUnavailableTitle
+              : isListening
+                ? "Listening..."
+                : "Speak to CASE"
+          }
+        >
+          🎤
+        </button>
+      </div>
+    </section>
   );
 }
 
