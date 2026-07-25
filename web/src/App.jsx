@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { API_BASE, apiFetch } from "./config";
 
@@ -223,6 +223,7 @@ function App() {
   const [assistantLoading, setAssistantLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [assistantPhase, setAssistantPhase] = useState("idle");
+  const activeRecognitionRef = useRef(null);
   const [assistantStatus, setAssistantStatus] = useState(null);
   const [systemStatus, setSystemStatus] = useState(null);
   const [securityStatus, setSecurityStatus] = useState(null);
@@ -660,9 +661,9 @@ function App() {
         },
       ]);
       setAssistantPhase("idle");
+    } finally {
+      setAssistantLoading(false);
     }
-
-    setAssistantLoading(false);
   }
 
   function speakCase(text) {
@@ -686,6 +687,15 @@ function App() {
 
   async function startVoiceRecognition() {
     const SpeechRecognition = getSpeechRecognition();
+
+    if (activeRecognitionRef.current) {
+      try {
+        activeRecognitionRef.current.abort();
+      } catch {
+        // Ignore stale browser recognition sessions.
+      }
+      activeRecognitionRef.current = null;
+    }
 
     if (!window.isSecureContext) {
       setAssistantOpen(true);
@@ -719,6 +729,7 @@ function App() {
     }
 
     const recognition = new SpeechRecognition();
+    activeRecognitionRef.current = recognition;
 
     recognition.lang = "en-AU";
     recognition.interimResults = false;
@@ -730,12 +741,18 @@ function App() {
     };
 
     recognition.onend = () => {
+      if (activeRecognitionRef.current === recognition) {
+        activeRecognitionRef.current = null;
+      }
       setIsListening(false);
       setAssistantPhase((current) => current === "listening" ? "idle" : current);
     };
 
     recognition.onerror = (event) => {
       console.error(event);
+      if (activeRecognitionRef.current === recognition) {
+        activeRecognitionRef.current = null;
+      }
       setIsListening(false);
       setAssistantPhase("idle");
     };
@@ -744,8 +761,26 @@ function App() {
       const transcript = event.results[0][0].transcript;
 
       setAssistantInput(transcript);
+      setIsListening(false);
+      try {
+        recognition.stop();
+      } catch {
+        // Some Safari/WebKit builds throw if recognition has already stopped.
+      }
 
-      await sendAssistantMessage(transcript);
+      try {
+        await sendAssistantMessage(transcript);
+      } finally {
+        if (activeRecognitionRef.current === recognition) {
+          try {
+            recognition.abort();
+          } catch {
+            // Best-effort cleanup for browsers that keep the mic active.
+          }
+          activeRecognitionRef.current = null;
+        }
+        setIsListening(false);
+      }
     };
 
     recognition.start();
@@ -1335,6 +1370,7 @@ function App() {
         minHeight: "100vh",
         background: "#f4f6f8",
         fontFamily: "Inter, system-ui, sans-serif",
+        fontSize: isMobile ? undefined : "15px",
         color: "#111827",
       }}
     >
@@ -4719,7 +4755,7 @@ function EventList({ events, compact = false }) {
   );
 }
 
-function PlannerViewToggle({ plannerView, setPlannerView }) {
+function PlannerViewToggle({ plannerView, setPlannerView, inline = false }) {
   return (
     <div
       style={{
@@ -4728,7 +4764,7 @@ function PlannerViewToggle({ plannerView, setPlannerView }) {
         background: "#e5e7eb",
         padding: "5px",
         borderRadius: "999px",
-        marginBottom: "18px",
+        marginBottom: inline ? 0 : "18px",
       }}
     >
       {[
@@ -4743,7 +4779,7 @@ function PlannerViewToggle({ plannerView, setPlannerView }) {
             background: plannerView === value ? "#111827" : "transparent",
             color: plannerView === value ? "white" : "#111827",
             borderRadius: "999px",
-            padding: "10px 16px",
+            padding: inline ? "8px 14px" : "10px 16px",
             fontWeight: 800,
             cursor: "pointer",
           }}
@@ -4868,19 +4904,21 @@ function PlannerPage({
                   })}
                 </h2>
 
-                <button
-                  className="button"
-                  onClick={() => {
-                    const d = new Date(currentMonth);
-                    d.setMonth(d.getMonth() + 1);
-                    setCurrentMonth(d);
-                  }}
-                >
-                  →
-                </button>
-              </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <PlannerViewToggle plannerView={plannerView} setPlannerView={setPlannerView} inline />
 
-              <PlannerViewToggle plannerView={plannerView} setPlannerView={setPlannerView} />
+                  <button
+                    className="button"
+                    onClick={() => {
+                      const d = new Date(currentMonth);
+                      d.setMonth(d.getMonth() + 1);
+                      setCurrentMonth(d);
+                    }}
+                  >
+                    →
+                  </button>
+                </div>
+              </div>
 
               <div
                 style={{
@@ -4959,7 +4997,7 @@ function PlannerPage({
                 <h2 style={{ margin: 0 }}>
                   Upcoming 10 days
                 </h2>
-                <PlannerViewToggle plannerView={plannerView} setPlannerView={setPlannerView} />
+                <PlannerViewToggle plannerView={plannerView} setPlannerView={setPlannerView} inline />
               </div>
 
               {upcomingDays.map((day) => {
