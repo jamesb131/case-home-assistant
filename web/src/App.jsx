@@ -2885,40 +2885,42 @@ function TopNavigation({
       className="topCaseNav"
       style={{
         display: "flex",
-        alignItems: "flex-start",
-        justifyContent: "space-between",
+        alignItems: "center",
+        justifyContent: isMobile ? "space-between" : "flex-end",
         gap: "16px",
-        marginBottom: isMobile ? "16px" : "18px",
+        marginBottom: isMobile ? "16px" : "10px",
       }}
     >
-      <button
-        onClick={() => setActivePage("Home")}
-        style={{
-          border: "none",
-          background: "transparent",
-          display: "flex",
-          alignItems: "center",
-          gap: "10px",
-          cursor: "pointer",
-          padding: 0,
-          color: "#111827",
-        }}
-        aria-label="Home"
-      >
-        <img
-          src="/case-house.png"
-          alt=""
-          aria-hidden="true"
+      {isMobile && (
+        <button
+          onClick={() => setActivePage("Home")}
           style={{
-            width: isMobile ? "46px" : "52px",
-            height: isMobile ? "34px" : "38px",
-            objectFit: "contain",
+            border: "none",
+            background: "transparent",
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            cursor: "pointer",
+            padding: 0,
+            color: "#111827",
           }}
-        />
-        <span style={{ fontSize: isMobile ? "30px" : "24px", fontWeight: 950, letterSpacing: 0 }}>
-          CASE
-        </span>
-      </button>
+          aria-label="Home"
+        >
+          <img
+            src="/case-house.png"
+            alt=""
+            aria-hidden="true"
+            style={{
+              width: "46px",
+              height: "34px",
+              objectFit: "contain",
+            }}
+          />
+          <span style={{ fontSize: "30px", fontWeight: 950, letterSpacing: 0 }}>
+            CASE
+          </span>
+        </button>
+      )}
 
       <div
         style={{
@@ -2927,7 +2929,6 @@ function TopNavigation({
           justifyContent: "flex-end",
           gap: "10px",
           flexWrap: "wrap",
-          marginTop: "46px",
         }}
       >
         <nav
