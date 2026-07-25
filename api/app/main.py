@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request
@@ -11,10 +11,11 @@ from app.services.ollama_client import get_ollama_status
 from pydantic import BaseModel
 from app.services.case_assistant import ask_case
 
-from app.services.google_calendar_client import get_upcoming_events
 from app.services.google_calendar_client import get_calendar_service
 from app.services.google_calendar_client import get_calendar_error
 from app.services.google_calendar_client import get_calendar_auth_status
+from app.repositories.calendar_repository import get_calendar_sources, get_upcoming_calendar_events
+from app.services.calendar_sync import sync_google_calendar
 
 from app.routers.lists_router import router as lists_router
 
@@ -169,7 +170,11 @@ def log_energy_now():
     }
 
 @app.get("/energy/recent")
-def get_recent_energy():
+def get_recent_energy(date: date | None = None):
+    perth = ZoneInfo("Australia/Perth")
+    selected_date = date or datetime.now(perth).date()
+    start_at = datetime.combine(selected_date, time.min, tzinfo=perth)
+    end_at = start_at + timedelta(days=1)
     conn = get_connection()
 
     try:
@@ -186,7 +191,8 @@ def get_recent_energy():
                     AVG(battery_soc) AS battery_soc,
                         MAX(house_load_kw) AS house_load_kw_max
                     FROM energy_readings
-                    WHERE captured_at >= date_trunc('day', NOW() AT TIME ZONE 'Australia/Perth') AT TIME ZONE 'Australia/Perth'
+                    WHERE captured_at >= %(start_at)s
+                        AND captured_at < %(end_at)s
                     GROUP BY bucket
                 )
                 SELECT
@@ -202,7 +208,7 @@ def get_recent_energy():
                     house_load_kw_max
                 FROM bucketed
                 ORDER BY bucket ASC;
-            """)
+            """, {"start_at": start_at, "end_at": end_at})
 
             rows = cur.fetchall()
 
@@ -241,7 +247,11 @@ def weather_summary():
     return get_weather_summary()
 
 @app.get("/energy/today-summary")
-def get_energy_today_summary():
+def get_energy_today_summary(date: date | None = None):
+    perth = ZoneInfo("Australia/Perth")
+    selected_date = date or datetime.now(perth).date()
+    start_at = datetime.combine(selected_date, time.min, tzinfo=perth)
+    end_at = start_at + timedelta(days=1)
     conn = get_connection()
 
     try:
@@ -257,7 +267,8 @@ def get_energy_today_summary():
                         grid_kw,
                         LEAD(captured_at) OVER (ORDER BY captured_at) AS next_at
                     FROM energy_readings
-                    WHERE captured_at >= date_trunc('day', NOW() AT TIME ZONE 'Australia/Perth') AT TIME ZONE 'Australia/Perth'
+                    WHERE captured_at >= %(start_at)s
+                        AND captured_at < %(end_at)s
                 )
                 SELECT
                     COALESCE(SUM(
@@ -303,7 +314,8 @@ def get_energy_today_summary():
                     (
                         SELECT ev_kw
                         FROM energy_readings
-                        WHERE captured_at >= date_trunc('day', NOW() AT TIME ZONE 'Australia/Perth') AT TIME ZONE 'Australia/Perth'
+                        WHERE captured_at >= %(start_at)s
+                            AND captured_at < %(end_at)s
                             AND ev_kw IS NOT NULL
                         ORDER BY captured_at DESC
                         LIMIT 1
@@ -311,13 +323,14 @@ def get_energy_today_summary():
                     (
                         SELECT ev_total_kwh
                         FROM energy_readings
-                        WHERE captured_at >= date_trunc('day', NOW() AT TIME ZONE 'Australia/Perth') AT TIME ZONE 'Australia/Perth'
+                        WHERE captured_at >= %(start_at)s
+                            AND captured_at < %(end_at)s
                             AND ev_total_kwh IS NOT NULL
                         ORDER BY captured_at DESC
                         LIMIT 1
                     ) AS latest_ev_total_kwh
                 FROM readings;
-            """)
+            """, {"start_at": start_at, "end_at": end_at})
 
             row = cur.fetchone()
 
@@ -760,7 +773,20 @@ def news_summary(limit: int = 8):
     return get_news_overview(limit=bounded_limit)
 
 @app.get("/calendar/upcoming")
-def calendar_upcoming():
+def calendar_upcoming(days: int = 30, max_results: int = 50):
+    events = get_upcoming_calendar_events(days=days, max_results=max_results)
+    sources = get_calendar_sources()
+    last_error = next((source["last_error"] for source in sources if source["last_error"]), None)
+
+    if events or sources:
+        return {
+            "events": events,
+            "calendar_available": True,
+            "local_store_available": True,
+            "sources": sources,
+            "error": last_error,
+        }
+
     snapshot = get_snapshot("calendar.upcoming")
 
     if snapshot:
@@ -773,18 +799,23 @@ def calendar_upcoming():
             "error": snapshot["error"],
         }
 
-    events = get_upcoming_events(days=30, max_results=50)
+    result = sync_google_calendar(days=max(days, 30), max_results=max(max_results, 50))
 
-    if events is None:
+    if not result["calendar_available"] and not result["events"]:
         return {
             "events": [],
             "calendar_available": False,
-            "error": get_calendar_error(),
+            "local_store_available": True,
+            "sources": get_calendar_sources(),
+            "error": result["error"] or get_calendar_error(),
         }
 
     return {
-        "events": events,
-        "calendar_available": True,
+        "events": result["events"][:max_results],
+        "calendar_available": result["calendar_available"],
+        "local_store_available": True,
+        "sources": get_calendar_sources(),
+        "error": result["error"],
     }
 
 @app.get("/calendar/list")
@@ -818,6 +849,10 @@ def calendar_list():
             for calendar in result.get("items", [])
         ]
     }
+
+@app.get("/calendar/sources")
+def calendar_sources():
+    return {"sources": get_calendar_sources()}
 
 @app.get("/calendar/auth-status")
 def calendar_auth_status():

@@ -5,8 +5,8 @@ from app.repositories.system_snapshots_repository import (
     get_snapshot,
     list_snapshots,
 )
+from app.repositories.calendar_repository import get_calendar_sources
 from app.services.db import get_connection
-from app.services.google_calendar_client import get_calendar_error, get_calendar_service
 from app.services.ollama_client import get_ollama_status
 
 
@@ -76,20 +76,36 @@ def get_worker_status():
 
 
 def get_calendar_status(snapshot):
-    service = get_calendar_service()
+    sources = get_calendar_sources()
+    source_errors = [source for source in sources if source.get("last_error")]
+    snapshot_status = get_snapshot_status(snapshot)
 
-    if not service:
+    if not sources and snapshot_status["status"] == "unknown":
+        return {
+            "status": "unknown",
+            "calendar_available": True,
+            "local_store_available": True,
+            "message": "No calendar sources synced yet.",
+            "sources": sources,
+            "snapshot": snapshot_status,
+        }
+
+    if source_errors and snapshot_status["status"] in {"unknown", "error"}:
         return {
             "status": "error",
-            "calendar_available": False,
-            "error": get_calendar_error(),
-            "snapshot": get_snapshot_status(snapshot),
+            "calendar_available": True,
+            "local_store_available": True,
+            "error": source_errors[0]["last_error"],
+            "sources": sources,
+            "snapshot": snapshot_status,
         }
 
     return {
-        "status": "ok",
+        "status": "stale" if source_errors else "ok",
         "calendar_available": True,
-        "snapshot": get_snapshot_status(snapshot),
+        "local_store_available": True,
+        "sources": sources,
+        "snapshot": snapshot_status,
     }
 
 

@@ -99,6 +99,14 @@ function formatTime(value) {
   });
 }
 
+function formatDateParam(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+}
+
 function greeting() {
   const hour = new Date().getHours();
   if (hour < 12) return "Good morning";
@@ -181,14 +189,23 @@ function App() {
   const [todaySummary, setTodaySummary] = useState(null);
   const [energyFlowPeriod, setEnergyFlowPeriod] = useState("now");
   const [energyFlowSummary, setEnergyFlowSummary] = useState(null);
+  const [energyDayOffset, setEnergyDayOffset] = useState(0);
+  const [energyDayRows, setEnergyDayRows] = useState([]);
+  const [energyDaySummary, setEnergyDaySummary] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
+  const [calendarError, setCalendarError] = useState(null);
 
   const [tasks, setTasks] = useState([]);
   const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [homeTaskFilter, setHomeTaskFilter] = useState("all");
+  const [showCompletedTasks, setShowCompletedTasks] = useState(false);
+  const [pendingTaskCompletion, setPendingTaskCompletion] = useState({});
 
   const [lists, setLists] = useState([]);
   const [newListItemText, setNewListItemText] = useState({});
   const [newListName, setNewListName] = useState("");
+  const [showCompletedLists, setShowCompletedLists] = useState(false);
+  const [pendingListCompletion, setPendingListCompletion] = useState({});
 
   const [plannerView, setPlannerView] = useState("month");
 
@@ -221,9 +238,9 @@ function App() {
   const [newsError, setNewsError] = useState(null);
   const [newsLoading, setNewsLoading] = useState(false);
 
-  async function loadTasks() {
+  async function loadTasks(includeCompleted = showCompletedTasks) {
     try {
-      const res = await apiFetch(`${API_BASE}/tasks`);
+      const res = await apiFetch(`${API_BASE}/tasks?include_completed=${includeCompleted ? "true" : "false"}`);
   
       if (!res.ok) {
         throw new Error(`Tasks API returned ${res.status}`);
@@ -263,7 +280,7 @@ function App() {
     }
   }
 
-  async function completeTask(taskId) {
+  async function completeTaskNow(taskId) {
     try {
       const res = await apiFetch(`${API_BASE}/tasks/${taskId}/complete`, {
         method: "POST",
@@ -273,7 +290,54 @@ function App() {
         throw new Error("Failed to complete task");
       }
   
-      await loadTasks();
+      await loadTasks(showCompletedTasks);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function completeTask(taskId) {
+    if (!taskId || pendingTaskCompletion[taskId]) return;
+
+    const timer = window.setTimeout(() => {
+      setPendingTaskCompletion((current) => {
+        const next = { ...current };
+        delete next[taskId];
+        return next;
+      });
+      completeTaskNow(taskId);
+    }, 4500);
+
+    setPendingTaskCompletion((current) => ({
+      ...current,
+      [taskId]: timer,
+    }));
+  }
+
+  function undoTaskCompletion(taskId) {
+    const timer = pendingTaskCompletion[taskId];
+    if (timer) {
+      window.clearTimeout(timer);
+    }
+
+    setPendingTaskCompletion((current) => {
+      const next = { ...current };
+      delete next[taskId];
+      return next;
+    });
+  }
+
+  async function reopenTask(taskId) {
+    try {
+      const res = await apiFetch(`${API_BASE}/tasks/${taskId}/reopen`, {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to reopen task");
+      }
+
+      await loadTasks(showCompletedTasks);
     } catch (err) {
       console.error(err);
     }
@@ -310,9 +374,9 @@ function App() {
     setSelectedTask(null);
   }
 
-  async function loadLists() {
+  async function loadLists(includeCompleted = showCompletedLists) {
     try {
-      const res = await apiFetch(`${API_BASE}/lists`);
+      const res = await apiFetch(`${API_BASE}/lists?include_completed=${includeCompleted ? "true" : "false"}`);
       if (!res.ok) throw new Error(`Lists API returned ${res.status}`);
 
       const json = await res.json();
@@ -351,7 +415,7 @@ function App() {
     }
   }
 
-  async function completeListItem(itemId) {
+  async function completeListItemNow(itemId) {
     try {
       const res = await apiFetch(`${API_BASE}/lists/items/${itemId}/complete`, {
         method: "POST",
@@ -359,7 +423,52 @@ function App() {
 
       if (!res.ok) throw new Error("Failed to complete list item");
 
-      await loadLists();
+      await loadLists(showCompletedLists);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function completeListItem(itemId) {
+    if (!itemId || pendingListCompletion[itemId]) return;
+
+    const timer = window.setTimeout(() => {
+      setPendingListCompletion((current) => {
+        const next = { ...current };
+        delete next[itemId];
+        return next;
+      });
+      completeListItemNow(itemId);
+    }, 4500);
+
+    setPendingListCompletion((current) => ({
+      ...current,
+      [itemId]: timer,
+    }));
+  }
+
+  function undoListItemCompletion(itemId) {
+    const timer = pendingListCompletion[itemId];
+    if (timer) {
+      window.clearTimeout(timer);
+    }
+
+    setPendingListCompletion((current) => {
+      const next = { ...current };
+      delete next[itemId];
+      return next;
+    });
+  }
+
+  async function reopenListItem(itemId) {
+    try {
+      const res = await apiFetch(`${API_BASE}/lists/items/${itemId}/reopen`, {
+        method: "POST",
+      });
+
+      if (!res.ok) throw new Error("Failed to reopen list item");
+
+      await loadLists(showCompletedLists);
     } catch (err) {
       console.error(err);
     }
@@ -395,8 +504,10 @@ function App() {
 
       const json = await res.json();
       setCalendarEvents(json.events || []);
+      setCalendarError(json.error || null);
     } catch (err) {
       console.error(err);
+      setCalendarError(err.message);
     }
   }
 
@@ -668,6 +779,38 @@ function App() {
           }),
         }))
       );
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function loadEnergyDay(offset = energyDayOffset) {
+    const selected = new Date();
+    selected.setDate(selected.getDate() + offset);
+    const date = formatDateParam(selected);
+
+    try {
+      const [rowsRes, summaryRes] = await Promise.all([
+        apiFetch(`${API_BASE}/energy/recent?date=${date}`),
+        apiFetch(`${API_BASE}/energy/today-summary?date=${date}`),
+      ]);
+
+      if (!rowsRes.ok) throw new Error(`Energy day API returned ${rowsRes.status}`);
+      if (!summaryRes.ok) throw new Error(`Energy day summary returned ${summaryRes.status}`);
+
+      const rows = await rowsRes.json();
+      const summary = await summaryRes.json();
+
+      setEnergyDayRows(
+        rows.map((row) => ({
+          ...row,
+          timeLabel: new Date(row.time).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          }),
+        }))
+      );
+      setEnergyDaySummary(summary);
     } catch (err) {
       console.error(err);
     }
@@ -999,6 +1142,7 @@ function App() {
     const initialLoad = setTimeout(() => {
       loadData();
       loadRecentEnergy();
+      loadEnergyDay();
       loadEnergyFlowSummary();
       loadWeather();
       loadTodaySummary();
@@ -1018,6 +1162,9 @@ function App() {
     const energyInterval = setInterval(() => {
       loadData();
       loadRecentEnergy();
+      if (activePage === "Energy") {
+        loadEnergyDay();
+      }
     }, 5000);
 
     const weatherInterval = setInterval(() => {
@@ -1087,7 +1234,23 @@ function App() {
     if (activePage === "News") {
       loadNewsSummary();
     }
+
+    if (activePage === "Energy") {
+      loadEnergyDay(energyDayOffset);
+    }
   }, [activePage]);
+
+  useEffect(() => {
+    loadEnergyDay(energyDayOffset);
+  }, [energyDayOffset]);
+
+  useEffect(() => {
+    loadTasks(showCompletedTasks);
+  }, [showCompletedTasks]);
+
+  useEffect(() => {
+    loadLists(showCompletedLists);
+  }, [showCompletedLists]);
 
   useEffect(() => {
     if (assistantOpen) {
@@ -1183,6 +1346,7 @@ function App() {
       >
         <aside
           style={{
+            display: "none",
             width: isMobile ? "100%" : "120px",
             minHeight: isMobile ? "auto" : "100vh",
             background: "#0f172a",
@@ -1293,12 +1457,18 @@ function App() {
         <main
           style={{
             flex: 1,
-            padding: isMobile ? "18px 14px" : "24px 30px",
-            maxWidth: "1900px",
+            padding: isMobile ? "16px 12px" : "22px 28px",
+            maxWidth: "none",
             minWidth: 0,
             overflowX: "hidden",
           }}
         >
+        <TopNavigation
+          navItems={navItems}
+          activePage={activePage}
+          setActivePage={setActivePage}
+          isMobile={isMobile}
+        />
         {activePage === "Home" && (
           <>
           {isMobile && (
@@ -1355,40 +1525,34 @@ function App() {
               <div style={{ marginTop: "12px", fontSize: "13px", opacity: 0.78 }}>
                 {assistantPhaseText}
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "14px" }}>
-                <button
-                  onClick={() => setActivePage("Lists")}
-                  style={{
-                    border: "none",
-                    borderRadius: "14px",
-                    padding: "12px",
-                    background: "rgba(255,255,255,0.12)",
-                    color: "white",
-                    fontWeight: 800,
-                  }}
-                >
-                  Lists
-                </button>
-                <button
-                  onClick={() => setActivePage("Home")}
-                  style={{
-                    border: "none",
-                    borderRadius: "14px",
-                    padding: "12px",
-                    background: "rgba(255,255,255,0.12)",
-                    color: "white",
-                    fontWeight: 800,
-                  }}
-                >
-                  Stats
-                </button>
+              <div style={{ display: "flex", gap: "8px", marginTop: "14px", flexWrap: "wrap" }}>
+                {navItems.slice(1, 6).map(([icon, item]) => (
+                  <button
+                    key={item}
+                    onClick={() => setActivePage(item)}
+                    aria-label={item}
+                    title={item}
+                    style={{
+                      border: "none",
+                      borderRadius: "14px",
+                      width: "42px",
+                      height: "42px",
+                      background: "rgba(255,255,255,0.12)",
+                      color: "white",
+                      fontSize: "18px",
+                      fontWeight: 800,
+                    }}
+                  >
+                    {icon}
+                  </button>
+                ))}
               </div>
             </section>
           )}
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "1fr 380px",
+              gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) 330px",
               gap: "20px",
               alignItems: "start",
             }}
@@ -1410,7 +1574,7 @@ function App() {
               <section
                 style={{
                   display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "1.7fr 0.9fr",
+                  gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) 320px",
                   gap: "18px",
                   marginBottom: "18px",
                 }}
@@ -1501,51 +1665,10 @@ function App() {
                 )}
 
                 {!isMobile && (
-                <div className="card">
-                  <div className="muted" style={{ marginBottom: "16px" }}>
-                    Recommendations
+                  <div style={{ display: "grid", gap: "14px" }}>
+                    <BatteryReserveCard state={state} />
+                    <MusicHomeCard />
                   </div>
-
-                  {topMessages.length === 0 ? (
-                    <div style={{ fontSize: "20px", fontWeight: "800" }}>
-                      All good. No actions needed.
-                    </div>
-                  ) : (
-                    topMessages.map((m, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "12px",
-                          padding: "14px",
-                          borderRadius: "16px",
-                          background:
-                            m.level === "warning"
-                              ? "rgba(251,191,36,0.16)"
-                              : "rgba(34,197,94,0.12)",
-                          marginBottom: "12px",
-                        }}
-                      >
-                        <div
-                          style={{
-                            width: "30px",
-                            height: "30px",
-                            borderRadius: "50%",
-                            display: "grid",
-                            placeItems: "center",
-                            background: m.level === "warning" ? "#f59e0b" : "#22c55e",
-                            color: "white",
-                            fontWeight: 900,
-                          }}
-                        >
-                          {m.level === "warning" ? "!" : "✓"}
-                        </div>
-                        <div style={{ fontWeight: 800, lineHeight: 1.25 }}>{m.text}</div>
-                      </div>
-                    ))
-                  )}
-                </div>
                 )}
               </section>
 
@@ -1554,76 +1677,44 @@ function App() {
                   <HomeTaskEventsCard
                     tasks={tasks}
                     calendarEvents={calendarEvents}
+                    calendarError={calendarError}
                     newTaskTitle={newTaskTitle}
                     setNewTaskTitle={setNewTaskTitle}
                     createTask={createTask}
                     completeTask={completeTask}
+                    undoTaskCompletion={undoTaskCompletion}
+                    reopenTask={reopenTask}
+                    taskFilter={homeTaskFilter}
+                    setTaskFilter={setHomeTaskFilter}
+                    showCompletedTasks={showCompletedTasks}
+                    setShowCompletedTasks={setShowCompletedTasks}
+                    pendingTaskCompletion={pendingTaskCompletion}
                     setSelectedTask={setSelectedTask}
                     setTaskModalOpen={setTaskModalOpen}
                   />
-                  <HomeRecommendationsCard topMessages={topMessages} />
                 </>
               )}
 
               {!isMobile && (
                 <>
                   <section
+                    className="card homeEnergyFlowCard"
                     style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-                      gap: "14px",
                       marginBottom: "18px",
                     }}
                   >
-                    <EnergyCard icon="☀️" label="Production" value={formatKw(state.solar_kw)} unit="kW" />
-                    <EnergyCard icon="🏠" label="Consumption" value={formatKw(liveHouseLoadNetKw)} unit="kW" />
-                    <EnergyCard
-                      icon="☀️"
-                      label="Solar today"
-                      value={(todaySummary?.solar_kwh ?? 0).toFixed(1)}
-                      unit="kWh"
+                    <HomeEnergyFlowHeader
+                      unit={energyFlowSummary?.unit || "kW"}
+                      period={energyFlowPeriod}
+                      onOpen={() => setActivePage("Energy")}
                     />
-                    <EnergyCard
-                      icon="🏡"
-                      label="Usage today"
-                      value={(todaySummary?.house_load_net_kwh ?? todaySummary?.house_load_kwh ?? 0).toFixed(1)}
-                      unit="kWh"
-                    />
-                    <EnergyCard
-                      icon="🚗"
-                      label="Car"
-                      value={todaySummary?.ev_kw === null || todaySummary?.ev_kw === undefined ? "--" : Number(todaySummary.ev_kw).toFixed(2)}
-                      unit="kW"
-                      subtext={todaySummary?.ev_status === "smart_port_not_mapped" ? "Not mapped yet" : undefined}
-                      color={todaySummary?.ev_charging ? "#16a34a" : "#111827"}
-                    />
-                    <EnergyCard
-                      icon="⚡"
-                      label="Grid"
-                      value={`${gridIsExporting ? "+" : "-"}${Math.abs(gridValue).toFixed(2)}`}
-                      unit="kW"
-                      color={gridIsExporting ? "#16a34a" : "#dc2626"}
-                    />
-                    <EnergyCard
-                      icon="🔌"
-                      label="Battery flow"
-                      value={`${state.battery_kw >= 0 ? "+" : "-"}${Math.abs(state.battery_kw).toFixed(2)}`}
-                      unit="kW"
-                      color={state.battery_kw >= 0 ? "#16a34a" : "#dc2626"}
-                    />
-                    <EnergyCard
-                      icon="🔋"
-                      label="Battery"
-                      value={state.battery_usable_kwh.toFixed(1)}
-                      unit="kWh"
-                      inlineSubtext={`${Math.round(state.battery_soc)}%`}
-                      color={state.battery_usable_kwh <= 0.2 ? "#dc2626" : "#16a34a"}
-                    />
-                    <EnergyCard
-                      icon="🔻"
-                      label="Grid today"
-                      value={(todaySummary?.grid_import_kwh ?? 0).toFixed(2)}
-                      unit="kWh"
+                    <EnergyFlowCard
+                      summary={energyFlowSummary}
+                      activePeriod={energyFlowPeriod}
+                      onPeriodChange={(period) => {
+                        setEnergyFlowPeriod(period);
+                        loadEnergyFlowSummary(period);
+                      }}
                     />
                   </section>
 
@@ -1649,7 +1740,7 @@ function App() {
               <section
                 style={{
                   display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "300px 1fr",
+                  gridTemplateColumns: isMobile ? "1fr" : "minmax(280px, 340px)",
                   gap: "18px",
                   marginBottom: "18px",
                 }}
@@ -1716,7 +1807,8 @@ function App() {
                   </div>
                 )}
 
-                <div className="card energyTrendCard" style={{ order: isMobile ? 1 : 0 }}>
+                {isMobile && (
+                <div className="card energyTrendCard" style={{ order: 1 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                     <div>
                       <div className="muted">{isMobile ? "Energy flow" : "Energy trend"}</div>
@@ -1760,10 +1852,13 @@ function App() {
                     )}
                   </div>
                 </div>
+                )}
               </section>
 
               {isMobile && (
                 <>
+                  <BatteryReserveCard state={state} fullWidth />
+
                   <CoffeeMachineHomeCard
                     status={gaggimateStatus}
                     profiles={gaggimateProfiles}
@@ -1800,10 +1895,10 @@ function App() {
             >
               <section
                 style={{
-                  borderRadius: "22px",
+                  borderRadius: "20px",
                   background: "#111827",
                   color: "white",
-                  padding: "18px",
+                  padding: "14px",
                   boxShadow: "0 14px 40px rgba(15, 23, 42, 0.16)",
                 }}
               >
@@ -1812,7 +1907,7 @@ function App() {
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    gap: "14px",
+                    gap: "12px",
                   }}
                 >
                   <button
@@ -1824,16 +1919,14 @@ function App() {
                       color: "inherit",
                       padding: 0,
                       fontWeight: 900,
-                      fontSize: "16px",
+                      fontSize: "14px",
                       cursor: "pointer",
                       textAlign: "left",
                     }}
                   >
                     Ask CASE
-                    <div style={{ fontSize: "12px", opacity: 0.72, marginTop: "4px" }}>
-                      Energy, tasks, events and household planning
-                    </div>
                     <div
+                      className={`assistantStatusPill ${assistantPhase}`}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -1863,10 +1956,11 @@ function App() {
 
                   <button
                     onClick={startVoiceRecognition}
+                    className={`voiceOrb ${assistantPhase}`}
                     style={{
-                      width: "44px",
-                      height: "44px",
-                      flex: "0 0 44px",
+                      width: "54px",
+                      height: "54px",
+                      flex: "0 0 54px",
                       borderRadius: "999px",
                       border: "none",
                       cursor: "pointer",
@@ -1876,7 +1970,7 @@ function App() {
                           ? "#ef4444"
                           : "rgba(255, 255, 255, 0.14)",
                       color: voiceAvailable ? "white" : "rgba(255, 255, 255, 0.45)",
-                      fontSize: "18px",
+                      fontSize: "22px",
                     }}
                     title={
                       !voiceAvailable
@@ -1903,24 +1997,27 @@ function App() {
                 >
                   <div className="muted">Tasks</div>
 
-                  <button
-                    onClick={() => {
-                      setSelectedTask(createBlankTask());
-                      setTaskModalOpen(true);
-                    }}
-                    style={{
-                      border: "none",
-                      background: "#111827",
-                      color: "white",
-                      borderRadius: "999px",
-                      width: "28px",
-                      height: "28px",
-                      cursor: "pointer",
-                      fontWeight: 900,
-                    }}
-                  >
-                    +
-                  </button>
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                    <TaskFilterButtons value={homeTaskFilter} onChange={setHomeTaskFilter} />
+                    <button
+                      onClick={() => {
+                        setSelectedTask(createBlankTask());
+                        setTaskModalOpen(true);
+                      }}
+                      style={{
+                        border: "none",
+                        background: "#111827",
+                        color: "white",
+                        borderRadius: "999px",
+                        width: "28px",
+                        height: "28px",
+                        cursor: "pointer",
+                        fontWeight: 900,
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
                 </div>
 
                 <input
@@ -1943,12 +2040,24 @@ function App() {
                   }}
                 />
 
-                {tasks.length === 0 ? (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
+                  <button
+                    onClick={() => setShowCompletedTasks((value) => !value)}
+                    className="quietLinkButton"
+                    style={{ fontSize: "11px" }}
+                  >
+                    {showCompletedTasks ? "Hide done" : "Show done"}
+                  </button>
+                </div>
+
+                {filterTasksForPerson(tasks, homeTaskFilter).length === 0 ? (
                   <div className="tiny">No household tasks yet.</div>
                 ) : (
                   <div>
-                    {tasks.slice(0, 6).map((task, index) => {
+                    {filterTasksForPerson(tasks, homeTaskFilter).slice(0, 6).map((task, index) => {
                       const theme = getPersonTheme(task.assigned_to);
+                      const pendingComplete = Boolean(pendingTaskCompletion[task.id]);
+                      const completed = task.status === "completed";
 
                       return (
                       <div
@@ -1959,8 +2068,9 @@ function App() {
                           gap: "10px",
                           padding: "10px 12px",
                           borderRadius: "14px",
-                          background:
-                            task.source === "recurring"
+                          background: pendingComplete || completed
+                            ? "#f1f5f9"
+                            : task.source === "recurring"
                               ? "#f8fafc"
                               : theme.soft,
 
@@ -1972,25 +2082,27 @@ function App() {
                         }}
                       >
                         <button
-                          onClick={() => completeTask(task.id)}
+                          onClick={() => completed ? reopenTask(task.id) : completeTask(task.id)}
                           style={{
                             width: "20px",
                             height: "20px",
                             borderRadius: "999px",
                             border: "2px solid #cbd5e1",
-                            background: "white",
+                            background: completed || pendingComplete ? "#111827" : "white",
                             cursor: "pointer",
                             marginTop: "2px",
                             flex: "0 0 auto",
                           }}
                         />
 
-                        <div style={{ minWidth: 0 }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
                           <div
                             style={{
                               fontSize: "14px",
                               fontWeight: 700,
                               lineHeight: 1.3,
+                              textDecoration: pendingComplete || completed ? "line-through" : "none",
+                              color: pendingComplete || completed ? "#64748b" : "#111827",
                             }}
                           >
                             {task.title}
@@ -2009,6 +2121,15 @@ function App() {
                             </div>
                           )}
                         </div>
+                        {pendingComplete && (
+                          <button
+                            className="quietLinkButton"
+                            onClick={() => undoTaskCompletion(task.id)}
+                            style={{ fontSize: "11px", padding: "4px 6px" }}
+                          >
+                            Undo
+                          </button>
+                        )}
                       </div>
                       );
                     })}
@@ -2023,11 +2144,22 @@ function App() {
                     Upcoming events
                   </div>
 
-                  {calendarEvents.length === 0 ? (
+                  {calendarError ? (
+                    <div style={{ color: "#b91c1c", fontSize: "13px", fontWeight: 700, lineHeight: 1.4 }}>
+                      Calendar error: {calendarError}
+                    </div>
+                  ) : calendarEvents.length === 0 ? (
                     <div style={{ color: "#667085" }}>No upcoming events found.</div>
                   ) : (
-                    <EventList events={calendarEvents.slice(0, 8)} />
+                    <EventList events={calendarEvents.slice(0, 8)} compact />
                   )}
+                  <button
+                    className="quietLinkButton"
+                    onClick={loadCalendarEvents}
+                    style={{ marginTop: "8px" }}
+                  >
+                    Refresh events
+                  </button>
                 </div>
 
                 <div style={{ height: "1px", background: "#e5e7eb", margin: "18px 0" }} />
@@ -2067,6 +2199,16 @@ function App() {
               refreshNews={refreshNews}
             />
           )}
+          {activePage === "Energy" && (
+            <EnergyPage
+              rows={energyDayRows.length ? energyDayRows : recentEnergy}
+              summary={energyDaySummary || todaySummary}
+              offset={energyDayOffset}
+              setOffset={setEnergyDayOffset}
+              state={state}
+              isMobile={isMobile}
+            />
+          )}
           {activePage === "Kids" && <KidsPage tasks={tasks} />}
           {activePage === "Lists" && (
             <ListsPage
@@ -2076,6 +2218,11 @@ function App() {
               setNewListItemText={setNewListItemText}
               addListItem={addListItem}
               completeListItem={completeListItem}
+              undoListItemCompletion={undoListItemCompletion}
+              reopenListItem={reopenListItem}
+              showCompletedLists={showCompletedLists}
+              setShowCompletedLists={setShowCompletedLists}
+              pendingListCompletion={pendingListCompletion}
               newListName={newListName}
               setNewListName={setNewListName}
               createList={createList}
@@ -2101,6 +2248,9 @@ function App() {
               assistantStatus={assistantStatus}
               apiBase={API_BASE}
             />
+          )}
+          {activePage === "Weather" && (
+            <WeatherPage weather={weather} />
           )}
         </main>
       </div>
@@ -2389,6 +2539,18 @@ function App() {
           animation: voicePulse 1.25s ease-in-out infinite;
         }
 
+        .voiceOrb.listening {
+          animation: voicePulse 1.1s ease-in-out infinite;
+        }
+
+        .voiceOrb.thinking {
+          animation: voiceThinking 1.2s ease-in-out infinite;
+        }
+
+        .voiceOrb.speaking {
+          animation: voiceSpeaking 0.9s ease-in-out infinite;
+        }
+
         @keyframes voicePulse {
           0% {
             box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.42);
@@ -2399,6 +2561,40 @@ function App() {
           100% {
             box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
           }
+        }
+
+        @keyframes voiceThinking {
+          0%, 100% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(96, 165, 250, 0.36);
+          }
+          50% {
+            transform: scale(0.96);
+            box-shadow: 0 0 0 10px rgba(96, 165, 250, 0);
+          }
+        }
+
+        @keyframes voiceSpeaking {
+          0%, 100% {
+            transform: translateY(0);
+          }
+          50% {
+            transform: translateY(-2px);
+          }
+        }
+
+        .quietLinkButton {
+          border: none;
+          background: #f1f5f9;
+          color: #111827;
+          border-radius: 999px;
+          padding: 7px 10px;
+          font-weight: 900;
+          cursor: pointer;
+        }
+
+        .quietLinkButton:hover {
+          background: #e2e8f0;
         }
 
         .compactSolar {
@@ -2520,6 +2716,22 @@ function App() {
           padding-bottom: 18px;
         }
 
+        .homeEnergyFlowCard {
+          padding: 18px;
+        }
+
+        .homeEnergyFlowCard svg {
+          max-height: 560px;
+        }
+
+        .batteryReserveCard {
+          overflow: visible;
+        }
+
+        .energyPageChart svg {
+          min-height: 420px;
+        }
+
         .solarRow {
           display: flex;
           justify-content: space-between;
@@ -2599,6 +2811,89 @@ function App() {
 
       `}</style>
     </div>
+  );
+}
+
+function TopNavigation({ navItems, activePage, setActivePage, isMobile }) {
+  const items = isMobile ? navItems : [...navItems].reverse();
+
+  return (
+    <header
+      className="topCaseNav"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        gap: "16px",
+        marginBottom: isMobile ? "16px" : "18px",
+      }}
+    >
+      <button
+        onClick={() => setActivePage("Home")}
+        style={{
+          border: "none",
+          background: "transparent",
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          cursor: "pointer",
+          padding: 0,
+          color: "#111827",
+        }}
+        aria-label="Home"
+      >
+        <img
+          src="/case-house.png"
+          alt=""
+          aria-hidden="true"
+          style={{
+            width: isMobile ? "46px" : "52px",
+            height: isMobile ? "34px" : "38px",
+            objectFit: "contain",
+          }}
+        />
+        <span style={{ fontSize: isMobile ? "30px" : "24px", fontWeight: 950, letterSpacing: 0 }}>
+          CASE
+        </span>
+      </button>
+
+      <nav
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "flex-end",
+          gap: isMobile ? "6px" : "8px",
+          flexWrap: "wrap",
+        }}
+        aria-label="Primary"
+      >
+        {items.map(([icon, item]) => (
+          <button
+            key={item}
+            onClick={() => setActivePage(item)}
+            aria-label={item}
+            title={item}
+            className="topNavIconButton"
+            style={{
+              width: isMobile ? "40px" : "42px",
+              height: isMobile ? "40px" : "42px",
+              borderRadius: "14px",
+              border: "1px solid #e2e8f0",
+              background: activePage === item ? "#111827" : "white",
+              color: activePage === item ? "white" : "#111827",
+              boxShadow: activePage === item ? "0 8px 18px rgba(15, 23, 42, 0.18)" : "none",
+              cursor: "pointer",
+              fontSize: "19px",
+              fontWeight: 900,
+              display: "grid",
+              placeItems: "center",
+            }}
+          >
+            {icon}
+          </button>
+        ))}
+      </nav>
+    </header>
   );
 }
 
@@ -2890,6 +3185,99 @@ function InfoMini({ icon, label, value }) {
   );
 }
 
+function HomeEnergyFlowHeader({ unit, period, onOpen }) {
+  return (
+    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "4px" }}>
+      <button
+        onClick={onOpen}
+        style={{
+          border: "none",
+          background: "transparent",
+          padding: 0,
+          textAlign: "left",
+          cursor: "pointer",
+          color: "#111827",
+        }}
+      >
+        <div className="muted">Energy flow</div>
+        <h2 style={{ margin: "2px 0 0", fontSize: "28px" }}>{periodLabel(period)}</h2>
+      </button>
+      <button
+        onClick={onOpen}
+        className="quietLinkButton"
+        style={{ alignSelf: "flex-start" }}
+      >
+        {unit || "kW"} →
+      </button>
+    </div>
+  );
+}
+
+function BatteryReserveCard({ state, fullWidth = false }) {
+  const soc = Math.max(0, Math.min(100, Number(state?.battery_soc || 0)));
+  const usable = Number(state?.battery_usable_kwh || 0);
+  const hue = Math.round((soc / 100) * 120);
+
+  return (
+    <section className="card batteryReserveCard" style={{ minHeight: fullWidth ? undefined : "148px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "12px" }}>
+        <div>
+          <div className="muted">Battery reserve</div>
+          <div style={{ fontSize: "32px", fontWeight: 950, lineHeight: 1.05, marginTop: "8px" }}>
+            {Math.round(soc)}
+            <span style={{ fontSize: "15px", fontWeight: 900, marginLeft: "4px" }}>%</span>
+          </div>
+          <div className="tiny" style={{ marginTop: "5px" }}>{usable.toFixed(1)} kWh usable</div>
+        </div>
+      </div>
+      <div
+        style={{
+          marginTop: "18px",
+          height: "46px",
+          border: "4px solid #111827",
+          borderRadius: "14px",
+          padding: "4px",
+          position: "relative",
+          background: "#f8fafc",
+        }}
+      >
+        <div
+          style={{
+            width: `${soc}%`,
+            height: "100%",
+            borderRadius: "8px",
+            background: `linear-gradient(90deg, hsl(${Math.max(0, hue - 22)} 82% 52%), hsl(${hue} 82% 45%))`,
+            transition: "width 300ms ease",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            right: "-12px",
+            top: "13px",
+            width: "8px",
+            height: "20px",
+            borderRadius: "0 5px 5px 0",
+            background: "#111827",
+          }}
+        />
+      </div>
+    </section>
+  );
+}
+
+function MusicHomeCard() {
+  return (
+    <section className="card">
+      <div className="muted">Music</div>
+      <h2 style={{ margin: "6px 0 8px", fontSize: "22px" }}>YouTube Music</h2>
+      <div className="tiny" style={{ lineHeight: 1.45 }}>
+        Planned via Home Assistant media player. Internet dependent.
+      </div>
+    </section>
+  );
+}
+
 function EnergyCard({ icon, label, value, unit, subtext, inlineSubtext, color = "#111827" }) {
   return (
     <div className="card energyCard">
@@ -2983,16 +3371,65 @@ function HomeRecommendationsCard({ topMessages }) {
   );
 }
 
+function filterTasksForPerson(tasks, filter) {
+  if (!filter || filter === "all") return tasks;
+
+  const expected = filter === "james" ? "james" : "chris";
+
+  return tasks.filter((task) => (task.assigned_to || "").toLowerCase().startsWith(expected));
+}
+
+function TaskFilterButtons({ value, onChange }) {
+  return (
+    <div style={{ display: "inline-flex", gap: "4px" }} aria-label="Task owner filter">
+      {[
+        ["all", "All"],
+        ["james", "J"],
+        ["chris", "C"],
+      ].map(([id, label]) => (
+        <button
+          key={id}
+          onClick={() => onChange(id)}
+          title={id === "all" ? "All tasks" : `${label} tasks`}
+          style={{
+            border: "none",
+            borderRadius: "999px",
+            width: id === "all" ? "36px" : "28px",
+            height: "28px",
+            background: value === id ? "#111827" : "#e5e7eb",
+            color: value === id ? "white" : "#111827",
+            cursor: "pointer",
+            fontSize: "11px",
+            fontWeight: 900,
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function HomeTaskEventsCard({
   tasks,
   calendarEvents,
+  calendarError,
   newTaskTitle,
   setNewTaskTitle,
   createTask,
   completeTask,
+  undoTaskCompletion,
+  reopenTask,
+  taskFilter,
+  setTaskFilter,
+  showCompletedTasks,
+  setShowCompletedTasks,
+  pendingTaskCompletion = {},
   setSelectedTask,
   setTaskModalOpen,
 }) {
+  const visibleTasks = filterTasksForPerson(tasks, taskFilter);
+
   return (
     <section className="card" style={{ marginBottom: "18px" }}>
       <div style={{ marginBottom: "18px" }}>
@@ -3006,24 +3443,27 @@ function HomeTaskEventsCard({
         >
           <div className="muted">Tasks</div>
 
-          <button
-            onClick={() => {
-              setSelectedTask(createBlankTask());
-              setTaskModalOpen(true);
-            }}
-            style={{
-              border: "none",
-              background: "#111827",
-              color: "white",
-              borderRadius: "999px",
-              width: "28px",
-              height: "28px",
-              cursor: "pointer",
-              fontWeight: 900,
-            }}
-          >
-            +
-          </button>
+          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+            <TaskFilterButtons value={taskFilter} onChange={setTaskFilter} />
+            <button
+              onClick={() => {
+                setSelectedTask(createBlankTask());
+                setTaskModalOpen(true);
+              }}
+              style={{
+                border: "none",
+                background: "#111827",
+                color: "white",
+                borderRadius: "999px",
+                width: "28px",
+                height: "28px",
+                cursor: "pointer",
+                fontWeight: 900,
+              }}
+            >
+              +
+            </button>
+          </div>
         </div>
 
         <input
@@ -3046,12 +3486,22 @@ function HomeTaskEventsCard({
           }}
         />
 
-        {tasks.length === 0 ? (
+        <button
+          onClick={() => setShowCompletedTasks((value) => !value)}
+          className="quietLinkButton"
+          style={{ marginBottom: "10px", fontSize: "11px" }}
+        >
+          {showCompletedTasks ? "Hide done" : "Show done"}
+        </button>
+
+        {visibleTasks.length === 0 ? (
           <div className="tiny">No household tasks yet.</div>
         ) : (
           <div>
-            {tasks.slice(0, 4).map((task, index) => {
+            {visibleTasks.slice(0, 4).map((task, index) => {
               const theme = getPersonTheme(task.assigned_to);
+              const pendingComplete = Boolean(pendingTaskCompletion[task.id]);
+              const completed = task.status === "completed";
 
               return (
                 <div
@@ -3062,27 +3512,37 @@ function HomeTaskEventsCard({
                     gap: "10px",
                     padding: "10px 12px",
                     borderRadius: "14px",
-                    background: task.source === "recurring" ? "#f8fafc" : theme.soft,
+                    background: pendingComplete || completed ? "#f1f5f9" : task.source === "recurring" ? "#f8fafc" : theme.soft,
                     border: task.source === "recurring" ? "1px solid #cbd5e1" : `1px solid ${theme.border}`,
                     marginBottom: "8px",
                   }}
                 >
                   <button
-                    onClick={() => completeTask(task.id)}
+                    onClick={() => completed ? reopenTask(task.id) : completeTask(task.id)}
                     style={{
                       width: "20px",
                       height: "20px",
                       borderRadius: "999px",
                       border: "2px solid #cbd5e1",
-                      background: "white",
+                      background: pendingComplete || completed ? "#111827" : "white",
                       cursor: "pointer",
                       marginTop: "2px",
                       flex: "0 0 auto",
                     }}
                   />
 
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: "14px", fontWeight: 700, lineHeight: 1.3 }}>{task.title}</div>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: 700,
+                        lineHeight: 1.3,
+                        textDecoration: pendingComplete || completed ? "line-through" : "none",
+                        color: pendingComplete || completed ? "#64748b" : "#111827",
+                      }}
+                    >
+                      {task.title}
+                    </div>
                     {(task.assigned_to || task.due_date) && (
                       <div className="tiny">
                         {task.assigned_to && `${task.assigned_to}`}
@@ -3096,6 +3556,15 @@ function HomeTaskEventsCard({
                       </div>
                     )}
                   </div>
+                  {pendingComplete && (
+                    <button
+                      className="quietLinkButton"
+                      onClick={() => undoTaskCompletion(task.id)}
+                      style={{ fontSize: "11px", padding: "4px 6px" }}
+                    >
+                      Undo
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -3110,10 +3579,14 @@ function HomeTaskEventsCard({
           Upcoming events
         </div>
 
-        {calendarEvents.length === 0 ? (
+        {calendarError ? (
+          <div style={{ color: "#b91c1c", fontSize: "13px", fontWeight: 700, lineHeight: 1.4 }}>
+            Calendar error: {calendarError}
+          </div>
+        ) : calendarEvents.length === 0 ? (
           <div style={{ color: "#667085" }}>No upcoming events found.</div>
         ) : (
-          <EventList events={calendarEvents.slice(0, 5)} />
+          <EventList events={calendarEvents.slice(0, 5)} compact />
         )}
       </div>
     </section>
@@ -3176,24 +3649,12 @@ function EnergyFlowCard({ summary, activePeriod, onPeriodChange }) {
         </defs>
 
         {flows.map((flow, index) => (
-          flow.thin ? (
-            <path
-              key={`flow-${index}`}
-              d={flow.path}
-              fill="none"
-              stroke={`url(#flow-gradient-${index})`}
-              strokeWidth={flow.strokeWidth}
-              strokeLinecap="round"
-              opacity="0.62"
-            />
-          ) : (
-            <path
-              key={`flow-${index}`}
-              d={flow.path}
-              fill={`url(#flow-gradient-${index})`}
-              opacity="0.62"
-            />
-          )
+          <path
+            key={`flow-${index}`}
+            d={flow.path}
+            fill={`url(#flow-gradient-${index})`}
+            opacity="0.62"
+          />
         ))}
 
         {sourceBlocks.map((item) => (
@@ -3317,16 +3778,10 @@ function buildEnergyFlowRibbons(sources, sinks) {
       const sourceBottom = sourceTop + sourceHeight;
       const sinkTop = sinkCursor[sinkId];
       const sinkBottom = sinkTop + sinkHeight;
-      const thin = Math.min(sourceHeight, sinkHeight) < 5;
-
       flows.push({
         source,
         sink,
-        thin,
-        strokeWidth: Math.max(2, Math.min(4, Math.max(sourceHeight, sinkHeight) * 0.12)),
-        path: thin
-          ? flowLinePath(132, 428, (sourceTop + sourceBottom) / 2, (sinkTop + sinkBottom) / 2)
-          : ribbonPath(132, 428, sourceTop, sourceBottom, sinkTop, sinkBottom),
+        path: ribbonPath(132, 428, sourceTop, sourceBottom, sinkTop, sinkBottom),
       });
 
       sourceCursor[sourceId] += sourceHeight;
@@ -3347,13 +3802,6 @@ function ribbonPath(x1, x2, sourceTop, sourceBottom, sinkTop, sinkBottom) {
     `C ${c2} ${sinkBottom}, ${c1} ${sourceBottom}, ${x1} ${sourceBottom}`,
     "Z",
   ].join(" ");
-}
-
-function flowLinePath(x1, x2, sourceY, sinkY) {
-  const c1 = x1 + 112;
-  const c2 = x2 - 112;
-
-  return `M ${x1} ${sourceY} C ${c1} ${sourceY}, ${c2} ${sinkY}, ${x2} ${sinkY}`;
 }
 
 function EnergyFlowNode({ item, x, width, align }) {
@@ -3417,9 +3865,6 @@ function EnergyFlowBatteryGauge({ x, y, width, align, fill, color }) {
         rx="3"
         fill={color}
       />
-      <text x={gaugeX - 5} y={gaugeY + 36} textAnchor="end" fontSize="14" fontWeight="900" fill={color}>
-        {Math.round(fill)}
-      </text>
     </g>
   );
 }
@@ -3908,7 +4353,7 @@ function ChartLegendItem({ type, color, label, compact = false }) {
   return <LegendLine color={color} label={label} compact={compact} />;
 }
 
-function EventList({ events }) {
+function EventList({ events, compact = false }) {
   return (
     <div>
       {events.map((event, index) => {
@@ -3947,10 +4392,10 @@ function EventList({ events }) {
 
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "64px 1fr",
-                gap: "10px",
-                padding: "10px 0",
+                display: compact ? "block" : "grid",
+                gridTemplateColumns: compact ? undefined : "64px 1fr",
+                gap: compact ? undefined : "10px",
+                padding: compact ? "9px 0" : "10px 0",
                 borderBottom: "1px solid #f1f5f9",
               }}
             >
@@ -3959,6 +4404,7 @@ function EventList({ events }) {
                   fontSize: "12px",
                   color: "#667085",
                   fontWeight: 800,
+                  marginBottom: compact ? "3px" : 0,
                 }}
               >
                 {event.is_all_day
@@ -3992,6 +4438,11 @@ function EventList({ events }) {
                     <span>📍</span>
                     <span>{event.location}</span>
                   </a>
+                )}
+                {event.source?.name && (
+                  <div className="tiny" style={{ marginTop: "4px" }}>
+                    {event.source.name}
+                  </div>
                 )}
               </div>
             </div>
@@ -4897,6 +5348,11 @@ function ListsPage({
   setNewListItemText,
   addListItem,
   completeListItem,
+  undoListItemCompletion,
+  reopenListItem,
+  showCompletedLists,
+  setShowCompletedLists,
+  pendingListCompletion,
   newListName,
   setNewListName,
   createList,
@@ -4937,9 +5393,14 @@ function ListsPage({
             list={primaryList}
             featured
             newListItemText={newListItemText}
-            setNewListItemText={setNewListItemText}
-            addListItem={addListItem}
-            completeListItem={completeListItem}
+              setNewListItemText={setNewListItemText}
+              addListItem={addListItem}
+              completeListItem={completeListItem}
+              undoListItemCompletion={undoListItemCompletion}
+              reopenListItem={reopenListItem}
+              showCompletedLists={showCompletedLists}
+              setShowCompletedLists={setShowCompletedLists}
+              pendingListCompletion={pendingListCompletion}
           />
         )}
 
@@ -4964,6 +5425,11 @@ function ListsPage({
                 setNewListItemText={setNewListItemText}
                 addListItem={addListItem}
                 completeListItem={completeListItem}
+                undoListItemCompletion={undoListItemCompletion}
+                reopenListItem={reopenListItem}
+                showCompletedLists={showCompletedLists}
+                setShowCompletedLists={setShowCompletedLists}
+                pendingListCompletion={pendingListCompletion}
               />
             ))}
 
@@ -4995,6 +5461,115 @@ function ListsPage({
                 Add list
               </button>
             </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}
+
+function EnergyPage({ rows, summary, offset, setOffset, state, isMobile }) {
+  const selectedDate = new Date();
+  selectedDate.setDate(selectedDate.getDate() + offset);
+  const canGoForward = offset < 0;
+  const title =
+    offset === 0
+      ? "Today"
+      : offset === -1
+        ? "Yesterday"
+        : selectedDate.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
+
+  return (
+    <div>
+      <section style={{ marginBottom: "18px" }}>
+        <div className="muted">Energy</div>
+        <h1 style={{ margin: "4px 0 0", fontSize: "32px" }}>{title}</h1>
+      </section>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) 280px",
+          gap: "18px",
+          alignItems: "start",
+        }}
+      >
+        <section className="card energyPageChart">
+          <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "10px" }}>
+            <div>
+              <div className="muted">Power movement</div>
+              <h2 style={{ margin: "2px 0 0", fontSize: "24px" }}>15-minute view</h2>
+            </div>
+            <div style={{ display: "flex", gap: "8px" }}>
+              <button className="button dayNavButton" onClick={() => setOffset(offset - 1)}>←</button>
+              <button
+                className="button dayNavButton"
+                onClick={() => setOffset(offset + 1)}
+                disabled={!canGoForward}
+                style={{ background: canGoForward ? "#111827" : "#cbd5e1", cursor: canGoForward ? "pointer" : "not-allowed" }}
+              >
+                →
+              </button>
+            </div>
+          </div>
+          <EnergyDayChart data={rows} isMobile={isMobile} />
+        </section>
+
+        <aside style={{ display: "grid", gap: "14px" }}>
+          <BatteryReserveCard state={state} />
+          <section className="card">
+            <div className="muted">Day stats</div>
+            <div style={{ display: "grid", gap: "10px", marginTop: "14px" }}>
+              <DeviceDetail label="Solar yield" value={`${Number(summary?.solar_kwh || 0).toFixed(1)} kWh`} />
+              <DeviceDetail label="Home load" value={`${Number(summary?.house_load_net_kwh || summary?.house_load_kwh || 0).toFixed(1)} kWh`} />
+              <DeviceDetail label="EV charge" value={`${Number(summary?.ev_charge_kwh || 0).toFixed(1)} kWh`} />
+              <DeviceDetail label="Grid import" value={`${Number(summary?.grid_import_kwh || 0).toFixed(2)} kWh`} />
+              <DeviceDetail label="Current solar" value={`${formatKw(state?.solar_kw || 0)} kW`} />
+              <DeviceDetail label="Current load" value={`${formatKw(Math.max(0, Number(state?.house_load_kw || 0) - Number(state?.ev_kw || 0)))} kW`} />
+            </div>
+          </section>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function WeatherPage({ weather }) {
+  if (!weather) {
+    return <section className="card">Weather is loading.</section>;
+  }
+
+  return (
+    <div>
+      <section style={{ marginBottom: "18px" }}>
+        <h1 style={{ margin: 0, fontSize: "32px" }}>Weather</h1>
+        <div style={{ marginTop: "8px", fontSize: "15px", color: "#6b7280" }}>
+          Perth forecast and solar conditions
+        </div>
+      </section>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px" }}>
+        <section className="card">
+          <div className="muted">Right now</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "16px", marginTop: "10px" }}>
+            <div style={{ fontSize: "52px" }}>☀️</div>
+            <div>
+              <div style={{ fontSize: "44px", fontWeight: 950, lineHeight: 1 }}>
+                {Math.round(weather.current.temperature_2m)}°
+              </div>
+              <div className="muted">
+                Feels like {Math.round(weather.current.apparent_temperature)}° · Cloud {weather.current.cloud_cover}%
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="card">
+          <div className="muted">Sun and wind</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "10px", marginTop: "14px" }}>
+            <InfoMini icon="↗" label="Sunrise" value={formatTime(weather.sunrise)} />
+            <InfoMini icon="↘" label="Sunset" value={formatTime(weather.sunset)} />
+            <InfoMini icon="💨" label="Wind" value={`${Math.round(weather.current.wind_speed_10m)} km/h`} />
           </div>
         </section>
       </div>
@@ -5801,6 +6376,11 @@ function ListCard({
   setNewListItemText,
   addListItem,
   completeListItem,
+  undoListItemCompletion,
+  reopenListItem,
+  showCompletedLists,
+  setShowCompletedLists,
+  pendingListCompletion = {},
 }) {
   const isGrocery = list.list_type === "grocery" || list.is_primary;
 
@@ -5834,6 +6414,14 @@ function ListCard({
 
         {isGrocery && <span className="listBadge">Pinned</span>}
       </div>
+
+      <button
+        onClick={() => setShowCompletedLists((value) => !value)}
+        className="quietLinkButton"
+        style={{ marginBottom: "12px", fontSize: "12px" }}
+      >
+        {showCompletedLists ? "Hide done items" : "Show done items"}
+      </button>
 
       <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
         <input
@@ -5870,46 +6458,14 @@ function ListCard({
       ) : (
         <div style={{ display: "grid", gap: "8px" }}>
           {list.items.map((item) => (
-            <div
+            <ListItemRow
               key={item.id}
-              style={{
-                display: "flex",
-                gap: "10px",
-                alignItems: "flex-start",
-                padding: "10px 12px",
-                borderRadius: "14px",
-                background: "#f8fafc",
-                border: "1px solid #e2e8f0",
-              }}
-            >
-              <button
-                onClick={() => completeListItem(item.id)}
-                style={{
-                  width: "20px",
-                  height: "20px",
-                  borderRadius: "999px",
-                  border: "2px solid #cbd5e1",
-                  background: "white",
-                  cursor: "pointer",
-                  marginTop: "1px",
-                  flex: "0 0 auto",
-                }}
-              />
-
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: "14px", lineHeight: 1.25 }}>
-                  {item.text}
-                </div>
-
-                {(item.quantity || item.notes) && (
-                  <div className="tiny">
-                    {item.quantity}
-                    {item.quantity && item.notes && " · "}
-                    {item.notes}
-                  </div>
-                )}
-              </div>
-            </div>
+              item={item}
+              pendingComplete={Boolean(pendingListCompletion[item.id])}
+              onComplete={completeListItem}
+              onUndo={undoListItemCompletion}
+              onReopen={reopenListItem}
+            />
           ))}
         </div>
       )}
@@ -5932,6 +6488,67 @@ function ListCard({
         </div>
       )}
     </section>
+  );
+}
+
+function ListItemRow({ item, pendingComplete, onComplete, onUndo, onReopen }) {
+  const completed = item.status === "completed";
+  const muted = pendingComplete || completed;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: "10px",
+        alignItems: "flex-start",
+        padding: "10px 12px",
+        borderRadius: "14px",
+        background: muted ? "#f1f5f9" : "#f8fafc",
+        border: "1px solid #e2e8f0",
+      }}
+    >
+      <button
+        onClick={() => completed ? onReopen(item.id) : onComplete(item.id)}
+        style={{
+          width: "20px",
+          height: "20px",
+          borderRadius: "999px",
+          border: "2px solid #cbd5e1",
+          background: muted ? "#111827" : "white",
+          cursor: "pointer",
+          marginTop: "1px",
+          flex: "0 0 auto",
+        }}
+      />
+
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <div
+          style={{
+            fontWeight: 800,
+            fontSize: "14px",
+            lineHeight: 1.25,
+            textDecoration: muted ? "line-through" : "none",
+            color: muted ? "#64748b" : "#111827",
+          }}
+        >
+          {item.text}
+        </div>
+
+        {(item.quantity || item.notes) && (
+          <div className="tiny">
+            {item.quantity}
+            {item.quantity && item.notes && " · "}
+            {item.notes}
+          </div>
+        )}
+      </div>
+
+      {pendingComplete && (
+        <button className="quietLinkButton" onClick={() => onUndo(item.id)} style={{ fontSize: "11px" }}>
+          Undo
+        </button>
+      )}
+    </div>
   );
 }
 

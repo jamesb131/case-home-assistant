@@ -19,7 +19,7 @@ from app.services.gaggimate_client import (
     get_gaggimate_status,
     offline_status as offline_gaggimate_status,
 )
-from app.services.google_calendar_client import get_calendar_error, get_upcoming_events
+from app.services.calendar_sync import sync_google_calendar
 from app.services.news_client import refresh_news
 from app.services.roborock_client import get_roborock_status
 from app.services.sigenergy_client import get_energy_snapshot, read_sigenergy_registers
@@ -81,18 +81,21 @@ def poll_weather_snapshot():
 
 
 def poll_calendar_snapshot():
-    events = get_upcoming_events(days=30, max_results=50)
+    result = sync_google_calendar(days=60, max_results=100)
+    events = result["events"]
 
-    if events is None:
+    if not result["calendar_available"]:
         return upsert_snapshot(
             "calendar.upcoming",
             {
-                "events": [],
+                "events": events,
                 "calendar_available": False,
+                "local_store_available": True,
+                "synced_count": result["synced_count"],
             },
             status="error",
             ttl_seconds=CALENDAR_INTERVAL_SECONDS,
-            error=get_calendar_error(),
+            error=result["error"],
         )
 
     return upsert_snapshot(
@@ -100,6 +103,8 @@ def poll_calendar_snapshot():
         {
             "events": events,
             "calendar_available": True,
+            "local_store_available": True,
+            "synced_count": result["synced_count"],
         },
         ttl_seconds=CALENDAR_INTERVAL_SECONDS * 3,
     )

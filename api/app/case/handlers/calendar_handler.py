@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from app.services.google_calendar_client import get_upcoming_events
+from app.repositories.calendar_repository import get_upcoming_calendar_events
 
 
 PERTH_TZ = ZoneInfo("Australia/Perth")
@@ -43,15 +43,7 @@ def handle_calendar_intent(intent):
     target_date = infer_target_date(intent)
     days = days_to_fetch(timeframe, target_date)
 
-    events = get_upcoming_events(days=days, max_results=30)
-
-    if events is None:
-        return {
-            "reply": "I couldn't access the calendar right now. It may need reconnecting.",
-            "intent": "calendar_unavailable",
-            "confidence": intent.get("confidence", "medium"),
-            "source": "calendar_handler",
-        }
+    events = get_upcoming_calendar_events(days=days, max_results=30)
 
     filtered = filter_events(events, timeframe, target_date)
 

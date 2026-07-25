@@ -1,7 +1,7 @@
 from app.db import get_connection
 
 
-def get_lists():
+def get_lists(include_completed: bool = False):
     conn = get_connection()
     cur = conn.cursor()
 
@@ -16,16 +16,30 @@ def get_lists():
     lists = [map_list(row) for row in cur.fetchall()]
 
     for list_item in lists:
-        cur.execute(
-            """
-            SELECT id, list_id, text, quantity, notes, status, sort_order, created_at, updated_at, completed_at
-            FROM household_list_items
-            WHERE list_id = %s
-              AND status != 'completed'
-            ORDER BY sort_order, created_at;
-            """,
-            (list_item["id"],),
-        )
+        if include_completed:
+            cur.execute(
+                """
+                SELECT id, list_id, text, quantity, notes, status, sort_order, created_at, updated_at, completed_at
+                FROM household_list_items
+                WHERE list_id = %s
+                ORDER BY
+                    CASE WHEN status = 'completed' THEN 1 ELSE 0 END,
+                    sort_order,
+                    created_at;
+                """,
+                (list_item["id"],),
+            )
+        else:
+            cur.execute(
+                """
+                SELECT id, list_id, text, quantity, notes, status, sort_order, created_at, updated_at, completed_at
+                FROM household_list_items
+                WHERE list_id = %s
+                  AND status != 'completed'
+                ORDER BY sort_order, created_at;
+                """,
+                (list_item["id"],),
+            )
 
         list_item["items"] = [map_item(row) for row in cur.fetchall()]
 
@@ -104,6 +118,28 @@ def complete_list_item(item_id):
     conn.close()
 
     return {"completed": True, "id": str(item_id)}
+
+
+def reopen_list_item(item_id):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        UPDATE household_list_items
+        SET status = 'pending',
+            completed_at = NULL,
+            updated_at = NOW()
+        WHERE id = %s;
+        """,
+        (str(item_id),),
+    )
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return {"reopened": True, "id": str(item_id)}
 
 
 def delete_list_item(item_id):

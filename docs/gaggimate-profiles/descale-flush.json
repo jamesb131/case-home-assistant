@@ -1,0 +1,197 @@
+{
+  "label": "Descale Flush",
+  "type": "standard",
+  "description": "Clean-water steam-wand-only flush after descaling. Fill tank with clean water. Supervise and stop when tank is empty.",
+  "temperature": 25,
+  "phases": [
+    {
+      "name": "CLEAN WATER + OPEN STEAM VALVE",
+      "phase": "preinfusion",
+      "valve": 0,
+      "duration": 30,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Flush 1/10 - stop if tank empty",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Check tank/container",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 15,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Flush 2/10 - stop if tank empty",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Check tank/container",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 15,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Flush 3/10 - stop if tank empty",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Check tank/container",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 15,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Flush 4/10 - stop if tank empty",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Check tank/container",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 15,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Flush 5/10 - stop if tank empty",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Check tank/container",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 15,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Flush 6/10 - stop if tank empty",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Check tank/container",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 15,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Flush 7/10 - stop if tank empty",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Check tank/container",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 15,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Flush 8/10 - stop if tank empty",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Check tank/container",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 15,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Flush 9/10 - stop if tank empty",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Check tank/container",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 15,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Flush 10/10 - final clean water",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Done - close steam valve",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 180,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    }
+  ]
+}

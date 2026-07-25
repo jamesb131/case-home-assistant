@@ -1,0 +1,161 @@
+{
+  "label": "Descale",
+  "type": "standard",
+  "description": "Steam-wand-only descale. Open steam valve before pump starts. Supervise and stop if tank or container needs attention.",
+  "temperature": 80,
+  "phases": [
+    {
+      "name": "OPEN STEAM VALVE - wand only",
+      "phase": "preinfusion",
+      "valve": 0,
+      "duration": 20,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Descale 1/8 - pump through wand",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Soak 1/7 - keep valve open",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 180,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Descale 2/8 - stop if tank empty",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Soak 2/7 - check container",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 180,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Descale 3/8 - stop if tank empty",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Soak 3/7 - keep valve open",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 180,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Descale 4/8 - stop if tank empty",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Soak 4/7 - check container",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 180,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Descale 5/8 - stop if tank empty",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Soak 5/7 - keep valve open",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 180,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Descale 6/8 - stop if tank empty",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Soak 6/7 - check container",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 180,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Descale 7/8 - stop if tank empty",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Soak 7/7 - final soak",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 180,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    },
+    {
+      "name": "Descale 8/8 - final pump",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 60,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 100
+    },
+    {
+      "name": "Done - prepare clean water flush",
+      "phase": "brew",
+      "valve": 0,
+      "duration": 300,
+      "temperature": 0,
+      "transition": { "type": "instant", "duration": 0, "adaptive": false },
+      "pump": 0
+    }
+  ]
+}

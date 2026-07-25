@@ -10,6 +10,7 @@ from app.repositories.lists_repository import (
     get_list,
     add_list_item,
     complete_list_item,
+    reopen_list_item,
     delete_list_item,
 )
 
@@ -30,8 +31,8 @@ class AddListItemRequest(BaseModel):
 
 
 @router.get("")
-def list_household_lists():
-    return {"lists": get_lists()}
+def list_household_lists(include_completed: bool = False):
+    return {"lists": get_lists(include_completed=include_completed)}
 
 
 @router.post("")
@@ -77,6 +78,11 @@ def add_item(list_id: UUID, request: AddListItemRequest):
 @router.post("/items/{item_id}/complete")
 def complete_item(item_id: UUID):
     return complete_list_item(item_id)
+
+
+@router.post("/items/{item_id}/reopen")
+def reopen_item(item_id: UUID):
+    return reopen_list_item(item_id)
 
 
 @router.delete("/items/{item_id}")
