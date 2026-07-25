@@ -1560,7 +1560,7 @@ function App() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) 330px",
+              gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 3fr) minmax(300px, 1fr)",
               gap: "20px",
               alignItems: "start",
             }}
@@ -1584,7 +1584,7 @@ function App() {
                   display: "grid",
                   gridTemplateColumns: isMobile
                     ? "1fr"
-                    : "minmax(250px, 1fr) minmax(250px, 1fr) minmax(380px, 440px)",
+                    : "repeat(3, minmax(0, 1fr))",
                   gap: "18px",
                   marginBottom: "18px",
                   alignItems: "start",
@@ -1683,9 +1683,11 @@ function App() {
                     className="card homeEnergyFlowCard"
                     style={{
                       gridColumn: "3",
-                      gridRow: "1 / 3",
-                      alignSelf: "start",
+                      gridRow: "1 / 4",
+                      alignSelf: "stretch",
                       marginBottom: 0,
+                      display: "grid",
+                      alignContent: "start",
                     }}
                   >
                     <HomeEnergyFlowHeader
@@ -2957,11 +2959,10 @@ function TopNavigation({ navItems, activePage, setActivePage, isMobile }) {
       className="topCaseNav"
       style={{
         display: "flex",
-        alignItems: "center",
+        alignItems: isMobile ? "center" : "flex-start",
         justifyContent: "space-between",
         gap: "16px",
-        marginBottom: isMobile ? "16px" : "18px",
-        paddingRight: !isMobile && activePage === "Home" ? "350px" : 0,
+        marginBottom: isMobile ? "16px" : "10px",
       }}
     >
       <button
@@ -3000,6 +3001,7 @@ function TopNavigation({ navItems, activePage, setActivePage, isMobile }) {
           justifyContent: "flex-end",
           gap: isMobile ? "6px" : "8px",
           flexWrap: "wrap",
+          marginTop: isMobile ? 0 : "42px",
         }}
         aria-label="Primary"
       >
@@ -4653,6 +4655,42 @@ function EventList({ events, compact = false }) {
   );
 }
 
+function PlannerViewToggle({ plannerView, setPlannerView }) {
+  return (
+    <div
+      style={{
+        display: "inline-flex",
+        gap: "8px",
+        background: "#e5e7eb",
+        padding: "5px",
+        borderRadius: "999px",
+        marginBottom: "18px",
+      }}
+    >
+      {[
+        ["month", "Month"],
+        ["upcoming", "Upcoming"],
+      ].map(([value, label]) => (
+        <button
+          key={value}
+          onClick={() => setPlannerView(value)}
+          style={{
+            border: "none",
+            background: plannerView === value ? "#111827" : "transparent",
+            color: plannerView === value ? "white" : "#111827",
+            borderRadius: "999px",
+            padding: "10px 16px",
+            fontWeight: 800,
+            cursor: "pointer",
+          }}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function PlannerPage({
   tasks,
   calendarEvents,
@@ -4714,61 +4752,18 @@ function PlannerPage({
   return (
     <div>
       <section style={{ marginBottom: "18px" }}>
+        <h1 style={{ margin: 0, fontSize: "32px" }}>
+          Planner
+        </h1>
+
         <div
           style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
+            marginTop: "8px",
+            fontSize: "15px",
+            color: "#6b7280",
           }}
         >
-          <div>
-            <h1 style={{ margin: 0, fontSize: "32px" }}>
-              Planner
-            </h1>
-
-            <div
-              style={{
-                marginTop: "8px",
-                fontSize: "15px",
-                color: "#6b7280",
-              }}
-            >
-              Household planning and coordination
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: "flex",
-              gap: "8px",
-              background: "#e5e7eb",
-              padding: "5px",
-              borderRadius: "999px",
-            }}
-          >
-            {[
-              ["month", "Month"],
-              ["upcoming", "Upcoming"],
-            ].map(([value, label]) => (
-              <button
-                key={value}
-                onClick={() => setPlannerView(value)}
-                style={{
-                  border: "none",
-                  background:
-                    plannerView === value ? "#111827" : "transparent",
-                  color:
-                    plannerView === value ? "white" : "#111827",
-                  borderRadius: "999px",
-                  padding: "10px 16px",
-                  fontWeight: 800,
-                  cursor: "pointer",
-                }}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          Household planning and coordination
         </div>
       </section>
 
@@ -4820,6 +4815,8 @@ function PlannerPage({
                   →
                 </button>
               </div>
+
+              <PlannerViewToggle plannerView={plannerView} setPlannerView={setPlannerView} />
 
               <div
                 style={{
@@ -4886,9 +4883,20 @@ function PlannerPage({
             </>
           ) : (
             <>
-              <h2 style={{ marginTop: 0 }}>
-                Upcoming 10 days
-              </h2>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "12px",
+                  marginBottom: "18px",
+                }}
+              >
+                <h2 style={{ margin: 0 }}>
+                  Upcoming 10 days
+                </h2>
+                <PlannerViewToggle plannerView={plannerView} setPlannerView={setPlannerView} />
+              </div>
 
               {upcomingDays.map((day) => {
                 const dayEvents = eventsForDay(day);
