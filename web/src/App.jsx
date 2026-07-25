@@ -1582,14 +1582,19 @@ function App() {
               <section
                 style={{
                   display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) minmax(360px, 440px)",
+                  gridTemplateColumns: isMobile
+                    ? "1fr"
+                    : "minmax(250px, 1fr) minmax(250px, 1fr) minmax(380px, 440px)",
                   gap: "18px",
                   marginBottom: "18px",
                   alignItems: "start",
                 }}
               >
                 {weather && (
-                  <div className="card">
+                  <div
+                    className="card"
+                    style={isMobile ? undefined : { gridColumn: "1 / 3", gridRow: "1" }}
+                  >
                     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1.2fr", gap: "20px" }}>
                       <div>
                         <div className="muted">Perth forecast</div>
@@ -1677,9 +1682,10 @@ function App() {
                   <section
                     className="card homeEnergyFlowCard"
                     style={{
-                      gridColumn: "2",
-                      gridRow: "1 / span 2",
+                      gridColumn: "3",
+                      gridRow: "1 / 3",
                       alignSelf: "start",
+                      marginBottom: 0,
                     }}
                   >
                     <HomeEnergyFlowHeader
@@ -1699,9 +1705,117 @@ function App() {
                 )}
 
                 {!isMobile && (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "14px" }}>
-                    <BatteryReserveCard state={state} />
+                  <CoffeeMachineHomeCard
+                    status={gaggimateStatus}
+                    profiles={gaggimateProfiles}
+                    onOpen={() => setActivePage("IoT")}
+                    onRefresh={refreshGaggimate}
+                    onModeChange={changeGaggimateMode}
+                    onProfileSelect={selectGaggimateProfile}
+                    style={{ gridColumn: "1", gridRow: "2", marginBottom: 0, height: "100%" }}
+                  />
+                )}
+
+                {!isMobile && (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateRows: "minmax(0, 1fr) minmax(0, 1fr)",
+                      gap: "14px",
+                      gridColumn: "2",
+                      gridRow: "2",
+                      alignSelf: "stretch",
+                    }}
+                  >
                     <MusicHomeCard />
+                    <BatteryReserveCard state={state} />
+                  </div>
+                )}
+
+                {!isMobile && (
+                  <AirTouchCard
+                    status={airtouchStatus}
+                    error={airtouchError}
+                    onCommand={runAirtouchCommand}
+                    onRefresh={refreshAirtouch}
+                    onOpen={() => setActivePage("IoT")}
+                    compact
+                    style={{ gridColumn: "1", gridRow: "3", marginBottom: 0 }}
+                  />
+                )}
+
+                {!isMobile && (
+                  <RoborockHomeCard
+                    status={roborockStatus}
+                    onOpen={() => setActivePage("IoT")}
+                    onRefresh={refreshRoborock}
+                    style={{ gridColumn: "2", gridRow: "3", marginBottom: 0 }}
+                  />
+                )}
+
+                {!isMobile && weather && (
+                  <div className="card compactSolar" style={{ gridColumn: "3", gridRow: "3", marginBottom: 0 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+                      <div>
+                        <div className="muted">Solar window</div>
+                        <h2 style={{ margin: "6px 0 0", fontSize: "20px", lineHeight: 1.2 }}>
+                          {formatTime(weather.sunrise)} → {formatTime(weather.sunset)}
+                        </h2>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: "16px" }}>
+                      <div className="muted" style={{ marginBottom: "8px" }}>
+                        Today
+                      </div>
+
+                      <div style={{ display: "grid", gap: "8px" }}>
+                        {weather.solar_bands.map((band) => (
+                          <div key={band.name} className="solarRow">
+                            <span style={{ textTransform: "capitalize" }}>{band.name}</span>
+                            <strong style={{ color: qualityColor(band.quality), textTransform: "capitalize" }}>
+                              {band.quality}
+                            </strong>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: "14px" }}>
+                      <div className="muted" style={{ marginBottom: "8px" }}>
+                        Coming days
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" }}>
+                        {(weather.daily_solar_outlook || []).slice(1, 4).map((day) => (
+                          <div
+                            key={day.date}
+                            className="solarRow"
+                            style={{
+                              display: "grid",
+                              justifyItems: "center",
+                              gap: "4px",
+                              textAlign: "center",
+                            }}
+                          >
+                            <span>
+                              {new Date(day.date).toLocaleDateString([], { weekday: "short" })}
+                            </span>
+                            <strong style={{ color: qualityColor(day.quality), textTransform: "capitalize" }}>
+                              {day.quality}
+                            </strong>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <button
+                      className="button"
+                      onClick={() => setActivePage("Energy")}
+                      style={{ marginTop: "16px", width: "100%" }}
+                    >
+                      Energy details →
+                    </button>
                   </div>
                 )}
               </section>
@@ -1729,34 +1843,13 @@ function App() {
                 </>
               )}
 
-              {!isMobile && (
-                <>
-                  <CoffeeMachineHomeCard
-                    status={gaggimateStatus}
-                    profiles={gaggimateProfiles}
-                    onOpen={() => setActivePage("IoT")}
-                    onRefresh={refreshGaggimate}
-                    onModeChange={changeGaggimateMode}
-                    onProfileSelect={selectGaggimateProfile}
-                  />
-
-                  <AirTouchCard
-                    status={airtouchStatus}
-                    error={airtouchError}
-                    onCommand={runAirtouchCommand}
-                    onRefresh={refreshAirtouch}
-                    onOpen={() => setActivePage("IoT")}
-                    compact
-                  />
-                </>
-              )}
-
               <section
                 style={{
                   display: "grid",
                   gridTemplateColumns: isMobile ? "1fr" : "minmax(280px, 340px)",
                   gap: "18px",
                   marginBottom: "18px",
+                  ...(isMobile ? {} : { display: "none" }),
                 }}
               >
                 {weather && (
@@ -2867,7 +2960,8 @@ function TopNavigation({ navItems, activePage, setActivePage, isMobile }) {
         alignItems: "center",
         justifyContent: "space-between",
         gap: "16px",
-        marginBottom: isMobile ? "16px" : "-34px",
+        marginBottom: isMobile ? "16px" : "18px",
+        paddingRight: !isMobile && activePage === "Home" ? "350px" : 0,
       }}
     >
       <button
@@ -2906,7 +3000,6 @@ function TopNavigation({ navItems, activePage, setActivePage, isMobile }) {
           justifyContent: "flex-end",
           gap: isMobile ? "6px" : "8px",
           flexWrap: "wrap",
-          marginTop: isMobile ? 0 : "42px",
         }}
         aria-label="Primary"
       >
@@ -3082,7 +3175,7 @@ function SystemStatusPanel({ items, compact = false }) {
   );
 }
 
-function CoffeeMachineHomeCard({ status, profiles = [], onOpen, onRefresh, onModeChange, onProfileSelect }) {
+function CoffeeMachineHomeCard({ status, profiles = [], onOpen, onRefresh, onModeChange, onProfileSelect, style }) {
   const online = status?.online === true;
   const temp = status?.current_temp_c;
   const target = status?.target_temp_c;
@@ -3090,7 +3183,7 @@ function CoffeeMachineHomeCard({ status, profiles = [], onOpen, onRefresh, onMod
   const selectedProfile = getSelectedGaggimateProfile(profiles, status?.profile_label);
 
   return (
-    <section className="card coffeeHomeCard">
+    <section className="card coffeeHomeCard" style={style}>
       <button
         className="deviceArtworkLink coffeeHomeArtworkLink"
         onClick={onOpen}
@@ -3324,6 +3417,63 @@ function MusicHomeCard() {
       <div className="tiny" style={{ lineHeight: 1.45 }}>
         Planned via Home Assistant media player. Internet dependent.
       </div>
+    </section>
+  );
+}
+
+function RoborockHomeCard({ status, onOpen, onRefresh, style }) {
+  const available = status?.available === true;
+  const roborockState = compactRoborockState(status);
+  const battery =
+    status?.battery_level === null || status?.battery_level === undefined
+      ? "--"
+      : `${Math.round(Number(status.battery_level))}%`;
+
+  return (
+    <section className="card" style={style}>
+      <div style={{ display: "flex", alignItems: "center", gap: "12px", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+          <button
+            className="deviceArtworkLink"
+            onClick={onOpen}
+            aria-label="Open vacuum controls"
+            title="Open IoT controls"
+          >
+            <img
+              className="deviceArtwork"
+              src="/devices/roborock-qrevo-maxq.png"
+              alt=""
+              aria-hidden="true"
+            />
+          </button>
+          <div style={{ minWidth: 0 }}>
+            <div className="muted">Vacuum</div>
+            <h2 style={{ margin: "4px 0 0", fontSize: "22px", lineHeight: 1.1 }}>Roborock</h2>
+          </div>
+        </div>
+        <span
+          style={{
+            borderRadius: "999px",
+            padding: "6px 9px",
+            fontSize: "11px",
+            fontWeight: 900,
+            background: available ? "#dcfce7" : "#fee2e2",
+            color: available ? "#15803d" : "#b91c1c",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {available ? "Online" : status?.configured === false ? "Setup" : "Offline"}
+        </span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "10px", marginTop: "14px" }}>
+        <MetricBox label="State" value={roborockState || "--"} />
+        <MetricBox label="Battery" value={battery} />
+      </div>
+
+      <button className="button" onClick={onRefresh} style={{ marginTop: "14px", width: "100%" }}>
+        Refresh vacuum
+      </button>
     </section>
   );
 }
@@ -3975,14 +4125,14 @@ function TinyTempLine({ points, color }) {
 }
 
 function EnergyDayChart({ data, isMobile = false }) {
-  const width = 1100;
-  const height = isMobile ? 210 : 420;
+  const width = isMobile ? 1100 : 1240;
+  const height = isMobile ? 210 : 540;
 
   const margin = {
     top: isMobile ? 16 : 18,
-    right: isMobile ? 22 : 54,
+    right: isMobile ? 22 : 38,
     bottom: isMobile ? 18 : 24,
-    left: isMobile ? 30 : 50,
+    left: isMobile ? 30 : 42,
   };
 
   const plotWidth = width - margin.left - margin.right;
@@ -4078,7 +4228,7 @@ function EnergyDayChart({ data, isMobile = false }) {
     <div style={{ width: "100%", overflow: "hidden" }}>
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        style={{ width: "100%", height: isMobile ? "210px" : "420px", display: "block" }}
+        style={{ width: "100%", height: isMobile ? "210px" : "540px", display: "block" }}
       >
         {(isMobile ? [-10, -5, 0, 5, 10] : [-20, -10, 0, 10, 20]).map((kw) => {
           const y = yFromKw(kw);
@@ -4098,7 +4248,7 @@ function EnergyDayChart({ data, isMobile = false }) {
                 x={margin.left - 12}
                 y={y + 4}
                 textAnchor="end"
-                fontSize="11"
+                fontSize={isMobile ? "11" : "13"}
                 fill="#6b7280"
               >
                 {kw}
@@ -4133,7 +4283,7 @@ function EnergyDayChart({ data, isMobile = false }) {
                 x={x}
                 y={height - 10}
                 textAnchor="middle"
-                fontSize="11"
+                fontSize={isMobile ? "11" : "13"}
                 fill="#6b7280"
               >
                 {label}
@@ -4142,7 +4292,7 @@ function EnergyDayChart({ data, isMobile = false }) {
           );
         })}
 
-        <text x={margin.left} y={12} fontSize="12" fill="#667085">
+        <text x={margin.left} y={12} fontSize={isMobile ? "12" : "14"} fill="#667085">
           Power (kW)
         </text>
 
@@ -4150,7 +4300,7 @@ function EnergyDayChart({ data, isMobile = false }) {
           x={width - margin.right}
           y={12}
           textAnchor="end"
-          fontSize="12"
+          fontSize={isMobile ? "12" : "14"}
           fill="#667085"
         >
           Battery SoC (%)
@@ -4264,7 +4414,7 @@ function EnergyDayChart({ data, isMobile = false }) {
               x={nowX}
               y={margin.top - 5}
               textAnchor="middle"
-              fontSize="11"
+              fontSize={isMobile ? "11" : "12"}
               fill="white"
               fontWeight="800"
             >
@@ -4284,7 +4434,7 @@ function EnergyDayChart({ data, isMobile = false }) {
           columnGap: isMobile ? "8px" : undefined,
           alignItems: "center",
           justifyContent: isMobile ? "space-between" : "stretch",
-          fontSize: isMobile ? "10px" : "13px",
+          fontSize: isMobile ? "10px" : "14px",
           color: "#667085",
           marginTop: isMobile ? "2px" : "8px",
           paddingLeft: isMobile ? 0 : `${margin.left}px`,
@@ -5532,8 +5682,10 @@ function EnergyPage({ rows, summary, offset, setOffset, state, isMobile }) {
   return (
     <div>
       <section style={{ marginBottom: "18px" }}>
-        <div className="muted">Energy</div>
-        <h1 style={{ margin: "4px 0 0", fontSize: "32px" }}>{title}</h1>
+        <h1 style={{ margin: 0, fontSize: "34px", lineHeight: 1.05 }}>Energy</h1>
+        <div style={{ marginTop: "8px", fontSize: "18px", fontWeight: 900, color: "#111827" }}>
+          {title}
+        </div>
       </section>
 
       <div
@@ -6024,7 +6176,7 @@ const AIRTOUCH_MODE_THEMES = {
   auto: { color: "#22c55e", soft: "#dcfce7" },
 };
 
-function AirTouchCard({ status, error, onCommand, onRefresh, onOpen, compact = false }) {
+function AirTouchCard({ status, error, onCommand, onRefresh, onOpen, compact = false, style }) {
   const modeTheme = getAirtouchModeTheme(status?.mode);
   const artwork = (
     <img
@@ -6036,7 +6188,7 @@ function AirTouchCard({ status, error, onCommand, onRefresh, onOpen, compact = f
   );
 
   return (
-    <section className="card">
+    <section className="card" style={style}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0 }}>
           {onOpen ? (
