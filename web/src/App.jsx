@@ -1525,8 +1525,16 @@ function App() {
               <div style={{ marginTop: "12px", fontSize: "13px", opacity: 0.78 }}>
                 {assistantPhaseText}
               </div>
-              <div style={{ display: "flex", gap: "8px", marginTop: "14px", flexWrap: "wrap" }}>
-                {navItems.slice(1, 6).map(([icon, item]) => (
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  marginTop: "14px",
+                  flexWrap: "wrap",
+                  justifyContent: "center",
+                }}
+              >
+                {navItems.map(([icon, item]) => (
                   <button
                     key={item}
                     onClick={() => setActivePage(item)}
@@ -1537,8 +1545,8 @@ function App() {
                       borderRadius: "14px",
                       width: "42px",
                       height: "42px",
-                      background: "rgba(255,255,255,0.12)",
-                      color: "white",
+                      background: activePage === item ? "white" : "rgba(255,255,255,0.12)",
+                      color: activePage === item ? "#111827" : "white",
                       fontSize: "18px",
                       fontWeight: 800,
                     }}
@@ -1574,9 +1582,10 @@ function App() {
               <section
                 style={{
                   display: "grid",
-                  gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) 320px",
+                  gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) minmax(360px, 440px)",
                   gap: "18px",
                   marginBottom: "18px",
+                  alignItems: "start",
                 }}
               >
                 {weather && (
@@ -1665,7 +1674,32 @@ function App() {
                 )}
 
                 {!isMobile && (
-                  <div style={{ display: "grid", gap: "14px" }}>
+                  <section
+                    className="card homeEnergyFlowCard"
+                    style={{
+                      gridColumn: "2",
+                      gridRow: "1 / span 2",
+                      alignSelf: "start",
+                    }}
+                  >
+                    <HomeEnergyFlowHeader
+                      unit={energyFlowSummary?.unit || "kW"}
+                      period={energyFlowPeriod}
+                      onOpen={() => setActivePage("Energy")}
+                    />
+                    <EnergyFlowCard
+                      summary={energyFlowSummary}
+                      activePeriod={energyFlowPeriod}
+                      onPeriodChange={(period) => {
+                        setEnergyFlowPeriod(period);
+                        loadEnergyFlowSummary(period);
+                      }}
+                    />
+                  </section>
+                )}
+
+                {!isMobile && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "14px" }}>
                     <BatteryReserveCard state={state} />
                     <MusicHomeCard />
                   </div>
@@ -1697,27 +1731,6 @@ function App() {
 
               {!isMobile && (
                 <>
-                  <section
-                    className="card homeEnergyFlowCard"
-                    style={{
-                      marginBottom: "18px",
-                    }}
-                  >
-                    <HomeEnergyFlowHeader
-                      unit={energyFlowSummary?.unit || "kW"}
-                      period={energyFlowPeriod}
-                      onOpen={() => setActivePage("Energy")}
-                    />
-                    <EnergyFlowCard
-                      summary={energyFlowSummary}
-                      activePeriod={energyFlowPeriod}
-                      onPeriodChange={(period) => {
-                        setEnergyFlowPeriod(period);
-                        loadEnergyFlowSummary(period);
-                      }}
-                    />
-                  </section>
-
                   <CoffeeMachineHomeCard
                     status={gaggimateStatus}
                     profiles={gaggimateProfiles}
@@ -1732,6 +1745,7 @@ function App() {
                     error={airtouchError}
                     onCommand={runAirtouchCommand}
                     onRefresh={refreshAirtouch}
+                    onOpen={() => setActivePage("IoT")}
                     compact
                   />
                 </>
@@ -1746,7 +1760,7 @@ function App() {
                 }}
               >
                 {weather && (
-                  <div className="card compactSolar" style={{ order: isMobile ? 2 : 0 }}>
+                  <div className="card compactSolar" style={{ order: isMobile ? 3 : 0 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
                       <div>
                         <div className="muted">Solar window</div>
@@ -1853,12 +1867,16 @@ function App() {
                   </div>
                 </div>
                 )}
+
+                {isMobile && (
+                  <div style={{ order: 2 }}>
+                    <BatteryReserveCard state={state} fullWidth />
+                  </div>
+                )}
               </section>
 
               {isMobile && (
                 <>
-                  <BatteryReserveCard state={state} fullWidth />
-
                   <CoffeeMachineHomeCard
                     status={gaggimateStatus}
                     profiles={gaggimateProfiles}
@@ -1873,6 +1891,7 @@ function App() {
                     error={airtouchError}
                     onCommand={runAirtouchCommand}
                     onRefresh={refreshAirtouch}
+                    onOpen={() => setActivePage("IoT")}
                     compact
                   />
 
@@ -1888,7 +1907,7 @@ function App() {
               style={{
                 display: "flex",
                 flexDirection: "column",
-                gap: "18px",
+                gap: "14px",
                 position: isMobile ? "static" : "sticky",
                 top: isMobile ? undefined : "20px",
               }}
@@ -1898,7 +1917,7 @@ function App() {
                   borderRadius: "20px",
                   background: "#111827",
                   color: "white",
-                  padding: "14px",
+                  padding: "10px 12px",
                   boxShadow: "0 14px 40px rgba(15, 23, 42, 0.16)",
                 }}
               >
@@ -1922,16 +1941,19 @@ function App() {
                       fontSize: "14px",
                       cursor: "pointer",
                       textAlign: "left",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      flexWrap: "wrap",
                     }}
                   >
-                    Ask CASE
+                    <span>Ask CASE</span>
                     <div
                       className={`assistantStatusPill ${assistantPhase}`}
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
                         gap: "6px",
-                        marginTop: "10px",
                         padding: "5px 8px",
                         borderRadius: "999px",
                         background: assistantAvailable
@@ -1958,9 +1980,9 @@ function App() {
                     onClick={startVoiceRecognition}
                     className={`voiceOrb ${assistantPhase}`}
                     style={{
-                      width: "54px",
-                      height: "54px",
-                      flex: "0 0 54px",
+                      width: "46px",
+                      height: "46px",
+                      flex: "0 0 46px",
                       borderRadius: "999px",
                       border: "none",
                       cursor: "pointer",
@@ -2619,6 +2641,30 @@ function App() {
           justify-self: center;
         }
 
+        .deviceArtworkLink {
+          border: none;
+          background: transparent;
+          padding: 0;
+          margin: 0;
+          cursor: pointer;
+          display: inline-grid;
+          place-items: center;
+          flex: 0 0 auto;
+        }
+
+        .coffeeHomeArtworkLink {
+          align-self: center;
+          justify-self: center;
+        }
+
+        .deviceArtworkLink:hover img {
+          transform: translateY(-1px);
+        }
+
+        .deviceArtworkLink img {
+          transition: transform 140ms ease;
+        }
+
         .coffeeHomeBody {
           min-width: 0;
           display: grid;
@@ -2728,10 +2774,6 @@ function App() {
           overflow: visible;
         }
 
-        .energyPageChart svg {
-          min-height: 420px;
-        }
-
         .solarRow {
           display: flex;
           justify-content: space-between;
@@ -2825,7 +2867,7 @@ function TopNavigation({ navItems, activePage, setActivePage, isMobile }) {
         alignItems: "center",
         justifyContent: "space-between",
         gap: "16px",
-        marginBottom: isMobile ? "16px" : "18px",
+        marginBottom: isMobile ? "16px" : "-34px",
       }}
     >
       <button
@@ -2859,11 +2901,12 @@ function TopNavigation({ navItems, activePage, setActivePage, isMobile }) {
 
       <nav
         style={{
-          display: "flex",
+          display: isMobile ? "none" : "flex",
           alignItems: "center",
           justifyContent: "flex-end",
           gap: isMobile ? "6px" : "8px",
           flexWrap: "wrap",
+          marginTop: isMobile ? 0 : "42px",
         }}
         aria-label="Primary"
       >
@@ -3048,11 +3091,18 @@ function CoffeeMachineHomeCard({ status, profiles = [], onOpen, onRefresh, onMod
 
   return (
     <section className="card coffeeHomeCard">
-      <img
-        className="coffeeHomeArtwork"
-        src="/devices/gaggia-classic.png"
-        alt="Gaggia Classic coffee machine"
-      />
+      <button
+        className="deviceArtworkLink coffeeHomeArtworkLink"
+        onClick={onOpen}
+        aria-label="Open coffee machine controls"
+        title="Open IoT controls"
+      >
+        <img
+          className="coffeeHomeArtwork"
+          src="/devices/gaggia-classic.png"
+          alt="Gaggia Classic coffee machine"
+        />
+      </button>
 
       <div className="coffeeHomeBody">
         <button
@@ -3926,7 +3976,7 @@ function TinyTempLine({ points, color }) {
 
 function EnergyDayChart({ data, isMobile = false }) {
   const width = 1100;
-  const height = isMobile ? 210 : 320;
+  const height = isMobile ? 210 : 420;
 
   const margin = {
     top: isMobile ? 16 : 18,
@@ -4028,7 +4078,7 @@ function EnergyDayChart({ data, isMobile = false }) {
     <div style={{ width: "100%", overflow: "hidden" }}>
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        style={{ width: "100%", height: isMobile ? "210px" : "320px", display: "block" }}
+        style={{ width: "100%", height: isMobile ? "210px" : "420px", display: "block" }}
       >
         {(isMobile ? [-10, -5, 0, 5, 10] : [-20, -10, 0, 10, 20]).map((kw) => {
           const y = yFromKw(kw);
@@ -4226,17 +4276,17 @@ function EnergyDayChart({ data, isMobile = false }) {
 
       <div
         style={{
-          display: isMobile ? "grid" : "flex",
+          display: isMobile ? "grid" : "grid",
           gridTemplateColumns: isMobile ? "repeat(3, minmax(0, auto))" : undefined,
+          ...(isMobile ? {} : { gridTemplateColumns: "repeat(6, minmax(0, 1fr))" }),
           gap: isMobile ? "8px" : "14px",
           rowGap: isMobile ? "6px" : undefined,
           columnGap: isMobile ? "8px" : undefined,
-          flexWrap: isMobile ? undefined : "wrap",
           alignItems: "center",
-          justifyContent: isMobile ? "space-between" : "center",
-          fontSize: isMobile ? "10px" : "12px",
+          justifyContent: isMobile ? "space-between" : "stretch",
+          fontSize: isMobile ? "10px" : "13px",
           color: "#667085",
-          marginTop: isMobile ? "2px" : "-4px",
+          marginTop: isMobile ? "2px" : "8px",
           paddingLeft: isMobile ? 0 : `${margin.left}px`,
           paddingRight: isMobile ? 0 : `${margin.right}px`,
         }}
@@ -5489,7 +5539,7 @@ function EnergyPage({ rows, summary, offset, setOffset, state, isMobile }) {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) 280px",
+          gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) 310px",
           gap: "18px",
           alignItems: "start",
         }}
@@ -5520,12 +5570,12 @@ function EnergyPage({ rows, summary, offset, setOffset, state, isMobile }) {
           <section className="card">
             <div className="muted">Day stats</div>
             <div style={{ display: "grid", gap: "10px", marginTop: "14px" }}>
-              <DeviceDetail label="Solar yield" value={`${Number(summary?.solar_kwh || 0).toFixed(1)} kWh`} />
-              <DeviceDetail label="Home load" value={`${Number(summary?.house_load_net_kwh || summary?.house_load_kwh || 0).toFixed(1)} kWh`} />
-              <DeviceDetail label="EV charge" value={`${Number(summary?.ev_charge_kwh || 0).toFixed(1)} kWh`} />
-              <DeviceDetail label="Grid import" value={`${Number(summary?.grid_import_kwh || 0).toFixed(2)} kWh`} />
-              <DeviceDetail label="Current solar" value={`${formatKw(state?.solar_kw || 0)} kW`} />
-              <DeviceDetail label="Current load" value={`${formatKw(Math.max(0, Number(state?.house_load_kw || 0) - Number(state?.ev_kw || 0)))} kW`} />
+              <DeviceDetail icon="☀️" label="Solar yield" value={`${Number(summary?.solar_kwh || 0).toFixed(1)} kWh`} />
+              <DeviceDetail icon="🏠" label="Home load" value={`${Number(summary?.house_load_net_kwh || summary?.house_load_kwh || 0).toFixed(1)} kWh`} />
+              <DeviceDetail icon="🚗" label="EV charge" value={`${Number(summary?.ev_charge_kwh || 0).toFixed(1)} kWh`} />
+              <DeviceDetail icon="⚡" label="Grid import" value={`${Number(summary?.grid_import_kwh || 0).toFixed(2)} kWh`} />
+              <DeviceDetail icon="🔆" label="Current solar" value={`${formatKw(state?.solar_kw || 0)} kW`} />
+              <DeviceDetail icon="🏡" label="Current load" value={`${formatKw(Math.max(0, Number(state?.house_load_kw || 0) - Number(state?.ev_kw || 0)))} kW`} />
             </div>
           </section>
         </aside>
@@ -5974,19 +6024,33 @@ const AIRTOUCH_MODE_THEMES = {
   auto: { color: "#22c55e", soft: "#dcfce7" },
 };
 
-function AirTouchCard({ status, error, onCommand, onRefresh, compact = false }) {
+function AirTouchCard({ status, error, onCommand, onRefresh, onOpen, compact = false }) {
   const modeTheme = getAirtouchModeTheme(status?.mode);
+  const artwork = (
+    <img
+      src="/devices/airtouch-ac.png"
+      alt=""
+      aria-hidden="true"
+      className={compact ? "deviceArtwork" : "deviceArtwork large"}
+    />
+  );
 
   return (
     <section className="card">
       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "flex-start" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "14px", minWidth: 0 }}>
-          <img
-            src="/devices/airtouch-ac.png"
-            alt=""
-            aria-hidden="true"
-            className={compact ? "deviceArtwork" : "deviceArtwork large"}
-          />
+          {onOpen ? (
+            <button
+              className="deviceArtworkLink"
+              onClick={onOpen}
+              aria-label="Open air conditioning controls"
+              title="Open IoT controls"
+            >
+              {artwork}
+            </button>
+          ) : (
+            artwork
+          )}
           <div style={{ minWidth: 0 }}>
             <div className="muted">AirTouch 5</div>
             <h2 style={{ margin: "6px 0 0", fontSize: compact ? "22px" : "26px" }}>Air conditioning</h2>
@@ -6214,13 +6278,47 @@ function MetricBox({ label, value }) {
   );
 }
 
-function DeviceDetail({ label, value }) {
+function DeviceDetail({ label, value, icon }) {
+  if (!icon) {
+    return (
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", fontSize: "14px" }}>
+        <span className="muted">{label}</span>
+        <strong style={{ textAlign: "right", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+          {value}
+        </strong>
+      </div>
+    );
+  }
+
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", fontSize: "14px" }}>
-      <span className="muted">{label}</span>
-      <strong style={{ textAlign: "right", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
-        {value}
-      </strong>
+    <div
+      className="innerCard"
+      style={{
+        display: "grid",
+        gridTemplateColumns: "34px minmax(0, 1fr)",
+        alignItems: "center",
+        gap: "10px",
+        fontSize: "14px",
+        padding: "12px",
+      }}
+    >
+      <span style={{ fontSize: "22px", lineHeight: 1 }}>{icon}</span>
+      <div style={{ minWidth: 0 }}>
+        <span className="muted">{label}</span>
+        <strong
+          style={{
+            display: "block",
+            marginTop: "2px",
+            fontSize: "22px",
+            lineHeight: 1.05,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {value}
+        </strong>
+      </div>
     </div>
   );
 }
