@@ -1652,10 +1652,10 @@ function App() {
                   alignItems: "start",
                 }}
               >
+                <div style={{ display: "grid", gap: "18px", gridColumn: isMobile ? undefined : "1 / 3" }}>
                 {weather && (
                   <div
                     className="card"
-                    style={isMobile ? undefined : { gridColumn: "1 / 3", gridRow: "1" }}
                   >
                     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1.2fr", gap: "20px" }}>
                       <div>
@@ -1743,6 +1743,52 @@ function App() {
                 {!isMobile && (
                   <div
                     style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                      gap: "18px",
+                      alignItems: "start",
+                    }}
+                  >
+                    <div style={{ display: "grid", gap: "18px" }}>
+                      <CoffeeMachineHomeCard
+                        status={gaggimateStatus}
+                        profiles={gaggimateProfiles}
+                        onOpen={() => setActivePage("IoT")}
+                        onRefresh={refreshGaggimate}
+                        onModeChange={changeGaggimateMode}
+                        onProfileSelect={selectGaggimateProfile}
+                        style={{ marginBottom: 0 }}
+                      />
+
+                      <AirTouchCard
+                        status={airtouchStatus}
+                        error={airtouchError}
+                        onCommand={runAirtouchCommand}
+                        onRefresh={refreshAirtouch}
+                        onOpen={() => setActivePage("IoT")}
+                        compact
+                        style={{ marginBottom: 0 }}
+                      />
+                    </div>
+
+                    <div style={{ display: "grid", gap: "18px" }}>
+                      <MusicHomeCard />
+                      <BatteryReserveCard state={state} />
+                      <RoborockHomeCard
+                        status={roborockStatus}
+                        onCommand={runRoborockCommand}
+                        onOpen={() => setActivePage("IoT")}
+                        onRefresh={refreshRoborock}
+                        style={{ marginBottom: 0 }}
+                      />
+                    </div>
+                  </div>
+                )}
+                </div>
+
+                {!isMobile && (
+                  <div
+                    style={{
                       gridColumn: "3",
                       display: "grid",
                       gap: "18px",
@@ -1780,56 +1826,6 @@ function App() {
                       />
                     )}
                   </div>
-                )}
-
-                {!isMobile && (
-                  <CoffeeMachineHomeCard
-                    status={gaggimateStatus}
-                    profiles={gaggimateProfiles}
-                    onOpen={() => setActivePage("IoT")}
-                    onRefresh={refreshGaggimate}
-                    onModeChange={changeGaggimateMode}
-                    onProfileSelect={selectGaggimateProfile}
-                    style={{ gridColumn: "1", gridRow: "2", marginBottom: 0, height: "100%" }}
-                  />
-                )}
-
-                {!isMobile && (
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateRows: "minmax(0, 1fr) minmax(0, 1fr)",
-                      gap: "14px",
-                      gridColumn: "2",
-                      gridRow: "2",
-                      alignSelf: "stretch",
-                    }}
-                  >
-                    <MusicHomeCard />
-                    <BatteryReserveCard state={state} />
-                  </div>
-                )}
-
-                {!isMobile && (
-                  <AirTouchCard
-                    status={airtouchStatus}
-                    error={airtouchError}
-                    onCommand={runAirtouchCommand}
-                    onRefresh={refreshAirtouch}
-                    onOpen={() => setActivePage("IoT")}
-                    compact
-                    style={{ gridColumn: "1", gridRow: "3", marginBottom: 0 }}
-                  />
-                )}
-
-                {!isMobile && (
-                  <RoborockHomeCard
-                    status={roborockStatus}
-                    onCommand={runRoborockCommand}
-                    onOpen={() => setActivePage("IoT")}
-                    onRefresh={refreshRoborock}
-                    style={{ gridColumn: "2", gridRow: "3", marginBottom: 0 }}
-                  />
                 )}
 
               </section>
