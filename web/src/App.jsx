@@ -1622,8 +1622,8 @@ function App() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 3fr) minmax(300px, 1fr)",
-              gap: "20px",
+              gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) minmax(270px, 300px)",
+              gap: isMobile ? "20px" : "16px",
               alignItems: "start",
             }}
           >
@@ -1646,13 +1646,13 @@ function App() {
                   display: "grid",
                   gridTemplateColumns: isMobile
                     ? "1fr"
-                    : "repeat(3, minmax(0, 1fr))",
-                  gap: "18px",
+                    : "minmax(0, 1fr) minmax(0, 1fr) minmax(280px, 0.9fr)",
+                  gap: isMobile ? "18px" : "16px",
                   marginBottom: "18px",
                   alignItems: "start",
                 }}
               >
-                <div style={{ display: "grid", gap: "18px", gridColumn: isMobile ? undefined : "1 / 3" }}>
+                <div style={{ display: "grid", gap: isMobile ? "18px" : "16px", gridColumn: isMobile ? undefined : "1 / 3" }}>
                 {weather && (
                   <div
                     className="card"
@@ -1745,11 +1745,11 @@ function App() {
                     style={{
                       display: "grid",
                       gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                      gap: "18px",
+                      gap: "16px",
                       alignItems: "start",
                     }}
                   >
-                    <div style={{ display: "grid", gap: "18px" }}>
+                    <div style={{ display: "grid", gap: "16px" }}>
                       <CoffeeMachineHomeCard
                         status={gaggimateStatus}
                         profiles={gaggimateProfiles}
@@ -1771,7 +1771,7 @@ function App() {
                       />
                     </div>
 
-                    <div style={{ display: "grid", gap: "18px" }}>
+                    <div style={{ display: "grid", gap: "16px" }}>
                       <MusicHomeCard />
                       <BatteryReserveCard state={state} />
                       <RoborockHomeCard
@@ -1791,7 +1791,7 @@ function App() {
                     style={{
                       gridColumn: "3",
                       display: "grid",
-                      gap: "18px",
+                      gap: "16px",
                       alignSelf: "start",
                     }}
                   >
@@ -2580,17 +2580,17 @@ function App() {
 
         .coffeeHomeCard {
           display: grid;
-          grid-template-columns: 92px minmax(0, 1fr);
+          grid-template-columns: 84px minmax(0, 1fr);
           align-items: stretch;
-          column-gap: 16px;
-          row-gap: 12px;
+          column-gap: 14px;
+          row-gap: 10px;
           margin-bottom: 18px;
-          padding: 14px 16px;
+          padding: 14px;
         }
 
         .coffeeHomeArtwork {
-          width: 92px;
-          height: 118px;
+          width: 84px;
+          height: 112px;
           object-fit: contain;
           align-self: center;
           justify-self: center;
@@ -2670,8 +2670,8 @@ function App() {
           color: #111827;
           font: inherit;
           font-weight: 800;
-          padding: 11px 12px;
-          min-height: 42px;
+          padding: 9px 10px;
+          min-height: 38px;
         }
 
         .caseSelect:disabled {
@@ -2682,7 +2682,7 @@ function App() {
         .coffeeModeControl {
           display: grid;
           grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 6px;
+          gap: 5px;
           padding: 5px;
           border-radius: 14px;
           background: #f1f5f9;
@@ -2695,10 +2695,10 @@ function App() {
           background: transparent;
           color: #475569;
           cursor: pointer;
-          font-size: 12px;
+          font-size: 11px;
           font-weight: 900;
-          min-height: 34px;
-          padding: 0 8px;
+          min-height: 32px;
+          padding: 0 6px;
           white-space: nowrap;
         }
 
