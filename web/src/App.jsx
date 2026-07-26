@@ -47,6 +47,9 @@ const PERSON_THEMES = {
   },
 };
 
+const ABC_RADIO_PERTH_STREAM_URL = "https://live-radio01.mediahubaustralia.com/6LRW/mp3/";
+const ABC_RADIO_PERTH_LISTEN_URL = "https://www.abc.net.au/listen/live/perth";
+
 const GAGGIMATE_MODES = [
   { id: "standby", label: "Standby", mode: 0 },
   { id: "brew", label: "Brew", mode: 1 },
@@ -132,6 +135,10 @@ function qualityColor(quality) {
   if (quality === "moderate") return "#f59e0b";
   if (quality === "low") return "#dc2626";
   return "#6b7280";
+}
+
+function getRemainingSolarBands(weather) {
+  return (weather?.solar_bands || []).filter(Boolean);
 }
 
 function getSpeechRecognition() {
@@ -677,9 +684,20 @@ function App() {
     utterance.rate = 0.9;
     utterance.pitch = 0.75;
     utterance.volume = 0.95;
+    const fallbackMs = Math.min(12000, Math.max(3500, text.split(/\s+/).length * 360));
+    const fallback = window.setTimeout(() => {
+      setAssistantPhase((current) => current === "thinking" || current === "speaking" ? "idle" : current);
+    }, fallbackMs);
+    setAssistantPhase("speaking");
     utterance.onstart = () => setAssistantPhase("speaking");
-    utterance.onend = () => setAssistantPhase("idle");
-    utterance.onerror = () => setAssistantPhase("idle");
+    utterance.onend = () => {
+      window.clearTimeout(fallback);
+      setAssistantPhase("idle");
+    };
+    utterance.onerror = () => {
+      window.clearTimeout(fallback);
+      setAssistantPhase("idle");
+    };
   
     window.speechSynthesis.speak(utterance);
     return true;
@@ -1728,7 +1746,7 @@ function App() {
                     className="card homeEnergyFlowCard"
                     style={{
                       gridColumn: "3",
-                      gridRow: "1 / 4",
+                      gridRow: "1 / 3",
                       alignSelf: "stretch",
                       marginBottom: 0,
                       display: "grid",
@@ -1794,6 +1812,7 @@ function App() {
                 {!isMobile && (
                   <RoborockHomeCard
                     status={roborockStatus}
+                    onCommand={runRoborockCommand}
                     onOpen={() => setActivePage("IoT")}
                     onRefresh={refreshRoborock}
                     style={{ gridColumn: "2", gridRow: "3", marginBottom: 0 }}
@@ -1801,69 +1820,11 @@ function App() {
                 )}
 
                 {!isMobile && weather && (
-                  <div className="card compactSolar" style={{ gridColumn: "3", gridRow: "3", marginBottom: 0 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                      <div>
-                        <div className="muted">Solar window</div>
-                        <h2 style={{ margin: "6px 0 0", fontSize: "20px", lineHeight: 1.2 }}>
-                          {formatTime(weather.sunrise)} → {formatTime(weather.sunset)}
-                        </h2>
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: "16px" }}>
-                      <div className="muted" style={{ marginBottom: "8px" }}>
-                        Today
-                      </div>
-
-                      <div style={{ display: "grid", gap: "8px" }}>
-                        {weather.solar_bands.map((band) => (
-                          <div key={band.name} className="solarRow">
-                            <span style={{ textTransform: "capitalize" }}>{band.name}</span>
-                            <strong style={{ color: qualityColor(band.quality), textTransform: "capitalize" }}>
-                              {band.quality}
-                            </strong>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: "14px" }}>
-                      <div className="muted" style={{ marginBottom: "8px" }}>
-                        Coming days
-                      </div>
-
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" }}>
-                        {(weather.daily_solar_outlook || []).slice(1, 4).map((day) => (
-                          <div
-                            key={day.date}
-                            className="solarRow"
-                            style={{
-                              display: "grid",
-                              justifyItems: "center",
-                              gap: "4px",
-                              textAlign: "center",
-                            }}
-                          >
-                            <span>
-                              {new Date(day.date).toLocaleDateString([], { weekday: "short" })}
-                            </span>
-                            <strong style={{ color: qualityColor(day.quality), textTransform: "capitalize" }}>
-                              {day.quality}
-                            </strong>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <button
-                      className="button"
-                      onClick={() => setActivePage("Energy")}
-                      style={{ marginTop: "16px", width: "100%" }}
-                    >
-                      Energy details →
-                    </button>
-                  </div>
+                  <SolarWindowCard
+                    weather={weather}
+                    onOpen={() => setActivePage("Energy")}
+                    style={{ gridColumn: "3", gridRow: "3", marginBottom: 0 }}
+                  />
                 )}
               </section>
 
@@ -1900,65 +1861,11 @@ function App() {
                 }}
               >
                 {weather && (
-                  <div className="card compactSolar" style={{ order: isMobile ? 3 : 0 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
-                      <div>
-                        <div className="muted">Solar window</div>
-                        <h2 style={{ margin: "6px 0 0", fontSize: "20px", lineHeight: 1.2 }}>
-                          {formatTime(weather.sunrise)} → {formatTime(weather.sunset)}
-                        </h2>
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: "18px" }}>
-                      <div className="muted" style={{ marginBottom: "8px" }}>
-                        Today
-                      </div>
-
-                      <div style={{ display: "grid", gap: "8px" }}>
-                        {weather.solar_bands.map((band) => (
-                          <div key={band.name} className="solarRow">
-                            <span style={{ textTransform: "capitalize" }}>{band.name}</span>
-                            <strong style={{ color: qualityColor(band.quality), textTransform: "capitalize" }}>
-                              {band.quality}
-                            </strong>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: "16px" }}>
-                      <div className="muted" style={{ marginBottom: "8px" }}>
-                        Coming days
-                      </div>
-
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" }}>
-                        {(weather.daily_solar_outlook || []).slice(1, 4).map((day) => (
-                          <div
-                            key={day.date}
-                            className="solarRow"
-                            style={{
-                              display: "grid",
-                              justifyItems: "center",
-                              gap: "4px",
-                              textAlign: "center",
-                            }}
-                          >
-                            <span>
-                              {new Date(day.date).toLocaleDateString([], { weekday: "short" })}
-                            </span>
-                            <strong style={{ color: qualityColor(day.quality), textTransform: "capitalize" }}>
-                              {day.quality}
-                            </strong>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-
-                    <button className="button" style={{ marginTop: "18px", width: "100%" }}>
-                      Energy details →
-                    </button>
-                  </div>
+                  <SolarWindowCard
+                    weather={weather}
+                    onOpen={() => setActivePage("Energy")}
+                    style={{ order: isMobile ? 3 : 0 }}
+                  />
                 )}
 
                 {isMobile && (
@@ -3511,25 +3418,204 @@ function BatteryReserveCard({ state, fullWidth = false }) {
   );
 }
 
+function SolarWindowCard({ weather, onOpen, style }) {
+  const remainingBands = getRemainingSolarBands(weather);
+  const showComingDays = remainingBands.length === 0;
+
+  if (!weather) return null;
+
+  return (
+    <div className="card compactSolar" style={style}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
+        <div>
+          <div className="muted">Solar window</div>
+          <h2 style={{ margin: "6px 0 0", fontSize: "20px", lineHeight: 1.2 }}>
+            {formatTime(weather.sunrise)} → {formatTime(weather.sunset)}
+          </h2>
+        </div>
+      </div>
+
+      <div style={{ marginTop: "16px" }}>
+        <div className="muted" style={{ marginBottom: "8px" }}>
+          {showComingDays ? "Coming days" : "Today"}
+        </div>
+
+        {showComingDays ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px" }}>
+            {(weather.daily_solar_outlook || []).slice(1, 4).map((day) => (
+              <div
+                key={day.date}
+                className="solarRow"
+                style={{
+                  display: "grid",
+                  justifyItems: "center",
+                  gap: "4px",
+                  textAlign: "center",
+                }}
+              >
+                <span>
+                  {new Date(day.date).toLocaleDateString([], { weekday: "short" })}
+                </span>
+                <strong style={{ color: qualityColor(day.quality), textTransform: "capitalize" }}>
+                  {day.quality}
+                </strong>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: "8px" }}>
+            {remainingBands.map((band) => (
+              <div key={band.name} className="solarRow">
+                <span style={{ textTransform: "capitalize" }}>{band.name}</span>
+                <strong style={{ color: qualityColor(band.quality), textTransform: "capitalize" }}>
+                  {band.quality}
+                </strong>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <button
+        className="button"
+        onClick={onOpen}
+        style={{ marginTop: "16px", width: "100%" }}
+      >
+        Energy details →
+      </button>
+    </div>
+  );
+}
+
 function MusicHomeCard() {
+  const [mode, setMode] = useState("abc");
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [error, setError] = useState(null);
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+    };
+  }, []);
+
+  async function toggleAbcRadio() {
+    setError(null);
+
+    if (!audioRef.current) {
+      audioRef.current = new Audio(ABC_RADIO_PERTH_STREAM_URL);
+      audioRef.current.preload = "none";
+      audioRef.current.onended = () => setIsPlaying(false);
+      audioRef.current.onerror = () => {
+        setIsPlaying(false);
+        setError("ABC stream could not play here. Open ABC Listen instead.");
+      };
+    }
+
+    if (isPlaying) {
+      audioRef.current.pause();
+      setIsPlaying(false);
+      return;
+    }
+
+    try {
+      await audioRef.current.play();
+      setIsPlaying(true);
+    } catch {
+      setIsPlaying(false);
+      setError("ABC stream was blocked by this browser. Open ABC Listen instead.");
+    }
+  }
+
   return (
     <section className="card">
       <div className="muted">Music</div>
-      <h2 style={{ margin: "6px 0 8px", fontSize: "22px" }}>YouTube Music</h2>
-      <div className="tiny" style={{ lineHeight: 1.45 }}>
-        Planned via Home Assistant media player. Internet dependent.
+      <div
+        style={{
+          display: "inline-flex",
+          gap: "6px",
+          background: "#e5e7eb",
+          padding: "5px",
+          borderRadius: "999px",
+          marginTop: "8px",
+        }}
+      >
+        {[
+          ["abc", "ABC Radio"],
+          ["youtube", "YouTube"],
+        ].map(([value, label]) => (
+          <button
+            key={value}
+            onClick={() => setMode(value)}
+            style={{
+              border: "none",
+              background: mode === value ? "#111827" : "transparent",
+              color: mode === value ? "white" : "#111827",
+              borderRadius: "999px",
+              padding: "8px 12px",
+              fontWeight: 900,
+              cursor: "pointer",
+            }}
+          >
+            {label}
+          </button>
+        ))}
       </div>
+
+      {mode === "abc" ? (
+        <>
+          <h2 style={{ margin: "12px 0 8px", fontSize: "22px" }}>ABC Perth</h2>
+          <div className="tiny" style={{ lineHeight: 1.45 }}>
+            Live ABC Radio Perth. Internet dependent.
+          </div>
+          {error && (
+            <div className="tiny" style={{ color: "#b91c1c", marginTop: "8px", fontWeight: 800 }}>
+              {error}
+            </div>
+          )}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "14px" }}>
+            <button className="button" onClick={toggleAbcRadio}>
+              {isPlaying ? "Pause" : "Play"}
+            </button>
+            <button
+              className="button"
+              onClick={() => window.open(ABC_RADIO_PERTH_LISTEN_URL, "_blank", "noopener,noreferrer")}
+              style={{ background: "#334155" }}
+            >
+              Open
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <h2 style={{ margin: "12px 0 8px", fontSize: "22px" }}>YouTube Music</h2>
+          <div className="tiny" style={{ lineHeight: 1.45 }}>
+            Planned via Home Assistant media player. Internet dependent.
+          </div>
+        </>
+      )}
     </section>
   );
 }
 
-function RoborockHomeCard({ status, onOpen, onRefresh, style }) {
+function RoborockHomeCard({ status, onCommand, onOpen, onRefresh, style }) {
   const available = status?.available === true;
   const roborockState = compactRoborockState(status);
+  const routes = status?.routes || [];
+  const [selectedRoute, setSelectedRoute] = useState(routes[0] || "");
+  const activeRoute = selectedRoute || routes[0] || "";
   const battery =
     status?.battery_level === null || status?.battery_level === undefined
       ? "--"
       : `${Math.round(Number(status.battery_level))}%`;
+
+  useEffect(() => {
+    if (!selectedRoute && routes.length > 0) {
+      setSelectedRoute(routes[0]);
+    }
+  }, [routes, selectedRoute]);
 
   return (
     <section className="card" style={style}>
@@ -3572,6 +3658,35 @@ function RoborockHomeCard({ status, onOpen, onRefresh, style }) {
         <MetricBox label="State" value={roborockState || "--"} />
         <MetricBox label="Battery" value={battery} />
       </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px", marginTop: "14px" }}>
+        <button className="button" onClick={() => onCommand("start")} disabled={!available}>Start</button>
+        <button className="button" onClick={() => onCommand("pause")} disabled={!available} style={{ background: "#334155" }}>Pause</button>
+        <button className="button" onClick={() => onCommand("dock")} disabled={!available} style={{ background: "#475569" }}>Dock</button>
+      </div>
+
+      {routes.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: "8px", marginTop: "10px" }}>
+          <select
+            className="caseSelect"
+            value={activeRoute}
+            onChange={(event) => setSelectedRoute(event.target.value)}
+          >
+            {routes.map((route) => (
+              <option key={route} value={route}>
+                {route}
+              </option>
+            ))}
+          </select>
+          <button
+            className="button"
+            onClick={() => onCommand("run_route", activeRoute)}
+            disabled={!available || !activeRoute}
+          >
+            Run
+          </button>
+        </div>
+      )}
 
       <button className="button" onClick={onRefresh} style={{ marginTop: "14px", width: "100%" }}>
         Refresh vacuum
@@ -6152,15 +6267,6 @@ function IoTPage({
           onCommand={runAirtouchCommand}
           onRefresh={refreshAirtouch}
         />
-        <section className="card">
-          <div className="muted">IoT notes</div>
-          <h2 style={{ margin: "6px 0 14px", fontSize: "22px" }}>Guardrails</h2>
-          <div className="tiny" style={{ lineHeight: 1.5 }}>
-            Coffee machine power switching is intentionally not enabled here yet. GaggiMate documents status
-            and profile control over WebSocket; machine power should go through a documented relay path or
-            smart plug. Roborock routines run only through named Home Assistant scripts, buttons or scenes.
-          </div>
-        </section>
       </div>
     </div>
   );
