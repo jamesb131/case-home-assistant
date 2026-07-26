@@ -48,7 +48,6 @@ const PERSON_THEMES = {
 };
 
 const ABC_RADIO_PERTH_STREAM_URL = "https://live-radio01.mediahubaustralia.com/6LRW/mp3/";
-const ABC_RADIO_PERTH_LISTEN_URL = "https://www.abc.net.au/listen/live/perth";
 
 const GAGGIMATE_MODES = [
   { id: "standby", label: "Standby", mode: 0 },
@@ -1742,31 +1741,45 @@ function App() {
                 )}
 
                 {!isMobile && (
-                  <section
-                    className="card homeEnergyFlowCard"
+                  <div
                     style={{
                       gridColumn: "3",
-                      gridRow: "1 / 3",
-                      alignSelf: "stretch",
-                      marginBottom: 0,
                       display: "grid",
-                      alignContent: "start",
+                      gap: "18px",
+                      alignSelf: "start",
                     }}
                   >
-                    <HomeEnergyFlowHeader
-                      unit={energyFlowSummary?.unit || "kW"}
-                      period={energyFlowPeriod}
-                      onOpen={() => setActivePage("Energy")}
-                    />
-                    <EnergyFlowCard
-                      summary={energyFlowSummary}
-                      activePeriod={energyFlowPeriod}
-                      onPeriodChange={(period) => {
-                        setEnergyFlowPeriod(period);
-                        loadEnergyFlowSummary(period);
+                    <section
+                      className="card homeEnergyFlowCard"
+                      style={{
+                        marginBottom: 0,
+                        display: "grid",
+                        alignContent: "start",
                       }}
-                    />
-                  </section>
+                    >
+                      <HomeEnergyFlowHeader
+                        unit={energyFlowSummary?.unit || "kW"}
+                        period={energyFlowPeriod}
+                        onOpen={() => setActivePage("Energy")}
+                      />
+                      <EnergyFlowCard
+                        summary={energyFlowSummary}
+                        activePeriod={energyFlowPeriod}
+                        onPeriodChange={(period) => {
+                          setEnergyFlowPeriod(period);
+                          loadEnergyFlowSummary(period);
+                        }}
+                      />
+                    </section>
+
+                    {weather && (
+                      <SolarWindowCard
+                        weather={weather}
+                        onOpen={() => setActivePage("Energy")}
+                        style={{ marginBottom: 0 }}
+                      />
+                    )}
+                  </div>
                 )}
 
                 {!isMobile && (
@@ -1819,13 +1832,6 @@ function App() {
                   />
                 )}
 
-                {!isMobile && weather && (
-                  <SolarWindowCard
-                    weather={weather}
-                    onOpen={() => setActivePage("Energy")}
-                    style={{ gridColumn: "3", gridRow: "3", marginBottom: 0 }}
-                  />
-                )}
               </section>
 
               {isMobile && (
@@ -2720,7 +2726,7 @@ function App() {
         }
 
         .homeEnergyFlowCard svg {
-          max-height: 560px;
+          max-height: 455px;
         }
 
         .batteryReserveCard {
@@ -3418,7 +3424,7 @@ function BatteryReserveCard({ state, fullWidth = false }) {
   );
 }
 
-function SolarWindowCard({ weather, onOpen, style }) {
+function SolarWindowCard({ weather, style }) {
   const remainingBands = getRemainingSolarBands(weather);
   const showComingDays = remainingBands.length === 0;
 
@@ -3476,13 +3482,6 @@ function SolarWindowCard({ weather, onOpen, style }) {
         )}
       </div>
 
-      <button
-        className="button"
-        onClick={onOpen}
-        style={{ marginTop: "16px", width: "100%" }}
-      >
-        Energy details →
-      </button>
     </div>
   );
 }
@@ -3531,68 +3530,82 @@ function MusicHomeCard() {
 
   return (
     <section className="card">
-      <div className="muted">Music</div>
       <div
         style={{
-          display: "inline-flex",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
           gap: "6px",
-          background: "#e5e7eb",
-          padding: "5px",
-          borderRadius: "999px",
-          marginTop: "8px",
         }}
       >
-        {[
-          ["abc", "ABC Radio"],
-          ["youtube", "YouTube"],
-        ].map(([value, label]) => (
+        <div
+          style={{
+            display: "inline-flex",
+            gap: "6px",
+            background: "#e5e7eb",
+            padding: "5px",
+            borderRadius: "999px",
+          }}
+        >
+          {[
+            ["abc", "ABC"],
+            ["youtube", "YouTube"],
+          ].map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => setMode(value)}
+              style={{
+                border: "none",
+                background: mode === value ? "#111827" : "transparent",
+                color: mode === value ? "white" : "#111827",
+                borderRadius: "999px",
+                padding: "7px 11px",
+                fontWeight: 900,
+                cursor: "pointer",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {mode === "abc" && (
           <button
-            key={value}
-            onClick={() => setMode(value)}
+            onClick={toggleAbcRadio}
+            aria-label={isPlaying ? "Pause ABC Perth" : "Play ABC Perth"}
+            title={isPlaying ? "Pause ABC Perth" : "Play ABC Perth"}
             style={{
               border: "none",
-              background: mode === value ? "#111827" : "transparent",
-              color: mode === value ? "white" : "#111827",
+              background: "#111827",
+              color: "white",
               borderRadius: "999px",
-              padding: "8px 12px",
+              width: "42px",
+              height: "42px",
               fontWeight: 900,
               cursor: "pointer",
+              fontSize: "16px",
             }}
           >
-            {label}
+            {isPlaying ? "❚❚" : "▶"}
           </button>
-        ))}
+        )}
       </div>
 
       {mode === "abc" ? (
         <>
-          <h2 style={{ margin: "12px 0 8px", fontSize: "22px" }}>ABC Perth</h2>
-          <div className="tiny" style={{ lineHeight: 1.45 }}>
-            Live ABC Radio Perth. Internet dependent.
-          </div>
+          <h2 style={{ margin: "12px 0 4px", fontSize: "22px" }}>ABC Perth</h2>
+          <div className="tiny" style={{ lineHeight: 1.35 }}>Live radio</div>
           {error && (
             <div className="tiny" style={{ color: "#b91c1c", marginTop: "8px", fontWeight: 800 }}>
               {error}
             </div>
           )}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "14px" }}>
-            <button className="button" onClick={toggleAbcRadio}>
-              {isPlaying ? "Pause" : "Play"}
-            </button>
-            <button
-              className="button"
-              onClick={() => window.open(ABC_RADIO_PERTH_LISTEN_URL, "_blank", "noopener,noreferrer")}
-              style={{ background: "#334155" }}
-            >
-              Open
-            </button>
-          </div>
         </>
       ) : (
         <>
-          <h2 style={{ margin: "12px 0 8px", fontSize: "22px" }}>YouTube Music</h2>
+          <h2 style={{ margin: "12px 0 4px", fontSize: "22px" }}>YouTube Music</h2>
           <div className="tiny" style={{ lineHeight: 1.45 }}>
-            Planned via Home Assistant media player. Internet dependent.
+            Planned via Home Assistant media player.
           </div>
         </>
       )}
@@ -4105,7 +4118,7 @@ function EnergyFlowCard({ summary, activePeriod, onPeriodChange }) {
               color: activePeriod === period ? "white" : "#111827",
             }}
           >
-            {periodLabel(period)}
+            {period === "week" ? "Week" : periodLabel(period)}
           </button>
         ))}
       </div>
