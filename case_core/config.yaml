@@ -1,5 +1,5 @@
 name: CASE Core
-version: "0.1.51"
+version: "0.1.52"
 slug: case_core
 description: Local-first household assistant API, worker and web UI.
 url: https://github.com/jamesb131/case-home-assistant

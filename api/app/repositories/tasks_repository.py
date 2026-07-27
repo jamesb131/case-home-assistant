@@ -27,6 +27,7 @@ def get_tasks(include_completed: bool = False):
             WHERE
                 (
                     source != 'recurring'
+                    OR visible_at IS NULL
                     OR visible_at <= (NOW() AT TIME ZONE 'Australia/Perth')
                 )
             ORDER BY
@@ -57,6 +58,7 @@ def get_tasks(include_completed: bool = False):
                 status NOT IN ('completed', 'expired')
                 AND (
                     source != 'recurring'
+                    OR visible_at IS NULL
                     OR visible_at <= (NOW() AT TIME ZONE 'Australia/Perth')
                 )
             ORDER BY
@@ -143,6 +145,7 @@ def get_task(task_id):
             id = %s
             AND (
                 source != 'recurring'
+                OR visible_at IS NULL
                 OR visible_at <= (NOW() AT TIME ZONE 'Australia/Perth')
             )
         """,
