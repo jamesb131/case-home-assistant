@@ -48,6 +48,29 @@ const PERSON_THEMES = {
 };
 
 const ABC_RADIO_PERTH_STREAM_URL = "https://live-radio01.mediahubaustralia.com/6LRW/mp3/";
+const RADIO_STATIONS = [
+  {
+    id: "abc-perth",
+    label: "ABC",
+    title: "ABC Perth",
+    subtitle: "Live radio",
+    streamUrl: ABC_RADIO_PERTH_STREAM_URL,
+  },
+  {
+    id: "triple-j",
+    label: "triple j",
+    title: "triple j",
+    subtitle: "101.7 FM Perth",
+    streamUrl: "https://live-radio01.mediahubaustralia.com/2TJW/mp3/",
+  },
+  {
+    id: "nova-929",
+    label: "92.9",
+    title: "92.9",
+    subtitle: "Perth FM",
+    streamUrl: "https://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_937.mp3",
+  },
+];
 
 const GAGGIMATE_MODES = [
   { id: "standby", label: "Standby", mode: 0 },
@@ -199,6 +222,7 @@ function App() {
   const [energyDayRows, setEnergyDayRows] = useState([]);
   const [energyDaySummary, setEnergyDaySummary] = useState(null);
   const [calendarEvents, setCalendarEvents] = useState([]);
+  const [calendarReviewEvents, setCalendarReviewEvents] = useState([]);
   const [calendarError, setCalendarError] = useState(null);
 
   const [tasks, setTasks] = useState([]);
@@ -518,6 +542,75 @@ function App() {
     }
   }
 
+  async function loadCalendarReviewEvents() {
+    try {
+      const res = await apiFetch(`${API_BASE}/calendar/review?status=pending`);
+      if (!res.ok) throw new Error(`Calendar review API returned ${res.status}`);
+
+      const json = await res.json();
+      setCalendarReviewEvents(json.events || []);
+    } catch (err) {
+      console.error(err);
+      setCalendarError(err.message);
+    }
+  }
+
+  async function deleteCalendarEvent(eventId, eventTitle = "this event") {
+    if (!eventId) return;
+
+    const confirmed = window.confirm(
+      `Remove ${eventTitle} from CASE?\n\nThis only hides it locally. It will not change the original school or Google calendar.`
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await apiFetch(`${API_BASE}/calendar/events/${eventId}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("Failed to delete calendar event");
+
+      await loadCalendarEvents();
+      await loadCalendarReviewEvents();
+    } catch (err) {
+      console.error(err);
+      setCalendarError(err.message);
+    }
+  }
+
+  async function updateCalendarReviewEvent(eventId, status) {
+    if (!eventId) return;
+
+    try {
+      const res = await apiFetch(`${API_BASE}/calendar/events/${eventId}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+
+      if (!res.ok) throw new Error("Failed to update calendar review event");
+
+      await loadCalendarEvents();
+      await loadCalendarReviewEvents();
+    } catch (err) {
+      console.error(err);
+      setCalendarError(err.message);
+    }
+  }
+
+  async function refreshCalendars() {
+    try {
+      const res = await apiFetch(`${API_BASE}/calendar/refresh`, { method: "POST" });
+      if (!res.ok) throw new Error(`Calendar refresh API returned ${res.status}`);
+
+      await loadCalendarEvents();
+      await loadCalendarReviewEvents();
+    } catch (err) {
+      console.error(err);
+      setCalendarError(err.message);
+    }
+  }
+
   async function loadAssistantStatus() {
     try {
       const res = await apiFetch(`${API_BASE}/assistant/status`);
@@ -641,10 +734,13 @@ function App() {
         if (
           json.intent === "list_command" ||
           json.intent === "task_command" ||
-          json.intent === "feature_suggestion_create"
+          json.intent === "feature_suggestion_create" ||
+          json.intent === "calendar_create"
         ) {
           await loadTasks();
           await loadLists();
+          await loadCalendarEvents();
+          await loadCalendarReviewEvents();
         }
         
         setAssistantMessages((prev) => [
@@ -1177,6 +1273,7 @@ function App() {
       loadEnergyFlowSummary(),
       loadWeather(),
       loadCalendarEvents(),
+      loadCalendarReviewEvents(),
       loadTasks(),
       loadLists(),
       loadAssistantStatus(),
@@ -1199,6 +1296,7 @@ function App() {
       loadWeather();
       loadTodaySummary();
       loadCalendarEvents();
+      loadCalendarReviewEvents();
       loadTasks();
       loadLists();
       loadAssistantStatus();
@@ -1225,6 +1323,7 @@ function App() {
 
     const calendarInterval = setInterval(() => {
       loadCalendarEvents();
+      loadCalendarReviewEvents();
     }, 900000);
 
     const assistantStatusInterval = setInterval(() => {
@@ -2132,7 +2231,7 @@ function App() {
                   )}
                   <button
                     className="quietLinkButton"
-                    onClick={loadCalendarEvents}
+                    onClick={refreshCalendars}
                     style={{ marginTop: "8px" }}
                   >
                     Refresh events
@@ -2209,6 +2308,7 @@ function App() {
             <PlannerPage
               tasks={tasks}
               calendarEvents={calendarEvents}
+              calendarReviewEvents={calendarReviewEvents}
               completeTask={completeTask}
               createTask={createTask}
               newTaskTitle={newTaskTitle}
@@ -2217,6 +2317,8 @@ function App() {
               setPlannerView={setPlannerView}
               setSelectedTask={setSelectedTask}
               setTaskModalOpen={setTaskModalOpen}
+              deleteCalendarEvent={deleteCalendarEvent}
+              updateCalendarReviewEvent={updateCalendarReviewEvent}
             />
           )}
           {activePage === "Security" && (
@@ -2947,13 +3049,13 @@ function CompactAskCase({
   return (
     <section
       style={{
-        width: "330px",
+        width: "292px",
         borderRadius: "18px",
         background: "#111827",
         color: "white",
         padding: "10px 12px",
         boxShadow: "0 14px 40px rgba(15, 23, 42, 0.16)",
-        flex: "0 0 330px",
+        flex: "0 0 292px",
       }}
     >
       <div
@@ -2978,7 +3080,7 @@ function CompactAskCase({
             textAlign: "left",
             display: "flex",
             alignItems: "center",
-            gap: "8px",
+            gap: "7px",
             flexWrap: "wrap",
           }}
         >
@@ -2989,13 +3091,13 @@ function CompactAskCase({
               display: "inline-flex",
               alignItems: "center",
               gap: "6px",
-              padding: "5px 8px",
+              padding: "5px 7px",
               borderRadius: "999px",
               background: assistantAvailable
                 ? "rgba(34, 197, 94, 0.16)"
                 : "rgba(248, 113, 113, 0.18)",
               color: assistantAvailable ? "#bbf7d0" : "#fecaca",
-              fontSize: "11px",
+              fontSize: "10px",
               fontWeight: 800,
             }}
           >
@@ -3484,9 +3586,11 @@ function SolarWindowCard({ weather, style }) {
 
 function MusicHomeCard() {
   const [mode, setMode] = useState("abc");
+  const [stationIndex, setStationIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [error, setError] = useState(null);
   const audioRef = useRef(null);
+  const station = RADIO_STATIONS[stationIndex] || RADIO_STATIONS[0];
 
   useEffect(() => {
     return () => {
@@ -3496,16 +3600,28 @@ function MusicHomeCard() {
     };
   }, []);
 
-  async function toggleAbcRadio() {
+  function changeStation(direction) {
+    setError(null);
+    setIsPlaying(false);
+
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
+    setStationIndex((current) => (current + direction + RADIO_STATIONS.length) % RADIO_STATIONS.length);
+  }
+
+  async function toggleRadio() {
     setError(null);
 
     if (!audioRef.current) {
-      audioRef.current = new Audio(ABC_RADIO_PERTH_STREAM_URL);
+      audioRef.current = new Audio(station.streamUrl);
       audioRef.current.preload = "none";
       audioRef.current.onended = () => setIsPlaying(false);
       audioRef.current.onerror = () => {
         setIsPlaying(false);
-        setError("ABC stream could not play here. Open ABC Listen instead.");
+        setError("Radio stream could not play here.");
       };
     }
 
@@ -3520,7 +3636,7 @@ function MusicHomeCard() {
       setIsPlaying(true);
     } catch {
       setIsPlaying(false);
-      setError("ABC stream was blocked by this browser. Open ABC Listen instead.");
+      setError("Radio stream was blocked by this browser.");
     }
   }
 
@@ -3567,9 +3683,9 @@ function MusicHomeCard() {
 
         {mode === "abc" && (
           <button
-            onClick={toggleAbcRadio}
-            aria-label={isPlaying ? "Pause ABC Perth" : "Play ABC Perth"}
-            title={isPlaying ? "Pause ABC Perth" : "Play ABC Perth"}
+            onClick={toggleRadio}
+            aria-label={isPlaying ? `Pause ${station.title}` : `Play ${station.title}`}
+            title={isPlaying ? `Pause ${station.title}` : `Play ${station.title}`}
             style={{
               border: "none",
               background: "#111827",
@@ -3589,8 +3705,27 @@ function MusicHomeCard() {
 
       {mode === "abc" ? (
         <>
-          <h2 style={{ margin: "12px 0 4px", fontSize: "22px" }}>ABC Perth</h2>
-          <div className="tiny" style={{ lineHeight: 1.35 }}>Live radio</div>
+          <h2 style={{ margin: "12px 0 4px", fontSize: "22px" }}>{station.title}</h2>
+          <div className="tiny" style={{ lineHeight: 1.35 }}>{station.subtitle}</div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "8px",
+              marginTop: "10px",
+            }}
+          >
+            <button className="quietLinkButton" onClick={() => changeStation(-1)} aria-label="Previous radio station">
+              ←
+            </button>
+            <div className="tiny" style={{ fontWeight: 900 }}>
+              {stationIndex + 1} / {RADIO_STATIONS.length}
+            </div>
+            <button className="quietLinkButton" onClick={() => changeStation(1)} aria-label="Next radio station">
+              →
+            </button>
+          </div>
           {error && (
             <div className="tiny" style={{ color: "#b91c1c", marginTop: "8px", fontWeight: 800 }}>
               {error}
@@ -4918,6 +5053,7 @@ function PlannerViewToggle({ plannerView, setPlannerView, inline = false }) {
 function PlannerPage({
   tasks,
   calendarEvents,
+  calendarReviewEvents,
   completeTask,
   createTask,
   newTaskTitle,
@@ -4926,6 +5062,8 @@ function PlannerPage({
   setPlannerView,
   setSelectedTask,
   setTaskModalOpen,
+  deleteCalendarEvent,
+  updateCalendarReviewEvent,
 }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -4994,7 +5132,7 @@ function PlannerPage({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "65% 35%",
+          gridTemplateColumns: "minmax(0, 72%) minmax(260px, 28%)",
           gap: "20px",
           alignItems: "start",
         }}
@@ -5086,12 +5224,20 @@ function PlannerPage({
                       </div>
 
                       {dayEvents.slice(0, 2).map((event) => (
-                        <div
+                        <button
                           key={event.id}
                           className="calendarPill eventPill"
+                          onClick={() => deleteCalendarEvent(event.id, event.title)}
+                          title="Remove this event from CASE"
+                          style={{
+                            border: "none",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            width: "100%",
+                          }}
                         >
                           {event.title}
-                        </div>
+                        </button>
                       ))}
 
                       {dayTasks.slice(0, 2).map((task) => (
@@ -5155,6 +5301,10 @@ function PlannerPage({
                       <div
                         key={event.id}
                         style={{
+                          display: "grid",
+                          gridTemplateColumns: "minmax(0, 1fr) auto",
+                          gap: "10px",
+                          alignItems: "start",
                           background: PERSON_THEMES.Event.soft,
                           border: `1px solid ${PERSON_THEMES.Event.border}`,
                           color: PERSON_THEMES.Event.text,
@@ -5163,15 +5313,31 @@ function PlannerPage({
                           marginBottom: "8px",
                         }}
                       >
-                        <div style={{ fontWeight: 800 }}>
-                          {event.title}
+                        <div>
+                          <div style={{ fontWeight: 800 }}>
+                            {event.title}
+                          </div>
+
+                          {event.location && (
+                            <div className="tiny">
+                              📍 {event.location}
+                            </div>
+                          )}
+
+                          <div className="tiny">
+                            {event.source?.name}
+                          </div>
                         </div>
 
-                        {event.location && (
-                          <div className="tiny">
-                            📍 {event.location}
-                          </div>
-                        )}
+                        <button
+                          className="quietLinkButton"
+                          onClick={() => deleteCalendarEvent(event.id, event.title)}
+                          title="Remove this event from CASE"
+                          aria-label={`Remove ${event.title}`}
+                          style={{ padding: "5px 8px" }}
+                        >
+                          ×
+                        </button>
                       </div>
                     ))}
 
@@ -5348,10 +5514,74 @@ function PlannerPage({
             </div>
             );
           })}
+
+          {calendarReviewEvents.length > 0 && (
+            <div style={{ marginTop: "20px", borderTop: "1px solid #eef2f7", paddingTop: "16px" }}>
+              <div className="muted">School review</div>
+
+              {calendarReviewEvents.slice(0, 6).map((event) => (
+                <div
+                  key={event.id}
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "14px",
+                    padding: "11px 12px",
+                    marginTop: "10px",
+                  }}
+                >
+                  <div style={{ fontWeight: 900, fontSize: "14px", lineHeight: 1.25 }}>
+                    {event.title}
+                  </div>
+                  <div className="tiny">
+                    {formatCalendarEventDate(event)}
+                    {event.audience ? ` · ${event.audience}` : ""}
+                  </div>
+                  {event.review_reason && (
+                    <div className="tiny">
+                      {event.review_reason}
+                    </div>
+                  )}
+                  <div style={{ display: "flex", gap: "8px", marginTop: "10px" }}>
+                    <button
+                      className="quietLinkButton"
+                      onClick={() => updateCalendarReviewEvent(event.id, "approved")}
+                    >
+                      Keep
+                    </button>
+                    <button
+                      className="quietLinkButton"
+                      onClick={() => updateCalendarReviewEvent(event.id, "ignored")}
+                    >
+                      Ignore
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       </div>
     </div>
   );
+}
+
+function formatCalendarEventDate(event) {
+  if (!event?.start) return "No date";
+
+  const date = new Date(event.start);
+  const dateText = date.toLocaleDateString([], {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+
+  if (event.is_all_day) return dateText;
+
+  return `${dateText}, ${date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
 }
 
 function TaskModal({ task, onClose, onSave }) {

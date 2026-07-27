@@ -73,6 +73,7 @@ Schema:
 
   "date": "YYYY-MM-DD | null",
   "time": "HH:MM | null",
+  "end_time": "HH:MM | null",
   "timeframe": "today | tomorrow | this_week | this_weekend | next_week | upcoming | null",
 
   "list_name": string | null,
@@ -135,6 +136,9 @@ For task read queries:
 For calendar create:
 - birthday party, kids party, party for Leo/Benny => category=kids_party
 - If a child is mentioned in a calendar event, put them in person.
+- Extract the event title without date/time words where possible.
+- If a time range is provided, set time to the start time and end_time to the end time.
+- Example: "add event James Draft Dinner August 15 6pm till 10pm" => domain=calendar, operation=create, title="James Draft Dinner", date=YYYY-08-15, time=18:00, end_time=22:00.
 - "Book dentist for James" is ambiguous unless a date/time is provided, so operation=clarify.
 
 For kids:
@@ -298,6 +302,11 @@ def extract_deterministic_intent(message):
 
     if roborock_intent:
         return roborock_intent
+
+    calendar_intent = extract_calendar_intent(text, lower)
+
+    if calendar_intent:
+        return calendar_intent
 
     news_intent = extract_news_intent(text, lower)
 
@@ -497,6 +506,39 @@ def extract_roborock_route(text, lower):
     )
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" .?!")
     return cleaned or None
+
+
+def extract_calendar_intent(text, lower):
+    if re.search(r"\b(add|create|make|book)\s+(an?\s+)?(calendar\s+)?(event|appointment)\b", lower):
+        title = re.sub(
+            r"^\s*(add|create|make|book)\s+(an?\s+)?(calendar\s+)?(event|appointment)?\s*",
+            "",
+            text,
+            flags=re.I,
+        )
+
+        return {
+            "domain": "calendar",
+            "operation": "create",
+            "confidence": "high",
+            "clarification_needed": False,
+            "clarification_question": None,
+            "title": title.strip(" -,."),
+            "question": text,
+        }
+
+    if re.search(r"\b(add|create|make|book)\b", lower) and re.search(r"\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec|january|february|march|april|june|july|august|september|october|november|december)\b", lower):
+        return {
+            "domain": "calendar",
+            "operation": "create",
+            "confidence": "medium",
+            "clarification_needed": False,
+            "clarification_question": None,
+            "title": text,
+            "question": text,
+        }
+
+    return None
 
 
 def extract_news_intent(text, lower):

@@ -204,6 +204,16 @@
       "expected": { "domain": "calendar", "operation": "create", "person": "Benny" }
     },
     {
+      "input": "Add event James Draft Dinner August 15 6pm till 10pm",
+      "severity": "critical",
+      "expected": { "domain": "calendar", "operation": "create" }
+    },
+    {
+      "input": "Add event Leo birthday party August 15 2pm till 4pm at Crocs Butler. Also add task buy present for Leo birthday party due August 12.",
+      "severity": "critical",
+      "expected": { "domain": "calendar", "operation": "create" }
+    },
+    {
       "input": "Book dentist for James",
       "severity": "important",
       "expected": { "domain": "calendar", "operation": "clarify" }

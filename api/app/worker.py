@@ -19,7 +19,7 @@ from app.services.gaggimate_client import (
     get_gaggimate_status,
     offline_status as offline_gaggimate_status,
 )
-from app.services.calendar_sync import sync_google_calendar
+from app.services.calendar_sync import sync_all_calendars
 from app.services.news_client import refresh_news
 from app.services.roborock_client import get_roborock_status
 from app.services.sigenergy_client import get_energy_snapshot, read_sigenergy_registers
@@ -81,7 +81,7 @@ def poll_weather_snapshot():
 
 
 def poll_calendar_snapshot():
-    result = sync_google_calendar(days=60, max_results=100)
+    result = sync_all_calendars(days=60, max_results=100)
     events = result["events"]
 
     if not result["calendar_available"]:

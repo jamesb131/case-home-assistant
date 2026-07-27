@@ -89,10 +89,12 @@ def upsert_calendar_events(source_id, events):
                             first_seen_at,
                             last_seen_at,
                             updated_at,
-                            cancelled
+                            cancelled,
+                            review_status,
+                            review_reason
                         )
                         VALUES (
-                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, NOW(), FALSE
+                            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb, %s, %s, NOW(), FALSE, %s, %s
                         )
                         ON CONFLICT (source_id, external_id)
                         DO UPDATE SET
@@ -110,7 +112,15 @@ def upsert_calendar_events(source_id, events):
                             source_payload = EXCLUDED.source_payload,
                             last_seen_at = EXCLUDED.last_seen_at,
                             updated_at = NOW(),
-                            cancelled = FALSE;
+                            cancelled = CASE
+                                WHEN calendar_events.cancelled = TRUE THEN TRUE
+                                ELSE FALSE
+                            END,
+                            review_status = CASE
+                                WHEN calendar_events.review_status = 'pending' THEN EXCLUDED.review_status
+                                ELSE calendar_events.review_status
+                            END,
+                            review_reason = EXCLUDED.review_reason;
                         """,
                         (
                             source_id,
@@ -129,6 +139,8 @@ def upsert_calendar_events(source_id, events):
                             json_dumps(event),
                             now,
                             now,
+                            event.get("review_status") or "approved",
+                            event.get("review_reason"),
                         ),
                     )
                     count += 1
@@ -150,6 +162,115 @@ def upsert_calendar_events(source_id, events):
         conn.close()
 
     return count
+
+
+def create_calendar_event(
+    title,
+    start,
+    end=None,
+    is_all_day=False,
+    description=None,
+    location=None,
+    category=None,
+    audience=None,
+    url=None,
+    source_name="CASE Calendar",
+    source_type="case",
+    external_id=None,
+):
+    source_id = ensure_calendar_source(
+        name=source_name,
+        source_type=source_type,
+        external_id=f"{source_type}:local",
+        config={"managed_by": "case"},
+        refresh_interval_seconds=0,
+    )
+    event_id = external_id or f"case-{datetime.now(PERTH_TZ).strftime('%Y%m%d%H%M%S%f')}"
+    event = {
+        "id": event_id,
+        "title": title,
+        "description": description,
+        "location": location,
+        "start": start,
+        "end": end,
+        "is_all_day": is_all_day,
+        "category": category,
+        "audience": audience,
+        "url": url,
+        "review_status": "approved",
+        "review_reason": None,
+    }
+
+    upsert_calendar_events(source_id, [event])
+
+    return get_calendar_event_by_external_id(source_id, event_id)
+
+
+def get_calendar_event_by_external_id(source_id, external_id):
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    e.id,
+                    e.external_id,
+                    e.title,
+                    e.description,
+                    e.location,
+                    e.start_at,
+                    e.end_at,
+                    e.start_date,
+                    e.end_date,
+                    e.is_all_day,
+                    e.category,
+                    e.audience,
+                    e.url,
+                    e.last_seen_at,
+                    s.id,
+                    s.name,
+                    s.source_type,
+                    s.external_id,
+                    s.last_error,
+                    e.review_status,
+                    e.review_reason
+                FROM calendar_events e
+                JOIN calendar_sources s ON s.id = e.source_id
+                WHERE e.source_id = %s AND e.external_id = %s
+                LIMIT 1;
+                """,
+                (source_id, external_id),
+            )
+            row = cur.fetchone()
+
+    finally:
+        conn.close()
+
+    return map_event(row) if row else None
+
+
+def cancel_calendar_event(event_id):
+    conn = get_connection()
+
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE calendar_events
+                    SET cancelled = TRUE, updated_at = NOW()
+                    WHERE id = %s
+                    RETURNING id;
+                    """,
+                    (event_id,),
+                )
+                row = cur.fetchone()
+
+    finally:
+        conn.close()
+
+    return bool(row)
 
 
 def mark_calendar_source_error(source_id, error):
@@ -203,11 +324,14 @@ def get_upcoming_calendar_events(days=30, max_results=50, start_date=None):
                     s.name,
                     s.source_type,
                     s.external_id,
-                    s.last_error
+                    s.last_error,
+                    e.review_status,
+                    e.review_reason
                 FROM calendar_events e
                 JOIN calendar_sources s ON s.id = e.source_id
                 WHERE
                     e.cancelled = FALSE
+                    AND e.review_status = 'approved'
                     AND s.enabled = TRUE
                     AND (
                         (e.is_all_day = TRUE AND e.start_date >= %s AND e.start_date < %s)
@@ -225,6 +349,86 @@ def get_upcoming_calendar_events(days=30, max_results=50, start_date=None):
         conn.close()
 
     return [map_event(row) for row in rows]
+
+
+def get_calendar_review_events(days=180, max_results=100, status="pending"):
+    start_day = datetime.now(PERTH_TZ).date()
+    end_day = start_day + timedelta(days=days)
+    start_at = datetime.combine(start_day, time.min, tzinfo=PERTH_TZ)
+    end_at = start_at + timedelta(days=days)
+    conn = get_connection()
+
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    e.id,
+                    e.external_id,
+                    e.title,
+                    e.description,
+                    e.location,
+                    e.start_at,
+                    e.end_at,
+                    e.start_date,
+                    e.end_date,
+                    e.is_all_day,
+                    e.category,
+                    e.audience,
+                    e.url,
+                    e.last_seen_at,
+                    s.id,
+                    s.name,
+                    s.source_type,
+                    s.external_id,
+                    s.last_error,
+                    e.review_status,
+                    e.review_reason
+                FROM calendar_events e
+                JOIN calendar_sources s ON s.id = e.source_id
+                WHERE
+                    e.cancelled = FALSE
+                    AND e.review_status = %s
+                    AND s.enabled = TRUE
+                    AND (
+                        (e.is_all_day = TRUE AND e.start_date >= %s AND e.start_date < %s)
+                        OR
+                        (e.is_all_day = FALSE AND e.start_at >= %s AND e.start_at < %s)
+                    )
+                ORDER BY COALESCE(e.start_at, e.start_date::timestamptz), e.title
+                LIMIT %s;
+                """,
+                (status, start_day, end_day, start_at, end_at, max_results),
+            )
+            rows = cur.fetchall()
+
+    finally:
+        conn.close()
+
+    return [map_event(row) for row in rows]
+
+
+def update_calendar_event_review_status(event_id, status):
+    conn = get_connection()
+
+    try:
+        with conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE calendar_events
+                    SET review_status = %s, updated_at = NOW()
+                    WHERE id = %s
+                    RETURNING id;
+                    """,
+                    (status, event_id),
+                )
+                row = cur.fetchone()
+
+    finally:
+        conn.close()
+
+    return bool(row)
 
 
 def get_calendar_sources():
@@ -276,6 +480,8 @@ def map_event(row):
         "audience": row[11],
         "url": row[12],
         "last_seen_at": serialise(row[13]),
+        "review_status": row[19] if len(row) > 19 else "approved",
+        "review_reason": row[20] if len(row) > 20 else None,
         "source": {
             "id": str(row[14]),
             "name": row[15],

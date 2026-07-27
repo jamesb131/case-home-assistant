@@ -14,8 +14,15 @@ from app.services.case_assistant import ask_case
 from app.services.google_calendar_client import get_calendar_service
 from app.services.google_calendar_client import get_calendar_error
 from app.services.google_calendar_client import get_calendar_auth_status
-from app.repositories.calendar_repository import get_calendar_sources, get_upcoming_calendar_events
-from app.services.calendar_sync import sync_google_calendar
+from app.repositories.calendar_repository import (
+    cancel_calendar_event,
+    create_calendar_event,
+    get_calendar_review_events,
+    get_calendar_sources,
+    get_upcoming_calendar_events,
+    update_calendar_event_review_status,
+)
+from app.services.calendar_sync import sync_all_calendars
 
 from app.routers.lists_router import router as lists_router
 
@@ -595,6 +602,19 @@ class AirtouchCommandRequest(BaseModel):
     zone: str | None = None
     target_temperature: float | None = None
 
+class CalendarEventRequest(BaseModel):
+    title: str
+    start: str
+    end: str | None = None
+    is_all_day: bool = False
+    description: str | None = None
+    location: str | None = None
+    category: str | None = None
+    audience: str | None = None
+
+class CalendarReviewRequest(BaseModel):
+    status: str
+
 @app.post("/case/ask")
 def case_ask(request: CaseAskRequest):
     return ask_case(request.message)
@@ -799,7 +819,7 @@ def calendar_upcoming(days: int = 30, max_results: int = 50):
             "error": snapshot["error"],
         }
 
-    result = sync_google_calendar(days=max(days, 30), max_results=max(max_results, 50))
+    result = sync_all_calendars(days=max(days, 30), max_results=max(max_results, 50))
 
     if not result["calendar_available"] and not result["events"]:
         return {
@@ -853,6 +873,78 @@ def calendar_list():
 @app.get("/calendar/sources")
 def calendar_sources():
     return {"sources": get_calendar_sources()}
+
+@app.get("/calendar/review")
+def calendar_review(status: str = "pending", days: int = 180, max_results: int = 100):
+    allowed_statuses = {"pending", "approved", "ignored"}
+    review_status = status if status in allowed_statuses else "pending"
+    return {
+        "events": get_calendar_review_events(
+            status=review_status,
+            days=max(1, min(days, 365)),
+            max_results=max(1, min(max_results, 200)),
+        ),
+        "status": review_status,
+    }
+
+@app.post("/calendar/events")
+def calendar_event_create(request: CalendarEventRequest):
+    event = create_calendar_event(
+        title=request.title.strip() or "Untitled event",
+        start=request.start,
+        end=request.end,
+        is_all_day=request.is_all_day,
+        description=request.description,
+        location=request.location,
+        category=request.category,
+        audience=request.audience,
+    )
+
+    return {
+        "created": True,
+        "event": event,
+    }
+
+@app.delete("/calendar/events/{event_id}")
+def calendar_event_delete(event_id: str):
+    deleted = cancel_calendar_event(event_id)
+
+    if not deleted:
+        return JSONResponse(
+            status_code=404,
+            content={"deleted": False, "error": "Calendar event not found."},
+        )
+
+    return {"deleted": True, "event_id": event_id}
+
+@app.post("/calendar/events/{event_id}/review")
+def calendar_event_review(event_id: str, request: CalendarReviewRequest):
+    allowed_statuses = {"pending", "approved", "ignored"}
+
+    if request.status not in allowed_statuses:
+        return JSONResponse(
+            status_code=400,
+            content={"updated": False, "error": "Review status must be pending, approved, or ignored."},
+        )
+
+    updated = update_calendar_event_review_status(event_id, request.status)
+
+    if not updated:
+        return JSONResponse(
+            status_code=404,
+            content={"updated": False, "error": "Calendar event not found."},
+        )
+
+    return {"updated": True, "event_id": event_id, "status": request.status}
+
+@app.post("/calendar/refresh")
+def calendar_refresh():
+    result = sync_all_calendars(days=60, max_results=100)
+
+    return {
+        **result,
+        "sources": get_calendar_sources(),
+    }
 
 @app.get("/calendar/auth-status")
 def calendar_auth_status():
