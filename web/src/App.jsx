@@ -3034,6 +3034,7 @@ function TopNavigation({
           isListening={isListening}
           startVoiceRecognition={startVoiceRecognition}
           onOpenAssistant={onOpenAssistant}
+          width="calc((100vw - 56px - 32px) / 4)"
         />
       </div>
     </header>
@@ -3049,17 +3050,20 @@ function CompactAskCase({
   isListening,
   startVoiceRecognition,
   onOpenAssistant,
+  width = "292px",
 }) {
   return (
     <section
       style={{
-        width: "292px",
+        width,
+        minWidth: "260px",
+        maxWidth: "360px",
         borderRadius: "18px",
         background: "#111827",
         color: "white",
         padding: "10px 12px",
         boxShadow: "0 14px 40px rgba(15, 23, 42, 0.16)",
-        flex: "0 0 292px",
+        flex: `0 0 ${width}`,
       }}
     >
       <div
