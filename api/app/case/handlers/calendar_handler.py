@@ -20,6 +20,7 @@ WEEKDAYS = {
 
 def handle_calendar_intent(intent):
     operation = intent.get("operation")
+    raw = intent.get("raw_message") or intent.get("question") or ""
 
     if operation == "clarify":
         return {
@@ -131,6 +132,12 @@ def infer_target_date(intent):
 
     now = datetime.now(PERTH_TZ).date()
 
+    if "tomorrow" in raw:
+        return now + timedelta(days=1)
+
+    if "today" in raw:
+        return now
+
     for name, weekday in WEEKDAYS.items():
         if name not in raw:
             continue
@@ -214,6 +221,7 @@ def format_event(event):
 def build_calendar_event_from_intent(intent):
     raw = intent.get("raw_message") or intent.get("question") or ""
     parsed = parse_calendar_create_text(raw)
+    marker_category = intent.get("category") if intent.get("category") in {"daycare", "kindy", "school_day"} else None
     title = (
         parsed.get("title")
         if parsed.get("date")
@@ -225,6 +233,16 @@ def build_calendar_event_from_intent(intent):
     start = None
     end = None
     is_all_day = False
+
+    if not date_value:
+        target_date = infer_target_date(intent)
+        if target_date:
+            date_value = target_date.isoformat()
+
+    if marker_category:
+        title = normalise_child_marker_title(intent, title)
+        start_time = None
+        end_time = None
 
     if date_value:
         if start_time:
@@ -246,6 +264,22 @@ def build_calendar_event_from_intent(intent):
         "category": intent.get("category"),
         "audience": intent.get("person"),
     }
+
+
+def normalise_child_marker_title(intent, fallback_title):
+    person = intent.get("person") or "Child"
+    category = intent.get("category")
+
+    if category == "daycare":
+        return f"{person} daycare"
+
+    if category == "kindy":
+        return f"{person} kindy"
+
+    if category == "school_day":
+        return f"{person} school"
+
+    return fallback_title
 
 
 def parse_calendar_create_text(text):

@@ -38,6 +38,13 @@ const PERSON_THEMES = {
     text: "#92400e",
     emoji: "🗓",
   },
+  School: {
+    primary: "#ef4444",
+    soft: "#fee2e2",
+    border: "#fecaca",
+    text: "#991b1b",
+    emoji: "🏫",
+  },
   Unassigned: {
     primary: "#64748b",
     soft: "#f8fafc",
@@ -79,9 +86,120 @@ const GAGGIMATE_MODES = [
   { id: "water", label: "Water", mode: 3 },
 ];
 
+const BENNY_KINDY_WEDNESDAY_ANCHOR = new Date(2026, 6, 29);
+const CHILD_DAY_MARKER_CATEGORIES = ["school_day", "kindy", "daycare"];
+
 
 function getPersonTheme(name) {
   return PERSON_THEMES[name] || PERSON_THEMES.Unassigned;
+}
+
+function isSchoolCalendarEvent(event) {
+  return (
+    event?.category === "school" ||
+    event?.source?.type === "ics" ||
+    /school|st francis|assisi|butler/i.test(event?.source?.name || "")
+  );
+}
+
+function getEventTheme(event) {
+  return isSchoolCalendarEvent(event) ? PERSON_THEMES.School : PERSON_THEMES.Event;
+}
+
+function formatEventTime(event) {
+  if (!event?.start) return "";
+
+  if (event.is_all_day) return "All day";
+
+  return new Date(event.start).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatEventLocation(location) {
+  if (!location) return "";
+
+  return location
+    .replace(/\s*,?\s*Australia\s*$/i, "")
+    .replace(/\s+WA\s+(\d{4})(?=\s*$)/i, " $1")
+    .replace(/\s*,\s*WA\s+(\d{4})(?=\s*$)/i, " $1")
+    .trim();
+}
+
+function isBennyKindyDay(day) {
+  const weekday = day.getDay();
+  if (weekday === 1 || weekday === 2) return true;
+  if (weekday !== 3) return false;
+
+  const dayMs = 24 * 60 * 60 * 1000;
+  const elapsedDays = Math.round((startOfLocalDay(day) - startOfLocalDay(BENNY_KINDY_WEDNESDAY_ANCHOR)) / dayMs);
+  const elapsedWeeks = Math.floor(elapsedDays / 7);
+  return elapsedDays >= 0 && elapsedWeeks % 2 === 0;
+}
+
+function isBennyDaycareDay(day) {
+  return day.getDay() === 4 || day.getDay() === 5;
+}
+
+function startOfLocalDay(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function childDayMarkersFromEvents(events = []) {
+  return events
+    .filter((event) => CHILD_DAY_MARKER_CATEGORIES.includes(event.category))
+    .map((event) => {
+      const person = event.audience || event.person || "";
+      const category = event.category;
+      const key = `${event.id || event.title}-${person}-${category}`;
+
+      if (/benny/i.test(person) && category === "daycare") {
+        return { key, label: "D", title: "Benny daycare", className: "schoolDayDot bennyDaycare" };
+      }
+
+      if (/benny/i.test(person) && category === "kindy") {
+        return { key, label: "B", title: "Benny kindy", className: "schoolDayDot benny" };
+      }
+
+      if (/leo/i.test(person) || category === "school_day") {
+        return { key, label: "L", title: "Leo school", className: "schoolDayDot leo" };
+      }
+
+      return null;
+    })
+    .filter(Boolean);
+}
+
+function schoolDayIndicators(day, events = []) {
+  const indicators = [];
+  const keys = new Set();
+
+  function add(indicator) {
+    if (!indicator || keys.has(indicator.key)) return;
+    keys.add(indicator.key);
+    indicators.push(indicator);
+  }
+
+  const weekday = day.getDay();
+
+  if (weekday >= 1 && weekday <= 5) {
+    add({ key: "leo-school", label: "L", title: "Leo school", className: "schoolDayDot leo" });
+  }
+
+  if (isBennyKindyDay(day)) {
+    add({ key: "benny-kindy", label: "B", title: "Benny kindy", className: "schoolDayDot benny" });
+  }
+
+  if (isBennyDaycareDay(day)) {
+    add({ key: "benny-daycare", label: "D", title: "Benny daycare", className: "schoolDayDot bennyDaycare" });
+  }
+
+  childDayMarkersFromEvents(events).forEach(add);
+
+  return indicators;
 }
 
 function TaskMetaBadges({ task }) {
@@ -254,6 +372,7 @@ function App() {
   const [isListening, setIsListening] = useState(false);
   const [assistantPhase, setAssistantPhase] = useState("idle");
   const activeRecognitionRef = useRef(null);
+  const speechPrimedRef = useRef(false);
   const [assistantStatus, setAssistantStatus] = useState(null);
   const [systemStatus, setSystemStatus] = useState(null);
   const [securityStatus, setSecurityStatus] = useState(null);
@@ -779,17 +898,29 @@ function App() {
     utterance.rate = 0.9;
     utterance.pitch = 0.75;
     utterance.volume = 0.95;
+    let started = false;
     const fallbackMs = Math.min(12000, Math.max(3500, text.split(/\s+/).length * 360));
+    const startWatchdog = window.setTimeout(() => {
+      if (!started) {
+        window.speechSynthesis.cancel();
+        setAssistantPhase((current) => current === "thinking" ? "idle" : current);
+      }
+    }, 900);
     const fallback = window.setTimeout(() => {
       setAssistantPhase((current) => current === "thinking" || current === "speaking" ? "idle" : current);
     }, fallbackMs);
-    setAssistantPhase("speaking");
-    utterance.onstart = () => setAssistantPhase("speaking");
+    utterance.onstart = () => {
+      started = true;
+      window.clearTimeout(startWatchdog);
+      setAssistantPhase("speaking");
+    };
     utterance.onend = () => {
+      window.clearTimeout(startWatchdog);
       window.clearTimeout(fallback);
       setAssistantPhase("idle");
     };
     utterance.onerror = () => {
+      window.clearTimeout(startWatchdog);
       window.clearTimeout(fallback);
       setAssistantPhase("idle");
     };
@@ -798,8 +929,29 @@ function App() {
     return true;
   }
 
+  function primeCaseSpeech() {
+    if (speechPrimedRef.current || !window.speechSynthesis) return;
+
+    try {
+      const utterance = new SpeechSynthesisUtterance(".");
+      utterance.lang = "en-AU";
+      utterance.volume = 0.01;
+      utterance.rate = 1;
+      utterance.onend = () => {
+        speechPrimedRef.current = true;
+      };
+      utterance.onerror = () => {
+        speechPrimedRef.current = false;
+      };
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      speechPrimedRef.current = false;
+    }
+  }
+
   async function startVoiceRecognition() {
     const SpeechRecognition = getSpeechRecognition();
+    primeCaseSpeech();
 
     if (activeRecognitionRef.current) {
       try {
@@ -880,6 +1032,7 @@ function App() {
       } catch {
         // Some Safari/WebKit builds throw if recognition has already stopped.
       }
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
 
       try {
         await sendAssistantMessage(transcript);
@@ -2865,6 +3018,38 @@ function App() {
           background: #f8fafc;
           color: #475569;
           border: 1px solid #e2e8f0;
+        }
+
+        .schoolDayDots {
+          display: inline-flex;
+          gap: 3px;
+          align-items: center;
+          justify-content: flex-end;
+          min-width: 0;
+        }
+
+        .schoolDayDot {
+          display: inline-grid;
+          place-items: center;
+          width: 16px;
+          height: 16px;
+          border-radius: 999px;
+          color: white;
+          font-size: 9px;
+          font-weight: 900;
+          line-height: 1;
+        }
+
+        .schoolDayDot.leo {
+          background: #2563eb;
+        }
+
+        .schoolDayDot.benny {
+          background: #16a34a;
+        }
+
+        .schoolDayDot.bennyDaycare {
+          background: #22c55e;
         }
 
         @media (max-width: 820px) {
@@ -4939,6 +5124,7 @@ function EventList({ events, compact = false }) {
     <div>
       {events.map((event, index) => {
         const start = new Date(event.start);
+        const location = formatEventLocation(event.location);
         const dayLabel = start.toLocaleDateString([], {
           weekday: "long",
           day: "numeric",
@@ -4988,12 +5174,7 @@ function EventList({ events, compact = false }) {
                   marginBottom: compact ? "3px" : 0,
                 }}
               >
-                {event.is_all_day
-                  ? "All day"
-                  : start.toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                {formatEventTime(event)}
               </div>
 
               <div>
@@ -5001,7 +5182,7 @@ function EventList({ events, compact = false }) {
                   {event.title}
                 </div>
 
-                {event.location && (
+                {location && (
                   <a
                     href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(event.location)}`}
                     target="_blank"
@@ -5016,8 +5197,7 @@ function EventList({ events, compact = false }) {
                       textDecoration: "none",
                     }}
                   >
-                    <span>📍</span>
-                    <span>{event.location}</span>
+                    <span>{location}</span>
                   </a>
                 )}
                 {event.source?.name && (
@@ -5214,9 +5394,9 @@ function PlannerPage({
                   const isThisMonth =
                     day.getMonth() === currentMonth.getMonth();
 
-                  const isToday = sameDay(day, today);
-
                   const dayEvents = eventsForDay(day);
+                  const isToday = sameDay(day, today);
+                  const indicators = schoolDayIndicators(day, dayEvents);
 
                   const dayTasks = tasksForDay(day);
 
@@ -5237,14 +5417,31 @@ function PlannerPage({
                     >
                       <div
                         style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: "6px",
                           fontWeight: 900,
                           marginBottom: "8px",
                         }}
                       >
-                        {day.getDate()}
+                        <span>{day.getDate()}</span>
+                        <span className="schoolDayDots">
+                          {indicators.map((indicator) => (
+                            <span
+                              key={indicator.key}
+                              className={indicator.className}
+                              title={indicator.title}
+                            >
+                              {indicator.label}
+                            </span>
+                          ))}
+                        </span>
                       </div>
 
-                      {dayEvents.slice(0, 2).map((event) => (
+                      {dayEvents.slice(0, 2).map((event) => {
+                        const theme = getEventTheme(event);
+                        return (
                         <button
                           key={event.id}
                           className="calendarPill eventPill"
@@ -5252,6 +5449,9 @@ function PlannerPage({
                           title="Remove this event from CASE"
                           style={{
                             border: "none",
+                            background: theme.soft,
+                            color: theme.text,
+                            boxShadow: `inset 0 0 0 1px ${theme.border}`,
                             cursor: "pointer",
                             textAlign: "left",
                             width: "100%",
@@ -5259,7 +5459,8 @@ function PlannerPage({
                         >
                           {event.title}
                         </button>
-                      ))}
+                        );
+                      })}
 
                       {dayTasks.slice(0, 2).map((task) => (
                         <div
@@ -5318,7 +5519,10 @@ function PlannerPage({
                       })}
                     </div>
 
-                    {dayEvents.map((event) => (
+                    {dayEvents.map((event) => {
+                      const theme = getEventTheme(event);
+                      const location = formatEventLocation(event.location);
+                      return (
                       <div
                         key={event.id}
                         style={{
@@ -5326,22 +5530,25 @@ function PlannerPage({
                           gridTemplateColumns: "minmax(0, 1fr) auto",
                           gap: "10px",
                           alignItems: "start",
-                          background: PERSON_THEMES.Event.soft,
-                          border: `1px solid ${PERSON_THEMES.Event.border}`,
-                          color: PERSON_THEMES.Event.text,
+                          background: theme.soft,
+                          border: `1px solid ${theme.border}`,
+                          color: theme.text,
                           padding: "10px 12px",
                           borderRadius: "12px",
                           marginBottom: "8px",
                         }}
                       >
                         <div>
+                          <div className="tiny" style={{ color: theme.text, fontWeight: 900, marginBottom: "3px" }}>
+                            {formatEventTime(event)}
+                          </div>
                           <div style={{ fontWeight: 800 }}>
                             {event.title}
                           </div>
 
-                          {event.location && (
+                          {location && (
                             <div className="tiny">
-                              📍 {event.location}
+                              {location}
                             </div>
                           )}
 
@@ -5360,7 +5567,8 @@ function PlannerPage({
                           ×
                         </button>
                       </div>
-                    ))}
+                      );
+                    })}
 
                     {dayTasks.map((task) => {
                       const theme = getPersonTheme(task.assigned_to);

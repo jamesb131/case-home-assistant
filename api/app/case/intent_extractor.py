@@ -115,6 +115,7 @@ Calendar rules:
 - "what do we have planned", "what's on this weekend", "are we busy" => domain=calendar, operation=read.
 - Creating parties/appointments/events => domain=calendar, operation=create.
 - If unclear whether something is a task or calendar event, use operation=clarify.
+- Child schedule markers like "Benny has daycare next Wednesday", "add Benny kindy tomorrow", "mark Leo school Monday" => domain=calendar, operation=create, person=Leo/Benny, category=daycare/kindy/school_day. These are all-day markers unless a time is explicitly provided.
 
 Date rules:
 - Use today's date when the user says today.
@@ -509,6 +510,11 @@ def extract_roborock_route(text, lower):
 
 
 def extract_calendar_intent(text, lower):
+    child_marker_intent = extract_child_day_marker_intent(text, lower)
+
+    if child_marker_intent:
+        return child_marker_intent
+
     if re.search(r"\b(add|create|make|book)\s+(an?\s+)?(calendar\s+)?(event|appointment)\b", lower):
         title = re.sub(
             r"^\s*(add|create|make|book)\s+(an?\s+)?(calendar\s+)?(event|appointment)?\s*",
@@ -539,6 +545,47 @@ def extract_calendar_intent(text, lower):
         }
 
     return None
+
+
+def extract_child_day_marker_intent(text, lower):
+    person = None
+    if re.search(r"\bleo\b", lower):
+        person = "Leo"
+    elif re.search(r"\bbenny\b", lower):
+        person = "Benny"
+
+    if not person:
+        return None
+
+    category = None
+    label = None
+    if re.search(r"\bday\s*care\b|\bdaycare\b", lower):
+        category = "daycare"
+        label = "daycare"
+    elif re.search(r"\bkindy\b|\bkindergarten\b", lower):
+        category = "kindy"
+        label = "kindy"
+    elif re.search(r"\bschool\b", lower):
+        category = "school_day"
+        label = "school"
+
+    if not category:
+        return None
+
+    if not re.search(r"\b(add|create|make|book|put|mark|has|have|does|doing|goes|going)\b", lower):
+        return None
+
+    return {
+        "domain": "calendar",
+        "operation": "create",
+        "confidence": "high",
+        "clarification_needed": False,
+        "clarification_question": None,
+        "title": f"{person} {label}",
+        "person": person,
+        "category": category,
+        "question": text,
+    }
 
 
 def extract_news_intent(text, lower):

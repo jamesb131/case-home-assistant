@@ -214,6 +214,21 @@
       "expected": { "domain": "calendar", "operation": "create" }
     },
     {
+      "input": "Benny has daycare next Wednesday",
+      "severity": "important",
+      "expected": { "domain": "calendar", "operation": "create", "person": "Benny", "category": "daycare" }
+    },
+    {
+      "input": "Add Benny kindy tomorrow",
+      "severity": "important",
+      "expected": { "domain": "calendar", "operation": "create", "person": "Benny", "category": "kindy" }
+    },
+    {
+      "input": "Mark Leo school Monday",
+      "severity": "important",
+      "expected": { "domain": "calendar", "operation": "create", "person": "Leo", "category": "school_day" }
+    },
+    {
       "input": "Book dentist for James",
       "severity": "important",
       "expected": { "domain": "calendar", "operation": "clarify" }
