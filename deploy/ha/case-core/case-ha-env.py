@@ -52,6 +52,9 @@ OPTION_ENV_MAP = {
     "airtouch_zone_entities": "AIRTOUCH_ZONE_ENTITIES",
     "news_feeds": "NEWS_FEEDS",
     "news_refresh_interval_seconds": "NEWS_REFRESH_INTERVAL_SECONDS",
+    "school_calendar_feeds": "SCHOOL_CALENDAR_FEEDS",
+    "school_calendar_refresh_interval_seconds": "SCHOOL_CALENDAR_REFRESH_INTERVAL_SECONDS",
+    "school_calendar_primary_audience": "SCHOOL_CALENDAR_PRIMARY_AUDIENCE",
 }
 
 
