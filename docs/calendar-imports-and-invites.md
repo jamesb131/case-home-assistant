@@ -7,13 +7,13 @@ CASE can ingest public `.ics` feeds into its local calendar store. School feeds 
 In the CASE Core add-on settings, use:
 
 ```text
-school_calendar_feeds: "St Francis Butler|https://example.com/calendar.ics"
+school_calendar_feeds: "St Francis Butler|https://calendar.google.com/calendar/ical/brightoncps.wa.edu.au_pq6tviier5bfodispuek6br16c%40group.calendar.google.com/public/basic.ics"
 ```
 
 The optional third field assigns the default child/audience:
 
 ```text
-school_calendar_feeds: "St Francis Butler|https://example.com/calendar.ics|Leo"
+school_calendar_feeds: "St Francis Butler|https://calendar.google.com/calendar/ical/brightoncps.wa.edu.au_pq6tviier5bfodispuek6br16c%40group.calendar.google.com/public/basic.ics|Leo"
 ```
 
 Multiple feeds can be comma-separated:

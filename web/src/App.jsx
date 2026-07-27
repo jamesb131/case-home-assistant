@@ -1721,12 +1721,12 @@ function App() {
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) minmax(270px, 300px)",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(12, minmax(0, 1fr))",
               gap: isMobile ? "20px" : "16px",
               alignItems: "start",
             }}
           >
-            <div>
+            <div style={isMobile ? undefined : { gridColumn: "1 / span 9", minWidth: 0 }}>
               <section style={{ marginBottom: "18px" }}>
                 <h1 style={{ margin: 0, fontSize: "32px", lineHeight: 1.1 }}>
                   {greeting()}
@@ -1745,13 +1745,13 @@ function App() {
                   display: "grid",
                   gridTemplateColumns: isMobile
                     ? "1fr"
-                    : "minmax(0, 1fr) minmax(0, 1fr) minmax(280px, 0.9fr)",
+                    : "repeat(9, minmax(0, 1fr))",
                   gap: isMobile ? "18px" : "16px",
                   marginBottom: "18px",
                   alignItems: "start",
                 }}
               >
-                <div style={{ display: "grid", gap: isMobile ? "18px" : "16px", gridColumn: isMobile ? undefined : "1 / 3" }}>
+                <div style={{ display: "grid", gap: isMobile ? "18px" : "16px", gridColumn: isMobile ? undefined : "1 / span 6", minWidth: 0 }}>
                 {weather && (
                   <div
                     className="card"
@@ -1888,10 +1888,11 @@ function App() {
                 {!isMobile && (
                   <div
                     style={{
-                      gridColumn: "3",
+                      gridColumn: "7 / span 3",
                       display: "grid",
                       gap: "16px",
                       alignSelf: "start",
+                      minWidth: 0,
                     }}
                   >
                     <section
@@ -2053,12 +2054,14 @@ function App() {
             {!isMobile && (
             <aside
               style={{
+                gridColumn: "10 / span 3",
                 display: "flex",
                 flexDirection: "column",
                 gap: "14px",
                 position: isMobile ? "static" : "sticky",
                 top: isMobile ? undefined : "20px",
                 marginTop: isMobile ? undefined : "78px",
+                minWidth: 0,
               }}
             >
               <section className="card">
@@ -2285,7 +2288,7 @@ function App() {
               isMobile={isMobile}
             />
           )}
-          {activePage === "Kids" && <KidsPage tasks={tasks} />}
+          {activePage === "Kids" && <KidsPage tasks={tasks} isMobile={isMobile} />}
           {activePage === "Lists" && (
             <ListsPage
               lists={lists}
@@ -2319,6 +2322,7 @@ function App() {
               setTaskModalOpen={setTaskModalOpen}
               deleteCalendarEvent={deleteCalendarEvent}
               updateCalendarReviewEvent={updateCalendarReviewEvent}
+              isMobile={isMobile}
             />
           )}
           {activePage === "Security" && (
@@ -3660,7 +3664,7 @@ function MusicHomeCard() {
           }}
         >
           {[
-            ["abc", "ABC"],
+            ["abc", "Radio"],
             ["youtube", "YouTube"],
           ].map(([value, label]) => (
             <button
@@ -3705,26 +3709,38 @@ function MusicHomeCard() {
 
       {mode === "abc" ? (
         <>
-          <h2 style={{ margin: "12px 0 4px", fontSize: "22px" }}>{station.title}</h2>
-          <div className="tiny" style={{ lineHeight: 1.35 }}>{station.subtitle}</div>
           <div
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: "8px",
-              marginTop: "10px",
+              gap: "12px",
+              marginTop: "12px",
             }}
           >
-            <button className="quietLinkButton" onClick={() => changeStation(-1)} aria-label="Previous radio station">
-              ←
-            </button>
-            <div className="tiny" style={{ fontWeight: 900 }}>
-              {stationIndex + 1} / {RADIO_STATIONS.length}
+            <div style={{ minWidth: 0 }}>
+              <h2 style={{ margin: "0 0 4px", fontSize: "22px" }}>{station.title}</h2>
+              <div className="tiny" style={{ lineHeight: 1.35 }}>{station.subtitle}</div>
             </div>
-            <button className="quietLinkButton" onClick={() => changeStation(1)} aria-label="Next radio station">
-              →
-            </button>
+            <div
+              style={{
+                display: "inline-grid",
+                gridTemplateColumns: "32px auto 32px",
+                alignItems: "center",
+                gap: "7px",
+                flex: "0 0 auto",
+              }}
+            >
+              <button className="quietLinkButton" onClick={() => changeStation(-1)} aria-label="Previous radio station">
+                ←
+              </button>
+              <div className="tiny" style={{ fontWeight: 900, textAlign: "center", minWidth: "34px" }}>
+                {stationIndex + 1} / {RADIO_STATIONS.length}
+              </div>
+              <button className="quietLinkButton" onClick={() => changeStation(1)} aria-label="Next radio station">
+                →
+              </button>
+            </div>
           </div>
           {error && (
             <div className="tiny" style={{ color: "#b91c1c", marginTop: "8px", fontWeight: 800 }}>
@@ -5064,6 +5080,7 @@ function PlannerPage({
   setTaskModalOpen,
   deleteCalendarEvent,
   updateCalendarReviewEvent,
+  isMobile = false,
 }) {
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
@@ -5132,12 +5149,12 @@ function PlannerPage({
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 72%) minmax(260px, 28%)",
+          gridTemplateColumns: isMobile ? "1fr" : "repeat(12, minmax(0, 1fr))",
           gap: "20px",
           alignItems: "start",
         }}
       >
-        <section className="card">
+        <section className="card" style={isMobile ? undefined : { gridColumn: "1 / span 9", minWidth: 0 }}>
           {plannerView === "month" ? (
             <>
               <div
@@ -5381,7 +5398,7 @@ function PlannerPage({
           )}
         </section>
 
-        <section className="card">
+        <section className="card" style={isMobile ? undefined : { gridColumn: "10 / span 3", minWidth: 0 }}>
           <div
             style={{
               display: "flex",
@@ -5752,7 +5769,7 @@ const KID_THEMES = {
   Benny: PERSON_THEMES.Benny,
 };
 
-function KidsPage({ tasks }) {
+function KidsPage({ tasks, isMobile = false }) {
   const [selectedKid, setSelectedKid] = useState("Leo");
 
   const theme = KID_THEMES[selectedKid];
@@ -5819,12 +5836,12 @@ function KidsPage({ tasks }) {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 360px",
+          gridTemplateColumns: isMobile ? "1fr" : "repeat(12, minmax(0, 1fr))",
           gap: "20px",
           alignItems: "start",
         }}
       >
-        <section className="card">
+        <section className="card" style={isMobile ? undefined : { gridColumn: "1 / span 9", minWidth: 0 }}>
           <div
             style={{
               display: "flex",
@@ -5955,7 +5972,7 @@ function KidsPage({ tasks }) {
           </div>
         </section>
 
-        <aside className="card">
+        <aside className="card" style={isMobile ? undefined : { gridColumn: "10 / span 3", minWidth: 0 }}>
           <div className="muted">This week</div>
           <h2 style={{ margin: "4px 0 16px" }}>{selectedKid}'s tasks</h2>
 

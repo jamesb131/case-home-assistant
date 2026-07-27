@@ -1,5 +1,5 @@
 name: CASE Core
-version: "0.1.47"
+version: "0.1.48"
 slug: case_core
 description: Local-first household assistant API, worker and web UI.
 url: https://github.com/jamesb131/case-home-assistant
@@ -69,7 +69,7 @@ options:
   airtouch_zone_entities: '{"Living":"climate.living","James & Chris":"climate.james_chris","Leo":"climate.leo","Benny":"climate.benny","Lounge":"climate.lounge","Study":"climate.study","Cinema":"climate.cinema","Guest":"climate.guest"}'
   news_feeds: "ABC News|https://www.abc.net.au/news/feed/51120/rss.xml"
   news_refresh_interval_seconds: 1800
-  school_calendar_feeds: ""
+  school_calendar_feeds: "St Francis Butler|https://calendar.google.com/calendar/ical/brightoncps.wa.edu.au_pq6tviier5bfodispuek6br16c%40group.calendar.google.com/public/basic.ics|Leo"
   school_calendar_refresh_interval_seconds: 1800
   school_calendar_primary_audience: "Leo"
 schema:
