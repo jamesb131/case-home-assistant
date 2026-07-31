@@ -383,6 +383,8 @@ function App() {
   const [roborockError, setRoborockError] = useState(null);
   const [airtouchStatus, setAirtouchStatus] = useState(null);
   const [airtouchError, setAirtouchError] = useState(null);
+  const [zigbeeMeters, setZigbeeMeters] = useState(null);
+  const [zigbeeMetersError, setZigbeeMetersError] = useState(null);
   const [zigbeeEnvironment, setZigbeeEnvironment] = useState(null);
   const [zigbeeEnvironmentError, setZigbeeEnvironmentError] = useState(null);
   const [newsItems, setNewsItems] = useState([]);
@@ -1369,6 +1371,42 @@ function App() {
     }
   }
 
+  async function loadZigbeeMeters() {
+    try {
+      const res = await apiFetch(`${API_BASE}/iot/zigbee/meters`);
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || json.snapshot_error || `Zigbee meters API returned ${res.status}`);
+
+      const readings = json.readings || [];
+      const histories = {};
+      await Promise.allSettled(
+        readings.map(async (reading) => {
+          const historyRes = await apiFetch(
+            `${API_BASE}/iot/zigbee/meters/${encodeURIComponent(reading.device_name)}/readings?limit=1000`
+          );
+          const historyJson = await historyRes.json();
+          if (historyRes.ok) {
+            histories[reading.device_name] = historyJson.readings || [];
+          }
+        })
+      );
+
+      setZigbeeMeters({
+        ...json,
+        histories,
+      });
+      setZigbeeMetersError(json.snapshot_error || null);
+    } catch (err) {
+      console.error(err);
+      setZigbeeMetersError(err.message);
+      setZigbeeMeters((current) => ({
+        ...(current || {}),
+        error: err.message,
+      }));
+    }
+  }
+
   async function loadZigbeeEnvironment() {
     try {
       const res = await apiFetch(`${API_BASE}/iot/zigbee/environment`);
@@ -1491,6 +1529,7 @@ function App() {
       loadGaggimateProfiles(),
       loadRoborockStatus(),
       loadAirtouchStatus(),
+      loadZigbeeMeters(),
       loadZigbeeEnvironment(),
       loadNewsSummary(),
     ]);
@@ -1515,6 +1554,7 @@ function App() {
       loadGaggimateProfiles();
       loadRoborockStatus();
       loadAirtouchStatus();
+      loadZigbeeMeters();
       loadZigbeeEnvironment();
       loadNewsSummary();
     }, 0);
@@ -1558,6 +1598,7 @@ function App() {
     }, 60000);
 
     const zigbeeEnvironmentInterval = setInterval(() => {
+      loadZigbeeMeters();
       loadZigbeeEnvironment();
     }, 60000);
 
@@ -2497,6 +2538,14 @@ function App() {
             <EnergyPage
               rows={energyDayRows.length ? energyDayRows : recentEnergy}
               summary={energyDaySummary || todaySummary}
+              flowSummary={energyFlowSummary}
+              flowPeriod={energyFlowPeriod}
+              setFlowPeriod={(period) => {
+                setEnergyFlowPeriod(period);
+                loadEnergyFlowSummary(period);
+              }}
+              zigbeeMeters={zigbeeMeters}
+              zigbeeMetersError={zigbeeMetersError}
               offset={energyDayOffset}
               setOffset={setEnergyDayOffset}
               state={state}
@@ -6430,7 +6479,19 @@ function ListsPage({
   );
 }
 
-function EnergyPage({ rows, summary, offset, setOffset, state, isMobile }) {
+function EnergyPage({
+  rows,
+  summary,
+  flowSummary,
+  flowPeriod,
+  setFlowPeriod,
+  zigbeeMeters,
+  zigbeeMetersError,
+  offset,
+  setOffset,
+  state,
+  isMobile,
+}) {
   const selectedDate = new Date();
   selectedDate.setDate(selectedDate.getDate() + offset);
   const canGoForward = offset < 0;
@@ -6458,26 +6519,37 @@ function EnergyPage({ rows, summary, offset, setOffset, state, isMobile }) {
           alignItems: "start",
         }}
       >
-        <section className="card energyPageChart">
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "10px" }}>
-            <div>
-              <div className="muted">Power movement</div>
-              <h2 style={{ margin: "2px 0 0", fontSize: "24px" }}>15-minute view</h2>
+        <div style={{ display: "grid", gap: "18px", minWidth: 0 }}>
+          <section className="card energyPageChart">
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "10px" }}>
+              <div>
+                <div className="muted">Power movement</div>
+                <h2 style={{ margin: "2px 0 0", fontSize: "24px" }}>15-minute view</h2>
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button className="button dayNavButton" onClick={() => setOffset(offset - 1)}>←</button>
+                <button
+                  className="button dayNavButton"
+                  onClick={() => setOffset(offset + 1)}
+                  disabled={!canGoForward}
+                  style={{ background: canGoForward ? "#111827" : "#cbd5e1", cursor: canGoForward ? "pointer" : "not-allowed" }}
+                >
+                  →
+                </button>
+              </div>
             </div>
-            <div style={{ display: "flex", gap: "8px" }}>
-              <button className="button dayNavButton" onClick={() => setOffset(offset - 1)}>←</button>
-              <button
-                className="button dayNavButton"
-                onClick={() => setOffset(offset + 1)}
-                disabled={!canGoForward}
-                style={{ background: canGoForward ? "#111827" : "#cbd5e1", cursor: canGoForward ? "pointer" : "not-allowed" }}
-              >
-                →
-              </button>
-            </div>
-          </div>
-          <EnergyDayChart data={rows} isMobile={isMobile} />
-        </section>
+            <EnergyDayChart data={rows} isMobile={isMobile} />
+          </section>
+
+          <DeviceEnergyFlowCard
+            summary={flowSummary}
+            activePeriod={flowPeriod}
+            onPeriodChange={setFlowPeriod}
+            zigbeeMeters={zigbeeMeters}
+            zigbeeMetersError={zigbeeMetersError}
+            isMobile={isMobile}
+          />
+        </div>
 
         <aside style={{ display: "grid", gap: "14px" }}>
           <BatteryReserveCard state={state} />
@@ -6495,6 +6567,314 @@ function EnergyPage({ rows, summary, offset, setOffset, state, isMobile }) {
         </aside>
       </div>
     </div>
+  );
+}
+
+function DeviceEnergyFlowCard({ summary, activePeriod, onPeriodChange, zigbeeMeters, zigbeeMetersError, isMobile }) {
+  const unit = summary?.unit || (activePeriod === "now" ? "kW" : "kWh");
+  const values = summary?.values || {};
+  const meterDevices = buildZigbeeDeviceLoads(zigbeeMeters, activePeriod);
+  const evValue = Math.max(0, Number(values.ev || 0));
+  const homeLoadNet = Math.max(0, Number(values.home_load_net ?? values.home_load ?? 0));
+  const otherMeteredTotal = meterDevices.reduce((sum, device) => sum + device.value, 0);
+  const unmeteredValue = Math.max(0, homeLoadNet - otherMeteredTotal);
+  const sources = [
+    { id: "solar", label: "Solar", value: Math.max(0, Number(values.solar || 0)), color: "#facc15" },
+    { id: "battery", label: "Battery", value: Math.max(0, Number(values.battery_discharge || 0)), color: "#2dd4bf" },
+    { id: "grid", label: "Grid", value: Math.max(0, Number(values.grid_import || 0)), color: "#60a5fa" },
+  ];
+  const devices = [
+    { id: "unmetered", label: "Unmetered", value: unmeteredValue, color: "#a855f7" },
+    { id: "ev", label: "EV", value: evValue, color: "#ef4444" },
+    ...meterDevices.map((device, index) => ({
+      ...device,
+      id: `meter-${index}`,
+      color: DEVICE_FLOW_COLORS[index % DEVICE_FLOW_COLORS.length],
+    })),
+  ];
+  const visibleDevices = devices.filter((device) => device.value > 0.005 || device.id === "unmetered" || device.id === "ev");
+  const flows = buildDeviceFlowRibbons(sources, visibleDevices);
+
+  return (
+    <section className="card">
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "12px" }}>
+        <div>
+          <div className="muted">Device flow</div>
+          <h2 style={{ margin: "2px 0 0", fontSize: "24px" }}>{periodLabel(activePeriod)}</h2>
+        </div>
+        <div
+          className="quietLinkButton"
+          style={{ alignSelf: "flex-start", pointerEvents: "none" }}
+        >
+          {unit}
+        </div>
+      </div>
+
+      {zigbeeMetersError && (
+        <div
+          style={{
+            background: "#fee2e2",
+            color: "#991b1b",
+            borderRadius: "12px",
+            padding: "10px 12px",
+            fontWeight: 900,
+            marginBottom: "12px",
+          }}
+        >
+          {zigbeeMetersError}
+        </div>
+      )}
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "112px minmax(0, 1fr)",
+          gap: "12px",
+          alignItems: "stretch",
+        }}
+      >
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "repeat(4, minmax(0, 1fr))" : "1fr",
+            gap: "8px",
+            alignContent: "start",
+          }}
+        >
+          {["now", "today", "yesterday", "week"].map((period) => (
+            <button
+              key={period}
+              className="button"
+              onClick={() => onPeriodChange(period)}
+              style={{
+                minHeight: "42px",
+                padding: "8px 6px",
+                borderRadius: "14px",
+                fontSize: "12px",
+                background: activePeriod === period ? "#111827" : "#e5e7eb",
+                color: activePeriod === period ? "white" : "#111827",
+              }}
+            >
+              {period === "week" ? "Week" : periodLabel(period)}
+            </button>
+          ))}
+        </div>
+
+        <svg viewBox="0 0 760 320" style={{ width: "100%", display: "block", minHeight: isMobile ? "240px" : "300px" }}>
+          <defs>
+            {flows.map((flow, index) => (
+              <linearGradient key={`device-flow-gradient-${index}`} id={`device-flow-gradient-${index}`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor={flow.source.color} stopOpacity="0.5" />
+                <stop offset="100%" stopColor={flow.sink.color} stopOpacity="0.55" />
+              </linearGradient>
+            ))}
+          </defs>
+
+          {flows.map((flow, index) => (
+            <path
+              key={`device-flow-${index}`}
+              d={flow.path}
+              fill={`url(#device-flow-gradient-${index})`}
+              opacity="0.72"
+            />
+          ))}
+
+          {layoutHorizontalBlocks(sources, 24, 90).map((item) => (
+            <DeviceFlowNode key={item.id} item={item} y={24} height={66} unit={unit} />
+          ))}
+
+          {layoutHorizontalBlocks(visibleDevices, 216, 292).map((item) => (
+            <DeviceFlowNode key={item.id} item={item} y={216} height={76} unit={unit} />
+          ))}
+        </svg>
+      </div>
+
+      <div className="tiny" style={{ marginTop: "10px" }}>
+        Metered devices are carved out of house load, not added on top.
+      </div>
+    </section>
+  );
+}
+
+const DEVICE_FLOW_COLORS = ["#0ea5e9", "#f97316", "#84cc16", "#ec4899", "#64748b"];
+
+function buildZigbeeDeviceLoads(zigbeeMeters, activePeriod) {
+  const readings = zigbeeMeters?.readings || [];
+  const configuredDevices = zigbeeMeters?.devices || [];
+  const byName = new Map(readings.map((reading) => [reading.device_name, reading]));
+
+  return configuredDevices.map((name) => {
+    const reading = byName.get(name) || {};
+    const history = zigbeeMeters?.histories?.[name] || [];
+    const value =
+      activePeriod === "now"
+        ? Math.max(0, Number(reading.power_w || 0)) / 1000
+        : estimateMeterEnergyKwh(history, activePeriod);
+
+    return {
+      label: compactDeviceName(name),
+      value,
+    };
+  });
+}
+
+function estimateMeterEnergyKwh(history, period) {
+  if (!history?.length) return 0;
+
+  const now = new Date();
+  const start = getPeriodStart(period, now);
+  const end = period === "yesterday" ? getPeriodStart("today", now) : now;
+  const ordered = [...history]
+    .map((reading) => ({
+      ...reading,
+      capturedDate: new Date(reading.captured_at),
+    }))
+    .filter((reading) => reading.capturedDate >= start && reading.capturedDate <= end)
+    .sort((a, b) => a.capturedDate - b.capturedDate);
+
+  if (ordered.length < 2) return 0;
+
+  const firstEnergy = ordered.find((reading) => reading.energy_kwh !== null && reading.energy_kwh !== undefined);
+  const lastEnergy = [...ordered].reverse().find((reading) => reading.energy_kwh !== null && reading.energy_kwh !== undefined);
+  if (firstEnergy && lastEnergy && Number(lastEnergy.energy_kwh) >= Number(firstEnergy.energy_kwh)) {
+    return Math.max(0, Number(lastEnergy.energy_kwh) - Number(firstEnergy.energy_kwh));
+  }
+
+  let kwh = 0;
+  for (let i = 0; i < ordered.length - 1; i += 1) {
+    const current = ordered[i];
+    const next = ordered[i + 1];
+    const seconds = Math.min(1800, Math.max(0, (next.capturedDate - current.capturedDate) / 1000));
+    kwh += (Math.max(0, Number(current.power_w || 0)) / 1000) * (seconds / 3600);
+  }
+
+  return kwh;
+}
+
+function getPeriodStart(period, now = new Date()) {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+
+  if (period === "yesterday") {
+    start.setDate(start.getDate() - 1);
+  }
+
+  if (period === "week") {
+    const day = start.getDay();
+    const daysSinceMonday = day === 0 ? 6 : day - 1;
+    start.setDate(start.getDate() - daysSinceMonday);
+  }
+
+  return start;
+}
+
+function compactDeviceName(name) {
+  return String(name || "")
+    .replace(/_/g, " ")
+    .replace(/\bpower plug\b/i, "")
+    .replace(/\s+/g, " ")
+    .trim() || "Device";
+}
+
+function layoutHorizontalBlocks(items, yTop, yBottom) {
+  const minWidth = 104;
+  const gap = 12;
+  const left = 10;
+  const right = 750;
+  const available = right - left - gap * Math.max(0, items.length - 1);
+  const values = items.map((item) => Math.max(0, item.value || 0));
+  const valueTotal = values.reduce((sum, value) => sum + value, 0);
+  const minTotal = minWidth * items.length;
+  const extraWidth = Math.max(0, available - minTotal);
+  let x = left;
+
+  return items.map((item, index) => {
+    const weight = valueTotal > 0 ? values[index] / valueTotal : 1 / Math.max(1, items.length);
+    const width = minWidth + extraWidth * weight;
+    const block = {
+      ...item,
+      x,
+      yTop,
+      yBottom,
+      width,
+      height: yBottom - yTop,
+      midX: x + width / 2,
+    };
+    x += width + gap;
+    return block;
+  });
+}
+
+function buildDeviceFlowRibbons(sources, sinks) {
+  const sourceBlocks = layoutHorizontalBlocks(sources, 24, 90);
+  const sinkBlocks = layoutHorizontalBlocks(sinks, 216, 292);
+  const sourceTotal = sourceBlocks.reduce((sum, source) => sum + Math.max(0, source.value || 0), 0);
+  const sinkTotal = sinkBlocks.reduce((sum, sink) => sum + Math.max(0, sink.value || 0), 0);
+  if (sourceTotal <= 0.005 || sinkTotal <= 0.005) return [];
+
+  const sourceState = sourceBlocks.map((source) => ({ ...source, remaining: source.value, cursor: source.x }));
+  const sinkState = sinkBlocks.map((sink) => ({ ...sink, remaining: sink.value, cursor: sink.x }));
+  const flows = [];
+
+  sinkState.forEach((sink) => {
+    sourceState.forEach((source) => {
+      if (sink.remaining <= 0.005 || source.remaining <= 0.005) return;
+      const targetShare = sink.value * (source.value / sourceTotal);
+      const amount = Math.min(source.remaining, sink.remaining, targetShare);
+      if (amount <= 0.005) return;
+
+      const sourceWidth = (amount / Math.max(source.value, 0.01)) * source.width;
+      const sinkWidth = (amount / Math.max(sink.value, 0.01)) * sink.width;
+      const sourceLeft = source.cursor;
+      const sourceRight = sourceLeft + sourceWidth;
+      const sinkLeft = sink.cursor;
+      const sinkRight = sinkLeft + sinkWidth;
+
+      flows.push({
+        source,
+        sink,
+        path: verticalRibbonPath(sourceLeft, sourceRight, 90, sinkLeft, sinkRight, 216),
+      });
+
+      source.cursor += sourceWidth;
+      sink.cursor += sinkWidth;
+      source.remaining -= amount;
+      sink.remaining -= amount;
+    });
+  });
+
+  return flows;
+}
+
+function verticalRibbonPath(sourceLeft, sourceRight, sourceY, sinkLeft, sinkRight, sinkY) {
+  const c1 = sourceY + 58;
+  const c2 = sinkY - 58;
+
+  return [
+    `M ${sourceLeft} ${sourceY}`,
+    `C ${sourceLeft} ${c1}, ${sinkLeft} ${c2}, ${sinkLeft} ${sinkY}`,
+    `L ${sinkRight} ${sinkY}`,
+    `C ${sinkRight} ${c2}, ${sourceRight} ${c1}, ${sourceRight} ${sourceY}`,
+    "Z",
+  ].join(" ");
+}
+
+function DeviceFlowNode({ item, y, height, unit }) {
+  const textColor = getEnergyFlowTextColor(item.color);
+
+  return (
+    <g>
+      <rect x={item.x} y={y} width={item.width} height={height} rx="8" fill={item.color} opacity="0.93" />
+      <text x={item.x + 10} y={y + 27} fontSize="18" fontWeight="900" fill={textColor}>
+        {item.label}
+      </text>
+      <text x={item.x + 10} y={y + 55} fontSize="24" fontWeight="950" fill={textColor}>
+        {Number(item.value || 0).toFixed((item.value || 0) >= 10 ? 1 : 2)}
+      </text>
+      <text x={item.x + item.width - 10} y={y + height - 12} textAnchor="end" fontSize="12" fontWeight="900" fill={textColor} opacity="0.75">
+        {unit}
+      </text>
+    </g>
   );
 }
 

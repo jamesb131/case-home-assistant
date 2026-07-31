@@ -10,6 +10,13 @@ import paho.mqtt.client as mqtt
 
 DEFAULT_ZIGBEE_METER_DEVICES = '{"PC power plug":"PC_power_plug"}'
 DEFAULT_ZIGBEE_ENVIRONMENT_DEVICES = '{"Fridge":"Fridge_Temp_Sensor"}'
+MQTT_CONNECT_ERRORS = {
+    1: "unacceptable protocol version",
+    2: "identifier rejected",
+    3: "server unavailable",
+    4: "bad username or password",
+    5: "not authorised",
+}
 
 
 class ZigbeeMqttUnavailable(Exception):
@@ -82,7 +89,11 @@ def read_zigbee_device(device_name, topic_name, normalise_payload, request_state
 
     def on_connect(client, userdata, flags, rc):
         if rc != 0:
-            result["error"] = f"MQTT connection failed with code {rc}."
+            reason = MQTT_CONNECT_ERRORS.get(rc, "unknown error")
+            hint = ""
+            if rc in {4, 5}:
+                hint = " Check zigbee_mqtt_username and zigbee_mqtt_password in CASE Core settings."
+            result["error"] = f"MQTT connection failed with code {rc} ({reason}).{hint}"
             payload_event.set()
             return
         client.subscribe(topic)
