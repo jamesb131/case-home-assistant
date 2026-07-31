@@ -39,6 +39,8 @@ from app.worker import log_energy_snapshot
 from app.worker import poll_gaggimate_snapshot
 from app.worker import poll_news_snapshot
 from app.worker import poll_roborock_snapshot
+from app.worker import poll_zigbee_environment_snapshot
+from app.worker import poll_zigbee_meter_snapshot
 from app.services.gaggimate_client import (
     GaggimateUnavailable,
     change_mode as change_gaggimate_mode,
@@ -49,6 +51,16 @@ from app.services.home_assistant_client import HomeAssistantUnavailable
 from app.services.news_client import get_news_overview
 from app.services.roborock_client import get_roborock_status, run_roborock_command
 from app.services.airtouch_client import get_airtouch_status, run_airtouch_command
+from app.services.zigbee_environment_service import (
+    get_zigbee_environment_history,
+    get_zigbee_environment_status,
+)
+from app.services.zigbee_meter_service import (
+    get_zigbee_meter_history,
+    get_zigbee_meter_status,
+    set_zigbee_meter_state,
+)
+from app.services.zigbee_mqtt_client import ZigbeeMqttUnavailable
 from app.repositories.gaggimate_repository import get_recent_gaggimate_readings
 from app.repositories.news_repository import get_latest_news
 
@@ -615,6 +627,10 @@ class CalendarEventRequest(BaseModel):
 class CalendarReviewRequest(BaseModel):
     status: str
 
+class ZigbeeMeterCommandRequest(BaseModel):
+    device_name: str
+    state: str
+
 @app.post("/case/ask")
 def case_ask(request: CaseAskRequest):
     return ask_case(request.message)
@@ -770,6 +786,64 @@ def airtouch_command(request: AirtouchCommandRequest):
                 "status": get_airtouch_status(),
             },
         )
+
+@app.get("/iot/zigbee/meters")
+def zigbee_meter_status():
+    snapshot = get_snapshot("iot.zigbee_meters")
+    status = get_zigbee_meter_status()
+
+    return {
+        **status,
+        "snapshot_status": snapshot["status"] if snapshot else "unknown",
+        "captured_at": snapshot["captured_at"] if snapshot else None,
+        "snapshot_error": snapshot["error"] if snapshot else None,
+    }
+
+@app.post("/iot/zigbee/meters/refresh")
+def refresh_zigbee_meter_status():
+    return poll_zigbee_meter_snapshot()
+
+@app.get("/iot/zigbee/meters/{device_name}/readings")
+def zigbee_meter_readings(device_name: str, limit: int = 120):
+    bounded_limit = max(1, min(limit, 1000))
+    return get_zigbee_meter_history(device_name, limit=bounded_limit)
+
+@app.post("/iot/zigbee/meters/command")
+def zigbee_meter_command(request: ZigbeeMeterCommandRequest):
+    try:
+        return set_zigbee_meter_state(request.device_name, request.state)
+    except ZigbeeMqttUnavailable as exc:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "ok": False,
+                "device_name": request.device_name,
+                "state": request.state,
+                "error": str(exc),
+            },
+        )
+
+@app.get("/iot/zigbee/environment")
+def zigbee_environment_status():
+    snapshot = get_snapshot("iot.zigbee_environment")
+    status = get_zigbee_environment_status()
+
+    return {
+        **status,
+        "snapshot_status": snapshot["status"] if snapshot else "unknown",
+        "captured_at": snapshot["captured_at"] if snapshot else None,
+        "snapshot_error": snapshot["error"] if snapshot else None,
+    }
+
+@app.post("/iot/zigbee/environment/refresh")
+def refresh_zigbee_environment_status():
+    return poll_zigbee_environment_snapshot()
+
+@app.get("/iot/zigbee/environment/{device_name}/readings")
+def zigbee_environment_readings(device_name: str, hours: int = 12, limit: int = 180):
+    bounded_hours = max(1, min(hours, 168))
+    bounded_limit = max(1, min(limit, 1000))
+    return get_zigbee_environment_history(device_name, hours=bounded_hours, limit=bounded_limit)
 
 @app.get("/news/latest")
 def news_latest(limit: int = 20):

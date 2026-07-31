@@ -1,5 +1,5 @@
 name: CASE Core
-version: "0.1.52"
+version: "0.1.53"
 slug: case_core
 description: Local-first household assistant API, worker and web UI.
 url: https://github.com/jamesb131/case-home-assistant
@@ -69,6 +69,15 @@ options:
   airtouch_zone_entities: '{"Living":"climate.living","James & Chris":"climate.james_chris","Leo":"climate.leo","Benny":"climate.benny","Lounge":"climate.lounge","Study":"climate.study","Cinema":"climate.cinema","Guest":"climate.guest"}'
   news_feeds: "ABC News|https://www.abc.net.au/news/feed/51120/rss.xml"
   news_refresh_interval_seconds: 1800
+  zigbee_mqtt_server: mqtt://core-mosquitto:1883
+  zigbee_mqtt_username: ""
+  zigbee_mqtt_password: ""
+  zigbee_mqtt_base_topic: zigbee2mqtt
+  zigbee_mqtt_timeout: 5
+  zigbee_meter_devices: '{"PC power plug":"PC_power_plug"}'
+  zigbee_meter_poll_interval: 30
+  zigbee_environment_devices: '{"Fridge":"Fridge_Temp_Sensor"}'
+  zigbee_environment_poll_interval: 60
   school_calendar_feeds: "St Francis Butler|https://calendar.google.com/calendar/ical/brightoncps.wa.edu.au_pq6tviier5bfodispuek6br16c%40group.calendar.google.com/public/basic.ics|Leo"
   school_calendar_refresh_interval_seconds: 1800
   school_calendar_primary_audience: "Leo"
@@ -118,6 +127,15 @@ schema:
   airtouch_zone_entities: str
   news_feeds: str
   news_refresh_interval_seconds: int(300,)
+  zigbee_mqtt_server: str
+  zigbee_mqtt_username: str?
+  zigbee_mqtt_password: password?
+  zigbee_mqtt_base_topic: str
+  zigbee_mqtt_timeout: int(1,30)
+  zigbee_meter_devices: str
+  zigbee_meter_poll_interval: int(10,)
+  zigbee_environment_devices: str
+  zigbee_environment_poll_interval: int(10,)
   school_calendar_feeds: str
   school_calendar_refresh_interval_seconds: int(300,)
   school_calendar_primary_audience: str

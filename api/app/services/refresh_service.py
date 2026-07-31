@@ -8,6 +8,8 @@ from app.worker import (
     poll_recurring_tasks,
     poll_weather_snapshot,
     poll_worker_status,
+    poll_zigbee_environment_snapshot,
+    poll_zigbee_meter_snapshot,
 )
 
 
@@ -25,12 +27,20 @@ REFRESH_JOBS = {
     "vacuum": poll_roborock_snapshot,
     "news": poll_news_snapshot,
     "abc": poll_news_snapshot,
+    "zigbee": poll_zigbee_meter_snapshot,
+    "zigbee_meters": poll_zigbee_meter_snapshot,
+    "meters": poll_zigbee_meter_snapshot,
+    "power_plugs": poll_zigbee_meter_snapshot,
+    "zigbee_environment": poll_zigbee_environment_snapshot,
+    "environment": poll_zigbee_environment_snapshot,
+    "rooms": poll_zigbee_environment_snapshot,
+    "sensors": poll_zigbee_environment_snapshot,
 }
 
 REFRESH_ALIASES = {
-    "all": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks", "gaggimate", "roborock", "news"],
-    "everything": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks", "gaggimate", "roborock", "news"],
-    "data": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks", "gaggimate", "roborock", "news"],
+    "all": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks", "gaggimate", "roborock", "news", "zigbee", "zigbee_environment"],
+    "everything": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks", "gaggimate", "roborock", "news", "zigbee", "zigbee_environment"],
+    "data": ["energy", "weather", "calendar", "bins", "status", "recurring_tasks", "gaggimate", "roborock", "news", "zigbee", "zigbee_environment"],
     "events": ["calendar"],
     "calendar": ["calendar"],
     "solar": ["energy"],
@@ -48,6 +58,15 @@ REFRESH_ALIASES = {
     "roborock": ["roborock"],
     "news": ["news"],
     "abc": ["news"],
+    "zigbee": ["zigbee"],
+    "meters": ["zigbee"],
+    "power_plugs": ["zigbee"],
+    "plug": ["zigbee"],
+    "environment": ["zigbee_environment"],
+    "rooms": ["zigbee_environment"],
+    "room_sensors": ["zigbee_environment"],
+    "sensors": ["zigbee_environment"],
+    "fridge": ["zigbee_environment"],
 }
 
 

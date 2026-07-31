@@ -1,0 +1,117 @@
+# Zigbee MQTT Devices
+
+CASE reads Zigbee devices directly from Zigbee2MQTT over MQTT. This keeps the
+device path local-first and avoids depending on Home Assistant entities for
+metering and room sensor data.
+
+## Current Devices
+
+Power plug:
+
+```text
+PC_power_plug
+```
+
+It currently publishes on:
+
+```text
+zigbee2mqtt/PC_power_plug
+```
+
+Example payload:
+
+```json
+{
+  "current": 0.3,
+  "last_seen": "2026-07-31T09:47:45.611Z",
+  "linkquality": 72,
+  "power": 63,
+  "voltage": 237,
+  "energy": null,
+  "state": null
+}
+```
+
+Temperature and humidity sensor:
+
+```text
+Fridge_Temp_Sensor
+```
+
+It publishes on:
+
+```text
+zigbee2mqtt/Fridge_Temp_Sensor
+```
+
+Example payload:
+
+```json
+{
+  "battery": 100,
+  "humidity": 66.6,
+  "last_seen": "2026-07-31T09:54:20.226Z",
+  "linkquality": 36,
+  "temperature": 23.35,
+  "voltage": 2900
+}
+```
+
+## CASE Settings
+
+CASE Core settings:
+
+```text
+zigbee_mqtt_server=mqtt://core-mosquitto:1883
+zigbee_mqtt_username=<mosquitto username>
+zigbee_mqtt_password=<mosquitto password>
+zigbee_mqtt_base_topic=zigbee2mqtt
+zigbee_meter_devices={"PC power plug":"PC_power_plug"}
+zigbee_meter_poll_interval=30
+zigbee_environment_devices={"Fridge":"Fridge_Temp_Sensor"}
+zigbee_environment_poll_interval=60
+```
+
+`zigbee_meter_devices` is a JSON map of display names to Zigbee2MQTT friendly
+names. Add future power plugs here instead of adding new code:
+
+```json
+{
+  "PC power plug": "PC_power_plug",
+  "Hot water": "hot_water_power_plug"
+}
+```
+
+`zigbee_environment_devices` is the same pattern for temperature, humidity,
+battery, link quality, CO2 and air-quality sensors:
+
+```json
+{
+  "Fridge": "Fridge_Temp_Sensor",
+  "Leo": "leo_temp_sensor",
+  "Kitchen": "kitchen_air_sensor"
+}
+```
+
+## API
+
+```text
+GET  /iot/zigbee/meters
+POST /iot/zigbee/meters/refresh
+GET  /iot/zigbee/meters/{device_name}/readings
+POST /iot/zigbee/meters/command
+GET  /iot/zigbee/environment
+POST /iot/zigbee/environment/refresh
+GET  /iot/zigbee/environment/{device_name}/readings
+```
+
+Command body:
+
+```json
+{
+  "device_name": "PC power plug",
+  "state": "ON"
+}
+```
+
+Valid states are `ON`, `OFF`, and `TOGGLE`.

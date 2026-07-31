@@ -25,6 +25,8 @@ from app.services.roborock_client import get_roborock_status
 from app.services.sigenergy_client import get_energy_snapshot, read_sigenergy_registers
 from app.services.sigenergy_repository import insert_raw_registers
 from app.services.weather_client import get_weather_summary
+from app.services.zigbee_environment_service import poll_zigbee_environment
+from app.services.zigbee_meter_service import poll_zigbee_meters
 
 
 LOG_INTERVAL_SECONDS = int(os.getenv("LOG_INTERVAL", "30"))
@@ -39,6 +41,8 @@ ENERGY_RETENTION_DAYS = int(os.getenv("ENERGY_RETENTION_DAYS", "0"))
 GAGGIMATE_INTERVAL_SECONDS = int(os.getenv("GAGGIMATE_POLL_INTERVAL", "60"))
 ROBOROCK_INTERVAL_SECONDS = int(os.getenv("ROBOROCK_POLL_INTERVAL", "60"))
 NEWS_INTERVAL_SECONDS = int(os.getenv("NEWS_REFRESH_INTERVAL_SECONDS", "1800"))
+ZIGBEE_METER_INTERVAL_SECONDS = int(os.getenv("ZIGBEE_METER_POLL_INTERVAL", "30"))
+ZIGBEE_ENVIRONMENT_INTERVAL_SECONDS = int(os.getenv("ZIGBEE_ENVIRONMENT_POLL_INTERVAL", "60"))
 PERTH_TZ = ZoneInfo("Australia/Perth")
 
 
@@ -139,6 +143,8 @@ def poll_worker_status():
             "gaggimate_interval_seconds": GAGGIMATE_INTERVAL_SECONDS,
             "roborock_interval_seconds": ROBOROCK_INTERVAL_SECONDS,
             "news_interval_seconds": NEWS_INTERVAL_SECONDS,
+            "zigbee_meter_interval_seconds": ZIGBEE_METER_INTERVAL_SECONDS,
+            "zigbee_environment_interval_seconds": ZIGBEE_ENVIRONMENT_INTERVAL_SECONDS,
         },
     )
 
@@ -206,6 +212,32 @@ def poll_news_snapshot():
         status=status,
         ttl_seconds=NEWS_INTERVAL_SECONDS * 3,
         error="; ".join(result.get("errors") or []) or None,
+    )
+
+
+def poll_zigbee_meter_snapshot():
+    result = poll_zigbee_meters()
+    status = "ok" if result.get("ok") else "error"
+
+    return upsert_snapshot(
+        "iot.zigbee_meters",
+        result,
+        status=status,
+        ttl_seconds=ZIGBEE_METER_INTERVAL_SECONDS * 3,
+        error="; ".join(error["error"] for error in result.get("errors") or []) or None,
+    )
+
+
+def poll_zigbee_environment_snapshot():
+    result = poll_zigbee_environment()
+    status = "ok" if result.get("ok") else "error"
+
+    return upsert_snapshot(
+        "iot.zigbee_environment",
+        result,
+        status=status,
+        ttl_seconds=ZIGBEE_ENVIRONMENT_INTERVAL_SECONDS * 3,
+        error="; ".join(error["error"] for error in result.get("errors") or []) or None,
     )
 
 
@@ -308,6 +340,18 @@ def worker_loop():
             "name": "news",
             "interval": NEWS_INTERVAL_SECONDS,
             "job": poll_news_snapshot,
+            "next_run": 0,
+        },
+        {
+            "name": "zigbee_meters",
+            "interval": ZIGBEE_METER_INTERVAL_SECONDS,
+            "job": poll_zigbee_meter_snapshot,
+            "next_run": 0,
+        },
+        {
+            "name": "zigbee_environment",
+            "interval": ZIGBEE_ENVIRONMENT_INTERVAL_SECONDS,
+            "job": poll_zigbee_environment_snapshot,
             "next_run": 0,
         },
         {

@@ -5,6 +5,7 @@ pymodbus
 requests
 websocket-client
 pyairtouch==3.3.0
+paho-mqtt
 
 google-api-python-client
 google-auth-httplib2

@@ -383,6 +383,8 @@ function App() {
   const [roborockError, setRoborockError] = useState(null);
   const [airtouchStatus, setAirtouchStatus] = useState(null);
   const [airtouchError, setAirtouchError] = useState(null);
+  const [zigbeeEnvironment, setZigbeeEnvironment] = useState(null);
+  const [zigbeeEnvironmentError, setZigbeeEnvironmentError] = useState(null);
   const [newsItems, setNewsItems] = useState([]);
   const [newsSummary, setNewsSummary] = useState(null);
   const [newsError, setNewsError] = useState(null);
@@ -1367,6 +1369,59 @@ function App() {
     }
   }
 
+  async function loadZigbeeEnvironment() {
+    try {
+      const res = await apiFetch(`${API_BASE}/iot/zigbee/environment`);
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || json.snapshot_error || `Zigbee environment API returned ${res.status}`);
+
+      const readings = json.readings || [];
+      const histories = {};
+      await Promise.allSettled(
+        readings.map(async (reading) => {
+          const historyRes = await apiFetch(
+            `${API_BASE}/iot/zigbee/environment/${encodeURIComponent(reading.device_name)}/readings?hours=12&limit=180`
+          );
+          const historyJson = await historyRes.json();
+          if (historyRes.ok) {
+            histories[reading.device_name] = historyJson.readings || [];
+          }
+        })
+      );
+
+      setZigbeeEnvironment({
+        ...json,
+        histories,
+      });
+      setZigbeeEnvironmentError(json.snapshot_error || null);
+    } catch (err) {
+      console.error(err);
+      setZigbeeEnvironmentError(err.message);
+      setZigbeeEnvironment((current) => ({
+        ...(current || {}),
+        configured: false,
+        error: err.message,
+      }));
+    }
+  }
+
+  async function refreshZigbeeEnvironment() {
+    try {
+      const res = await apiFetch(`${API_BASE}/iot/zigbee/environment/refresh`, {
+        method: "POST",
+      });
+      const json = await res.json();
+
+      if (!res.ok) throw new Error(json.error || json.snapshot_error || `Zigbee environment refresh returned ${res.status}`);
+
+      await loadZigbeeEnvironment();
+    } catch (err) {
+      console.error(err);
+      setZigbeeEnvironmentError(err.message);
+    }
+  }
+
   async function loadNews() {
     try {
       const res = await apiFetch(`${API_BASE}/news/latest`);
@@ -1436,6 +1491,7 @@ function App() {
       loadGaggimateProfiles(),
       loadRoborockStatus(),
       loadAirtouchStatus(),
+      loadZigbeeEnvironment(),
       loadNewsSummary(),
     ]);
   }
@@ -1459,6 +1515,7 @@ function App() {
       loadGaggimateProfiles();
       loadRoborockStatus();
       loadAirtouchStatus();
+      loadZigbeeEnvironment();
       loadNewsSummary();
     }, 0);
 
@@ -1500,6 +1557,10 @@ function App() {
       loadAirtouchStatus();
     }, 60000);
 
+    const zigbeeEnvironmentInterval = setInterval(() => {
+      loadZigbeeEnvironment();
+    }, 60000);
+
     const newsInterval = setInterval(() => {
       loadNewsSummary();
     }, 300000);
@@ -1514,6 +1575,7 @@ function App() {
       clearInterval(gaggimateInterval);
       clearInterval(roborockInterval);
       clearInterval(airtouchInterval);
+      clearInterval(zigbeeEnvironmentInterval);
       clearInterval(newsInterval);
     };
   }, []);
@@ -2486,7 +2548,14 @@ function App() {
             />
           )}
           {activePage === "Weather" && (
-            <WeatherPage weather={weather} />
+            <WeatherPage
+              weather={weather}
+              zigbeeEnvironment={zigbeeEnvironment}
+              zigbeeEnvironmentError={zigbeeEnvironmentError}
+              refreshZigbeeEnvironment={refreshZigbeeEnvironment}
+              airtouchStatus={airtouchStatus}
+              runAirtouchCommand={runAirtouchCommand}
+            />
           )}
         </main>
       </div>
@@ -6429,17 +6498,31 @@ function EnergyPage({ rows, summary, offset, setOffset, state, isMobile }) {
   );
 }
 
-function WeatherPage({ weather }) {
+function WeatherPage({
+  weather,
+  zigbeeEnvironment,
+  zigbeeEnvironmentError,
+  refreshZigbeeEnvironment,
+  airtouchStatus,
+  runAirtouchCommand,
+}) {
   if (!weather) {
     return <section className="card">Weather is loading.</section>;
   }
+
+  const readings = zigbeeEnvironment?.readings || [];
+  const histories = zigbeeEnvironment?.histories || {};
+  const roomReadings = readings.filter((reading) => !isUtilityEnvironmentSensor(reading.device_name));
+  const utilityReadings = readings.filter((reading) => isUtilityEnvironmentSensor(reading.device_name));
+  const roomCards = roomReadings;
+  const utilityCards = utilityReadings;
 
   return (
     <div>
       <section style={{ marginBottom: "18px" }}>
         <h1 style={{ margin: 0, fontSize: "32px" }}>Weather</h1>
         <div style={{ marginTop: "8px", fontSize: "15px", color: "#6b7280" }}>
-          Perth forecast and solar conditions
+          Outdoor weather, room comfort and useful utility temperatures
         </div>
       </section>
 
@@ -6468,8 +6551,209 @@ function WeatherPage({ weather }) {
           </div>
         </section>
       </div>
+
+      <section style={{ marginTop: "18px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginBottom: "12px" }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: "24px" }}>Rooms</h2>
+            <div className="muted" style={{ marginTop: "4px" }}>Temperature and humidity over the last 12 hours</div>
+          </div>
+          <button className="button secondary" onClick={refreshZigbeeEnvironment} style={{ width: "auto", minHeight: "38px", padding: "8px 14px" }}>
+            Refresh
+          </button>
+        </div>
+
+        {zigbeeEnvironmentError && (
+          <div style={{ borderRadius: "14px", padding: "12px", background: "#fef2f2", color: "#991b1b", fontWeight: 800, marginBottom: "12px" }}>
+            {zigbeeEnvironmentError}
+          </div>
+        )}
+
+        {roomCards.length ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px" }}>
+            {roomCards.map((reading) => (
+              <EnvironmentRoomCard
+                key={reading.device_name}
+                reading={reading}
+                history={histories[reading.device_name] || []}
+                airtouchZone={findAirtouchZoneForSensor(airtouchStatus, reading.device_name)}
+                onVentToggle={runAirtouchCommand}
+              />
+            ))}
+          </div>
+        ) : (
+          <section className="card">
+            <div className="muted">No Zigbee room sensors configured yet.</div>
+            <div style={{ marginTop: "8px", fontWeight: 800 }}>
+              Add sensors in CASE settings with `zigbee_environment_devices`.
+            </div>
+          </section>
+        )}
+      </section>
+
+      {utilityCards.length > 0 && (
+        <section style={{ marginTop: "18px" }}>
+          <h2 style={{ margin: "0 0 12px", fontSize: "24px" }}>Utility sensors</h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
+            {utilityCards.map((reading) => (
+              <EnvironmentUtilityCard key={reading.device_name} reading={reading} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
+}
+
+function EnvironmentRoomCard({ reading, history, airtouchZone, onVentToggle }) {
+  const stale = isStaleReading(reading);
+  const zoneAvailable = Boolean(airtouchZone?.available);
+
+  return (
+    <section className="card" style={{ padding: "18px", minHeight: "240px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "10px", alignItems: "flex-start" }}>
+        <div>
+          <div className="muted">{reading.device_name}</div>
+          <div style={{ fontSize: "34px", fontWeight: 950, lineHeight: 1.05, marginTop: "6px" }}>
+            {formatMetric(reading.temperature_c, "°C")}
+          </div>
+        </div>
+        <span
+          style={{
+            borderRadius: "999px",
+            padding: "6px 9px",
+            fontSize: "11px",
+            fontWeight: 900,
+            background: stale ? "#fee2e2" : "#dcfce7",
+            color: stale ? "#991b1b" : "#15803d",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {stale ? "Stale" : "Live"}
+        </span>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px", marginTop: "12px" }}>
+        <MiniMetric label="Humidity" value={formatMetric(reading.humidity_percent, "%")} />
+        <MiniMetric label="Battery" value={formatMetric(reading.battery_percent, "%")} />
+        <MiniMetric label="Signal" value={reading.linkquality ?? "--"} />
+      </div>
+
+      {(reading.co2_ppm !== null && reading.co2_ppm !== undefined) || reading.air_quality || reading.voc_index !== null ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "8px", marginTop: "8px" }}>
+          <MiniMetric label="CO2" value={formatMetric(reading.co2_ppm, " ppm")} />
+          <MiniMetric label="VOC" value={reading.voc_index ?? "--"} />
+          <MiniMetric label="Air" value={reading.air_quality || "--"} />
+        </div>
+      ) : null}
+
+      <EnvironmentSparkline readings={history} />
+
+      {airtouchZone && (
+        <button
+          className="button"
+          disabled={!zoneAvailable}
+          onClick={() => onVentToggle(airtouchZone.on ? "zone_off" : "zone_on", { zone: airtouchZone.name })}
+          style={{
+            marginTop: "12px",
+            width: "100%",
+            minHeight: "40px",
+            background: airtouchZone.on ? "#dcfce7" : "#111827",
+            color: airtouchZone.on ? "#14532d" : "white",
+          }}
+        >
+          {airtouchZone.on ? "Vent open" : "Open vent"}
+        </button>
+      )}
+    </section>
+  );
+}
+
+function EnvironmentUtilityCard({ reading }) {
+  return (
+    <section className="card" style={{ padding: "16px" }}>
+      <div className="muted">{reading.device_name}</div>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "10px", marginTop: "8px" }}>
+        <div style={{ fontSize: "30px", fontWeight: 950, lineHeight: 1 }}>
+          {formatMetric(reading.temperature_c, "°C")}
+        </div>
+        <div className="muted" style={{ fontWeight: 900 }}>
+          {formatMetric(reading.humidity_percent, "%")}
+        </div>
+      </div>
+      <div className="tiny" style={{ marginTop: "10px" }}>
+        Battery {formatMetric(reading.battery_percent, "%")} · Signal {reading.linkquality ?? "--"}
+      </div>
+    </section>
+  );
+}
+
+function MiniMetric({ label, value }) {
+  return (
+    <div style={{ borderRadius: "14px", background: "#f8fafc", padding: "9px 10px", minWidth: 0 }}>
+      <div className="tiny">{label}</div>
+      <div style={{ fontSize: "16px", fontWeight: 950, marginTop: "3px", whiteSpace: "nowrap" }}>{value}</div>
+    </div>
+  );
+}
+
+function EnvironmentSparkline({ readings }) {
+  const points = [...(readings || [])]
+    .reverse()
+    .filter((reading) => reading.temperature_c !== null && reading.temperature_c !== undefined)
+    .slice(-80);
+
+  if (points.length < 2) {
+    return (
+      <div style={{ height: "54px", borderRadius: "14px", background: "#f8fafc", marginTop: "12px", display: "grid", placeItems: "center" }}>
+        <span className="tiny">Trend starts after a few readings</span>
+      </div>
+    );
+  }
+
+  const values = points.map((point) => Number(point.temperature_c));
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = Math.max(1, max - min);
+  const width = 220;
+  const height = 54;
+  const padding = 7;
+  const path = points
+    .map((point, index) => {
+      const x = padding + (index / Math.max(1, points.length - 1)) * (width - padding * 2);
+      const y = height - padding - ((Number(point.temperature_c) - min) / range) * (height - padding * 2);
+      return `${index === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
+    })
+    .join(" ");
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="12 hour temperature trend" style={{ width: "100%", height: "54px", marginTop: "12px", display: "block" }}>
+      <rect x="0" y="0" width={width} height={height} rx="14" fill="#f8fafc" />
+      <path d={path} fill="none" stroke="#38bdf8" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function isUtilityEnvironmentSensor(name) {
+  return /(fridge|garage|store|storeroom|wine|cooler|freezer|pantry|shed)/i.test(name || "");
+}
+
+function findAirtouchZoneForSensor(status, sensorName) {
+  const sensorKey = normaliseName(sensorName);
+  return (status?.zones || []).find((zone) => {
+    const zoneKey = normaliseName(zone.name);
+    return sensorKey === zoneKey || sensorKey.includes(zoneKey) || zoneKey.includes(sensorKey);
+  });
+}
+
+function normaliseName(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function isStaleReading(reading) {
+  const rawTime = reading.payload_at || reading.captured_at;
+  if (!rawTime) return false;
+  return Date.now() - new Date(rawTime).getTime() > 30 * 60 * 1000;
 }
 
 function IoTPage({

@@ -27,6 +27,8 @@ def get_system_status():
         "recurring_tasks": get_snapshot_status(snapshots.get("tasks.recurring")),
         "gaggimate": get_snapshot_status(snapshots.get("iot.gaggimate")),
         "roborock": get_snapshot_status(snapshots.get("iot.roborock")),
+        "zigbee_meters": get_snapshot_status(snapshots.get("iot.zigbee_meters")),
+        "zigbee_environment": get_snapshot_status(snapshots.get("iot.zigbee_environment")),
         "news": get_snapshot_status(snapshots.get("news.latest")),
         "snapshots": snapshots,
     }
