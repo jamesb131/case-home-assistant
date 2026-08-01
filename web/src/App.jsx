@@ -1432,7 +1432,11 @@ function App() {
         ...json,
         histories,
       });
-      setZigbeeEnvironmentError(json.snapshot_error || null);
+      const detailError =
+        json.snapshot_error ||
+        (json.snapshot_errors || []).map((error) => `${error.device_name}: ${error.error}`).join("; ") ||
+        null;
+      setZigbeeEnvironmentError(detailError);
     } catch (err) {
       console.error(err);
       setZigbeeEnvironmentError(err.message);
@@ -6772,6 +6776,8 @@ function compactDeviceName(name) {
   return String(name || "")
     .replace(/_/g, " ")
     .replace(/\bpower plug\b/i, "")
+    .replace(/\bpower sensor\b/i, "")
+    .replace(/\bsensor\b/i, "")
     .replace(/\s+/g, " ")
     .trim() || "Device";
 }
@@ -6892,6 +6898,7 @@ function WeatherPage({
 
   const readings = zigbeeEnvironment?.readings || [];
   const histories = zigbeeEnvironment?.histories || {};
+  const configuredEnvironmentDevices = zigbeeEnvironment?.devices || zigbeeEnvironment?.snapshot_devices || [];
   const roomReadings = readings.filter((reading) => !isUtilityEnvironmentSensor(reading.device_name));
   const utilityReadings = readings.filter((reading) => isUtilityEnvironmentSensor(reading.device_name));
   const roomCards = roomReadings;
@@ -6963,10 +6970,24 @@ function WeatherPage({
           </div>
         ) : (
           <section className="card">
-            <div className="muted">No Zigbee room sensors configured yet.</div>
-            <div style={{ marginTop: "8px", fontWeight: 800 }}>
-              Add sensors in CASE settings with `zigbee_environment_devices`.
-            </div>
+            {configuredEnvironmentDevices.length ? (
+              <>
+                <div className="muted">No room sensor readings stored yet.</div>
+                <div style={{ marginTop: "8px", fontWeight: 800 }}>
+                  Configured: {configuredEnvironmentDevices.join(", ")}
+                </div>
+                <div className="tiny" style={{ marginTop: "8px" }}>
+                  Battery sensors can take a little while to wake and publish their next reading.
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="muted">No Zigbee room sensors configured yet.</div>
+                <div style={{ marginTop: "8px", fontWeight: 800 }}>
+                  Add sensors in CASE settings with `zigbee_environment_devices`.
+                </div>
+              </>
+            )}
           </section>
         )}
       </section>

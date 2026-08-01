@@ -1,5 +1,5 @@
 name: CASE Core
-version: "0.1.54"
+version: "0.1.55"
 slug: case_core
 description: Local-first household assistant API, worker and web UI.
 url: https://github.com/jamesb131/case-home-assistant
@@ -74,7 +74,7 @@ options:
   zigbee_mqtt_password: ""
   zigbee_mqtt_base_topic: zigbee2mqtt
   zigbee_mqtt_timeout: 5
-  zigbee_meter_devices: '{"PC power plug":"PC_power_plug"}'
+  zigbee_meter_devices: '{"PC power plug":"PC_power_plug","Fridge":"Fridge_Power_Sensor","Washing machine":"washing_machine_power_plug"}'
   zigbee_meter_poll_interval: 30
   zigbee_environment_devices: '{"Fridge":"Fridge_Temp_Sensor"}'
   zigbee_environment_poll_interval: 60

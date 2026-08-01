@@ -10,12 +10,16 @@ Power plug:
 
 ```text
 PC_power_plug
+Fridge_Power_Sensor
+washing_machine_power_plug
 ```
 
-It currently publishes on:
+They currently publish on:
 
 ```text
 zigbee2mqtt/PC_power_plug
+zigbee2mqtt/Fridge_Power_Sensor
+zigbee2mqtt/washing_machine_power_plug
 ```
 
 Example payload:
@@ -29,6 +33,40 @@ Example payload:
   "voltage": 237,
   "energy": null,
   "state": null
+}
+```
+
+Fridge power payload:
+
+```json
+{
+  "child_lock": "UNLOCK",
+  "countdown": 0,
+  "current": 0,
+  "energy": 0,
+  "last_seen": "2026-08-01T00:14:52.657Z",
+  "linkquality": 36,
+  "power": 0,
+  "state": "OFF",
+  "voltage": 240
+}
+```
+
+Washing machine power payload:
+
+```json
+{
+  "child_lock": "UNLOCK",
+  "countdown": 0,
+  "current": 0.09,
+  "energy": 0,
+  "indicator_mode": "off/on",
+  "last_seen": "2026-08-01T00:24:14.675Z",
+  "linkquality": 84,
+  "power": 0,
+  "power_outage_memory": "off",
+  "state": "ON",
+  "voltage": 241
 }
 ```
 
@@ -66,7 +104,7 @@ zigbee_mqtt_server=mqtt://core-mosquitto:1883
 zigbee_mqtt_username=<mosquitto username>
 zigbee_mqtt_password=<mosquitto password>
 zigbee_mqtt_base_topic=zigbee2mqtt
-zigbee_meter_devices={"PC power plug":"PC_power_plug"}
+zigbee_meter_devices={"PC power plug":"PC_power_plug","Fridge":"Fridge_Power_Sensor","Washing machine":"washing_machine_power_plug"}
 zigbee_meter_poll_interval=30
 zigbee_environment_devices={"Fridge":"Fridge_Temp_Sensor"}
 zigbee_environment_poll_interval=60
@@ -78,6 +116,8 @@ names. Add future power plugs here instead of adding new code:
 ```json
 {
   "PC power plug": "PC_power_plug",
+  "Fridge": "Fridge_Power_Sensor",
+  "Washing machine": "washing_machine_power_plug",
   "Hot water": "hot_water_power_plug"
 }
 ```
