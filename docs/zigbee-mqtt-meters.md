@@ -74,12 +74,18 @@ Temperature and humidity sensor:
 
 ```text
 Fridge_Temp_Sensor
+Living_temp_sensor
+Lounge_temp_sensor
+JC_bedroom_temp_sensor
 ```
 
-It publishes on:
+They publish on:
 
 ```text
 zigbee2mqtt/Fridge_Temp_Sensor
+zigbee2mqtt/Living_temp_sensor
+zigbee2mqtt/Lounge_temp_sensor
+zigbee2mqtt/JC_bedroom_temp_sensor
 ```
 
 Example payload:
@@ -95,6 +101,19 @@ Example payload:
 }
 ```
 
+Room sensor payload:
+
+```json
+{
+  "battery": 100,
+  "humidity": 49.4,
+  "last_seen": "2026-08-02T00:09:08.971Z",
+  "linkquality": 88,
+  "temperature": 18.07,
+  "voltage": 3000
+}
+```
+
 ## CASE Settings
 
 CASE Core settings:
@@ -106,7 +125,7 @@ zigbee_mqtt_password=<mosquitto password>
 zigbee_mqtt_base_topic=zigbee2mqtt
 zigbee_meter_devices={"PC power plug":"PC_power_plug","Fridge":"Fridge_Power_Sensor","Washing machine":"washing_machine_power_plug"}
 zigbee_meter_poll_interval=30
-zigbee_environment_devices={"Fridge":"Fridge_Temp_Sensor"}
+zigbee_environment_devices={"Fridge":"Fridge_Temp_Sensor","Living":"Living_temp_sensor","Lounge":"Lounge_temp_sensor","James & Chris":"JC_bedroom_temp_sensor"}
 zigbee_environment_poll_interval=60
 ```
 
@@ -128,8 +147,10 @@ battery, link quality, CO2 and air-quality sensors:
 ```json
 {
   "Fridge": "Fridge_Temp_Sensor",
-  "Leo": "leo_temp_sensor",
-  "Kitchen": "kitchen_air_sensor"
+  "Living": "Living_temp_sensor",
+  "Lounge": "Lounge_temp_sensor",
+  "James & Chris": "JC_bedroom_temp_sensor",
+  "Leo": "leo_temp_sensor"
 }
 ```
 

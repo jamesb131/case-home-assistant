@@ -38,7 +38,7 @@ services:
       ZIGBEE_MQTT_BASE_TOPIC: ${ZIGBEE_MQTT_BASE_TOPIC:-zigbee2mqtt}
       ZIGBEE_MQTT_TIMEOUT: ${ZIGBEE_MQTT_TIMEOUT:-5}
       ZIGBEE_METER_DEVICES: '${ZIGBEE_METER_DEVICES:-{"PC power plug":"PC_power_plug","Fridge":"Fridge_Power_Sensor","Washing machine":"washing_machine_power_plug"}}'
-      ZIGBEE_ENVIRONMENT_DEVICES: '${ZIGBEE_ENVIRONMENT_DEVICES:-{"Fridge":"Fridge_Temp_Sensor"}}'
+      ZIGBEE_ENVIRONMENT_DEVICES: '${ZIGBEE_ENVIRONMENT_DEVICES:-{"Fridge":"Fridge_Temp_Sensor","Living":"Living_temp_sensor","Lounge":"Lounge_temp_sensor","James & Chris":"JC_bedroom_temp_sensor"}}'
     volumes:
       - ./api/app/google:/app/app/google
 
@@ -83,7 +83,7 @@ services:
       ZIGBEE_MQTT_TIMEOUT: ${ZIGBEE_MQTT_TIMEOUT:-5}
       ZIGBEE_METER_DEVICES: '${ZIGBEE_METER_DEVICES:-{"PC power plug":"PC_power_plug","Fridge":"Fridge_Power_Sensor","Washing machine":"washing_machine_power_plug"}}'
       ZIGBEE_METER_POLL_INTERVAL: ${ZIGBEE_METER_POLL_INTERVAL:-30}
-      ZIGBEE_ENVIRONMENT_DEVICES: '${ZIGBEE_ENVIRONMENT_DEVICES:-{"Fridge":"Fridge_Temp_Sensor"}}'
+      ZIGBEE_ENVIRONMENT_DEVICES: '${ZIGBEE_ENVIRONMENT_DEVICES:-{"Fridge":"Fridge_Temp_Sensor","Living":"Living_temp_sensor","Lounge":"Lounge_temp_sensor","James & Chris":"JC_bedroom_temp_sensor"}}'
       ZIGBEE_ENVIRONMENT_POLL_INTERVAL: ${ZIGBEE_ENVIRONMENT_POLL_INTERVAL:-60}
       PYTHONUNBUFFERED: 1
     volumes:

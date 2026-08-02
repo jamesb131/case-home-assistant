@@ -1,5 +1,5 @@
 name: CASE Core
-version: "0.1.55"
+version: "0.1.56"
 slug: case_core
 description: Local-first household assistant API, worker and web UI.
 url: https://github.com/jamesb131/case-home-assistant
@@ -76,7 +76,7 @@ options:
   zigbee_mqtt_timeout: 5
   zigbee_meter_devices: '{"PC power plug":"PC_power_plug","Fridge":"Fridge_Power_Sensor","Washing machine":"washing_machine_power_plug"}'
   zigbee_meter_poll_interval: 30
-  zigbee_environment_devices: '{"Fridge":"Fridge_Temp_Sensor"}'
+  zigbee_environment_devices: '{"Fridge":"Fridge_Temp_Sensor","Living":"Living_temp_sensor","Lounge":"Lounge_temp_sensor","James & Chris":"JC_bedroom_temp_sensor"}'
   zigbee_environment_poll_interval: 60
   school_calendar_feeds: "St Francis Butler|https://calendar.google.com/calendar/ical/brightoncps.wa.edu.au_pq6tviier5bfodispuek6br16c%40group.calendar.google.com/public/basic.ics|Leo"
   school_calendar_refresh_interval_seconds: 1800

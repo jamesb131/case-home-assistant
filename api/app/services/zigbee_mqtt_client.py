@@ -9,7 +9,7 @@ import paho.mqtt.client as mqtt
 
 
 DEFAULT_ZIGBEE_METER_DEVICES = '{"PC power plug":"PC_power_plug","Fridge":"Fridge_Power_Sensor","Washing machine":"washing_machine_power_plug"}'
-DEFAULT_ZIGBEE_ENVIRONMENT_DEVICES = '{"Fridge":"Fridge_Temp_Sensor"}'
+DEFAULT_ZIGBEE_ENVIRONMENT_DEVICES = '{"Fridge":"Fridge_Temp_Sensor","Living":"Living_temp_sensor","Lounge":"Lounge_temp_sensor","James & Chris":"JC_bedroom_temp_sensor"}'
 MQTT_CONNECT_ERRORS = {
     1: "unacceptable protocol version",
     2: "identifier rejected",

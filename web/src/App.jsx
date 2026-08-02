@@ -6594,9 +6594,12 @@ function DeviceEnergyFlowCard({ summary, activePeriod, onPeriodChange, zigbeeMet
       ...device,
       id: `meter-${index}`,
       color: DEVICE_FLOW_COLORS[index % DEVICE_FLOW_COLORS.length],
+      isConfiguredMeter: true,
     })),
   ];
-  const visibleDevices = devices.filter((device) => device.value > 0.005 || device.id === "unmetered" || device.id === "ev");
+  const visibleDevices = devices.filter(
+    (device) => device.value > 0.005 || device.id === "unmetered" || device.id === "ev" || device.isConfiguredMeter
+  );
   const flows = buildDeviceFlowRibbons(sources, visibleDevices);
 
   return (
