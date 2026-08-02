@@ -1432,11 +1432,7 @@ function App() {
         ...json,
         histories,
       });
-      const detailError =
-        json.snapshot_error ||
-        (json.snapshot_errors || []).map((error) => `${error.device_name}: ${error.error}`).join("; ") ||
-        null;
-      setZigbeeEnvironmentError(detailError);
+      setZigbeeEnvironmentError(buildZigbeeEnvironmentWarning(json));
     } catch (err) {
       console.error(err);
       setZigbeeEnvironmentError(err.message);
@@ -6954,7 +6950,7 @@ function WeatherPage({
         </div>
 
         {zigbeeEnvironmentError && (
-          <div style={{ borderRadius: "14px", padding: "12px", background: "#fef2f2", color: "#991b1b", fontWeight: 800, marginBottom: "12px" }}>
+          <div style={{ borderRadius: "14px", padding: "12px", background: "#fff7ed", color: "#9a3412", fontWeight: 800, marginBottom: "12px" }}>
             {zigbeeEnvironmentError}
           </div>
         )}
@@ -7154,10 +7150,27 @@ function normaliseName(value) {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function buildZigbeeEnvironmentWarning(environment) {
+  const errors = environment?.snapshot_errors || [];
+  if (!errors.length) return null;
+
+  const readingsByName = new Map((environment?.readings || []).map((reading) => [reading.device_name, reading]));
+  const oldDevices = errors
+    .map((error) => {
+      const reading = readingsByName.get(error.device_name);
+      if (!reading || !isStaleReading(reading)) return null;
+      return error.device_name;
+    })
+    .filter(Boolean);
+
+  if (!oldDevices.length) return null;
+  return `Some room sensors have not reported for 12+ hours: ${oldDevices.join(", ")}.`;
+}
+
 function isStaleReading(reading) {
   const rawTime = reading.payload_at || reading.captured_at;
   if (!rawTime) return false;
-  return Date.now() - new Date(rawTime).getTime() > 30 * 60 * 1000;
+  return Date.now() - new Date(rawTime).getTime() > 12 * 60 * 60 * 1000;
 }
 
 function IoTPage({
