@@ -1319,16 +1319,12 @@ function App() {
 
       if (!res.ok) throw new Error(json.error || json.message || `AirTouch API returned ${res.status}`);
 
-      setAirtouchStatus(json);
+      setAirtouchStatus((current) => mergeAirtouchStatus(current, json));
       setAirtouchError(json.available === false ? json.message || null : null);
     } catch (err) {
       console.error(err);
       setAirtouchError(err.message);
-      setAirtouchStatus((current) => ({
-        ...(current || {}),
-        available: false,
-        message: err.message,
-      }));
+      setAirtouchStatus((current) => mergeAirtouchStatus(current, { available: false, message: err.message }));
     }
   }
 
@@ -1341,7 +1337,7 @@ function App() {
 
       if (!res.ok) throw new Error(json.error || json.message || `AirTouch refresh returned ${res.status}`);
 
-      setAirtouchStatus(json);
+      setAirtouchStatus((current) => mergeAirtouchStatus(current, json));
       setAirtouchError(json.available === false ? json.message || null : null);
     } catch (err) {
       console.error(err);
@@ -1396,7 +1392,7 @@ function App() {
         ...json,
         histories,
       });
-      setZigbeeMetersError(json.snapshot_error || null);
+      setZigbeeMetersError(buildZigbeeMeterWarning({ ...json, histories }));
     } catch (err) {
       console.error(err);
       setZigbeeMetersError(err.message);
@@ -1419,7 +1415,7 @@ function App() {
       await Promise.allSettled(
         readings.map(async (reading) => {
           const historyRes = await apiFetch(
-            `${API_BASE}/iot/zigbee/environment/${encodeURIComponent(reading.device_name)}/readings?hours=12&limit=180`
+            `${API_BASE}/iot/zigbee/environment/${encodeURIComponent(reading.device_name)}/readings?hours=24&limit=1000`
           );
           const historyJson = await historyRes.json();
           if (historyRes.ok) {
@@ -4808,9 +4804,9 @@ function TinyTempLine({ points, color }) {
   );
 }
 
-function EnergyDayChart({ data, isMobile = false }) {
+function EnergyDayChart({ data, isMobile = false, heightOverride = null }) {
   const width = isMobile ? 1100 : 1240;
-  const height = isMobile ? 210 : 540;
+  const height = heightOverride || (isMobile ? 210 : 540);
 
   const margin = {
     top: isMobile ? 16 : 18,
@@ -4912,7 +4908,7 @@ function EnergyDayChart({ data, isMobile = false }) {
     <div style={{ width: "100%", overflow: "hidden" }}>
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        style={{ width: "100%", height: isMobile ? "210px" : "540px", display: "block" }}
+        style={{ width: "100%", height: `${height}px`, display: "block" }}
       >
         {(isMobile ? [-10, -5, 0, 5, 10] : [-20, -10, 0, 10, 20]).map((kw) => {
           const y = yFromKw(kw);
@@ -6520,7 +6516,7 @@ function EnergyPage({
         }}
       >
         <div style={{ display: "grid", gap: "18px", minWidth: 0 }}>
-          <section className="card energyPageChart">
+          <section className="card energyPageChart" style={{ minHeight: isMobile ? undefined : "720px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "10px" }}>
               <div>
                 <div className="muted">Power movement</div>
@@ -6538,17 +6534,8 @@ function EnergyPage({
                 </button>
               </div>
             </div>
-            <EnergyDayChart data={rows} isMobile={isMobile} />
+            <EnergyDayChart data={rows} isMobile={isMobile} heightOverride={isMobile ? null : 620} />
           </section>
-
-          <DeviceEnergyFlowCard
-            summary={flowSummary}
-            activePeriod={flowPeriod}
-            onPeriodChange={setFlowPeriod}
-            zigbeeMeters={zigbeeMeters}
-            zigbeeMetersError={zigbeeMetersError}
-            isMobile={isMobile}
-          />
         </div>
 
         <aside style={{ display: "grid", gap: "14px" }}>
@@ -6565,6 +6552,17 @@ function EnergyPage({
             </div>
           </section>
         </aside>
+      </div>
+
+      <div style={{ marginTop: "18px" }}>
+        <DeviceEnergyFlowCard
+          summary={flowSummary}
+          activePeriod={flowPeriod}
+          onPeriodChange={setFlowPeriod}
+          zigbeeMeters={zigbeeMeters}
+          zigbeeMetersError={zigbeeMetersError}
+          isMobile={isMobile}
+        />
       </div>
     </div>
   );
@@ -6616,11 +6614,12 @@ function DeviceEnergyFlowCard({ summary, activePeriod, onPeriodChange, zigbeeMet
       {zigbeeMetersError && (
         <div
           style={{
-            background: "#fee2e2",
-            color: "#991b1b",
-            borderRadius: "12px",
-            padding: "10px 12px",
-            fontWeight: 900,
+            background: "#fff7ed",
+            color: "#9a3412",
+            borderRadius: "10px",
+            padding: "7px 10px",
+            fontSize: "12px",
+            fontWeight: 800,
             marginBottom: "12px",
           }}
         >
@@ -6633,7 +6632,7 @@ function DeviceEnergyFlowCard({ summary, activePeriod, onPeriodChange, zigbeeMet
           display: "grid",
           gridTemplateColumns: isMobile ? "1fr" : "112px minmax(0, 1fr)",
           gap: "12px",
-          alignItems: "stretch",
+          alignItems: "center",
         }}
       >
         <div
@@ -6641,7 +6640,7 @@ function DeviceEnergyFlowCard({ summary, activePeriod, onPeriodChange, zigbeeMet
             display: "grid",
             gridTemplateColumns: isMobile ? "repeat(4, minmax(0, 1fr))" : "1fr",
             gap: "8px",
-            alignContent: "start",
+            alignContent: "center",
           }}
         >
           {["now", "today", "yesterday", "week"].map((period) => (
@@ -6663,7 +6662,7 @@ function DeviceEnergyFlowCard({ summary, activePeriod, onPeriodChange, zigbeeMet
           ))}
         </div>
 
-        <svg viewBox="0 0 760 320" style={{ width: "100%", display: "block", minHeight: isMobile ? "240px" : "300px" }}>
+        <svg viewBox="0 0 760 320" style={{ width: "100%", display: "block", minHeight: isMobile ? "240px" : "320px" }}>
           <defs>
             {flows.map((flow, index) => (
               <linearGradient key={`device-flow-gradient-${index}`} id={`device-flow-gradient-${index}`} x1="0" x2="0" y1="0" y2="1">
@@ -6709,14 +6708,18 @@ function buildZigbeeDeviceLoads(zigbeeMeters, activePeriod) {
   return configuredDevices.map((name) => {
     const reading = byName.get(name) || {};
     const history = zigbeeMeters?.histories?.[name] || [];
+    const stale = activePeriod === "now" && reading.device_name && isStaleReading(reading);
     const value =
       activePeriod === "now"
-        ? Math.max(0, Number(reading.power_w || 0)) / 1000
+        ? stale
+          ? 0
+          : Math.max(0, Number(reading.power_w || 0)) / 1000
         : estimateMeterEnergyKwh(history, activePeriod);
 
     return {
       label: compactDeviceName(name),
       value,
+      stale,
     };
   });
 }
@@ -6774,6 +6777,7 @@ function getPeriodStart(period, now = new Date()) {
 function compactDeviceName(name) {
   return String(name || "")
     .replace(/_/g, " ")
+    .replace(/\bwashing machine\b/i, "Wash Mach.")
     .replace(/\bpower plug\b/i, "")
     .replace(/\bpower sensor\b/i, "")
     .replace(/\bsensor\b/i, "")
@@ -6866,6 +6870,7 @@ function verticalRibbonPath(sourceLeft, sourceRight, sourceY, sinkLeft, sinkRigh
 
 function DeviceFlowNode({ item, y, height, unit }) {
   const textColor = getEnergyFlowTextColor(item.color);
+  const formatted = formatDeviceFlowValue(item.value, unit, item.stale);
 
   return (
     <g>
@@ -6874,13 +6879,31 @@ function DeviceFlowNode({ item, y, height, unit }) {
         {item.label}
       </text>
       <text x={item.x + 10} y={y + 55} fontSize="24" fontWeight="950" fill={textColor}>
-        {Number(item.value || 0).toFixed((item.value || 0) >= 10 ? 1 : 2)}
+        {formatted.value}
       </text>
       <text x={item.x + item.width - 10} y={y + height - 12} textAnchor="end" fontSize="12" fontWeight="900" fill={textColor} opacity="0.75">
-        {unit}
+        {formatted.unit}
       </text>
     </g>
   );
+}
+
+function formatDeviceFlowValue(value, unit, stale = false) {
+  if (stale) return { value: "--", unit: "" };
+
+  const numericValue = Math.max(0, Number(value || 0));
+
+  if (unit === "kW" && numericValue < 0.1) {
+    return {
+      value: String(Math.round(numericValue * 1000)),
+      unit: "W",
+    };
+  }
+
+  return {
+    value: numericValue.toFixed(numericValue >= 10 ? 1 : 2),
+    unit,
+  };
 }
 
 function WeatherPage({
@@ -6942,7 +6965,7 @@ function WeatherPage({
         <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", marginBottom: "12px" }}>
           <div>
             <h2 style={{ margin: 0, fontSize: "24px" }}>Rooms</h2>
-            <div className="muted" style={{ marginTop: "4px" }}>Temperature and humidity over the last 12 hours</div>
+            <div className="muted" style={{ marginTop: "4px" }}>Temperature and humidity over the last 24 hours</div>
           </div>
           <button className="button secondary" onClick={refreshZigbeeEnvironment} style={{ width: "auto", minHeight: "38px", padding: "8px 14px" }}>
             Refresh
@@ -7098,12 +7121,11 @@ function MiniMetric({ label, value }) {
 }
 
 function EnvironmentSparkline({ readings }) {
-  const points = [...(readings || [])]
-    .reverse()
-    .filter((reading) => reading.temperature_c !== null && reading.temperature_c !== undefined)
-    .slice(-80);
+  const points = sampleEnvironmentReadings(readings, 24);
+  const temperaturePoints = points.filter((reading) => reading.temperature_c !== null && reading.temperature_c !== undefined);
+  const humidityPoints = points.filter((reading) => reading.humidity_percent !== null && reading.humidity_percent !== undefined);
 
-  if (points.length < 2) {
+  if (temperaturePoints.length < 2 && humidityPoints.length < 2) {
     return (
       <div style={{ height: "54px", borderRadius: "14px", background: "#f8fafc", marginTop: "12px", display: "grid", placeItems: "center" }}>
         <span className="tiny">Trend starts after a few readings</span>
@@ -7111,27 +7133,93 @@ function EnvironmentSparkline({ readings }) {
     );
   }
 
-  const values = points.map((point) => Number(point.temperature_c));
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const range = Math.max(1, max - min);
+  const temperatureScale = metricScale(temperaturePoints, "temperature_c");
+  const humidityScale = metricScale(humidityPoints, "humidity_percent");
   const width = 220;
   const height = 54;
   const padding = 7;
-  const path = points
-    .map((point, index) => {
-      const x = padding + (index / Math.max(1, points.length - 1)) * (width - padding * 2);
-      const y = height - padding - ((Number(point.temperature_c) - min) / range) * (height - padding * 2);
-      return `${index === 0 ? "M" : "L"} ${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(" ");
+  const temperaturePath = smoothSvgPath(temperaturePoints, "temperature_c", width, height, padding, temperatureScale.min, temperatureScale.range);
+  const humidityPath = smoothSvgPath(humidityPoints, "humidity_percent", width, height, padding, humidityScale.min, humidityScale.range);
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="12 hour temperature trend" style={{ width: "100%", height: "54px", marginTop: "12px", display: "block" }}>
+    <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="24 hour temperature and humidity trend" style={{ width: "100%", height: "54px", marginTop: "12px", display: "block" }}>
       <rect x="0" y="0" width={width} height={height} rx="14" fill="#f8fafc" />
-      <path d={path} fill="none" stroke="#38bdf8" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+      {humidityPath && <path d={humidityPath} fill="none" stroke="#a78bfa" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.85" />}
+      {temperaturePath && <path d={temperaturePath} fill="none" stroke="#38bdf8" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />}
     </svg>
   );
+}
+
+function sampleEnvironmentReadings(readings, targetCount = 24) {
+  const ordered = [...(readings || [])]
+    .map((reading) => ({
+      ...reading,
+      capturedDate: new Date(reading.captured_at || reading.payload_at),
+    }))
+    .filter((reading) => !Number.isNaN(reading.capturedDate.getTime()))
+    .sort((a, b) => a.capturedDate - b.capturedDate);
+
+  if (ordered.length <= targetCount) return ordered;
+
+  const sampled = [];
+  const bucketSize = ordered.length / targetCount;
+
+  for (let i = 0; i < targetCount; i += 1) {
+    const start = Math.floor(i * bucketSize);
+    const end = Math.max(start + 1, Math.floor((i + 1) * bucketSize));
+    const bucket = ordered.slice(start, end);
+    const last = bucket[bucket.length - 1];
+    sampled.push({
+      ...last,
+      temperature_c: averageMetric(bucket, "temperature_c"),
+      humidity_percent: averageMetric(bucket, "humidity_percent"),
+    });
+  }
+
+  return sampled;
+}
+
+function averageMetric(items, key) {
+  const values = items
+    .map((item) => item[key])
+    .filter((value) => value !== null && value !== undefined)
+    .map(Number)
+    .filter((value) => !Number.isNaN(value));
+
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function metricScale(points, key) {
+  const values = points
+    .map((point) => Number(point[key]))
+    .filter((value) => !Number.isNaN(value));
+
+  if (!values.length) return { min: 0, range: 1 };
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  return { min, range: Math.max(1, max - min) };
+}
+
+function smoothSvgPath(points, key, width, height, padding, min, range) {
+  const mapped = points
+    .filter((point) => point[key] !== null && point[key] !== undefined)
+    .map((point, index, series) => ({
+      x: padding + (index / Math.max(1, series.length - 1)) * (width - padding * 2),
+      y: height - padding - ((Number(point[key]) - min) / range) * (height - padding * 2),
+    }));
+
+  if (mapped.length < 2) return "";
+
+  return mapped
+    .map((point, index) => {
+      if (index === 0) return `M ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+      const previous = mapped[index - 1];
+      const cx = (previous.x + point.x) / 2;
+      return `Q ${previous.x.toFixed(1)} ${previous.y.toFixed(1)} ${cx.toFixed(1)} ${((previous.y + point.y) / 2).toFixed(1)} T ${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+    })
+    .join(" ");
 }
 
 function isUtilityEnvironmentSensor(name) {
@@ -7167,10 +7255,42 @@ function buildZigbeeEnvironmentWarning(environment) {
   return `Some room sensors have not reported for 12+ hours: ${oldDevices.join(", ")}.`;
 }
 
+function buildZigbeeMeterWarning(meters) {
+  const errors = meters?.snapshot_errors || [];
+  if (!errors.length) return null;
+
+  const readingsByName = new Map((meters?.readings || []).map((reading) => [reading.device_name, reading]));
+  const oldDevices = errors
+    .map((error) => {
+      const reading = readingsByName.get(error.device_name);
+      if (!reading || !isStaleReading(reading)) return null;
+      return compactDeviceName(error.device_name);
+    })
+    .filter(Boolean);
+
+  if (!oldDevices.length) return null;
+  return `Some power meters have not reported for 12+ hours: ${oldDevices.join(", ")}.`;
+}
+
 function isStaleReading(reading) {
-  const rawTime = reading.payload_at || reading.captured_at;
+  const rawTime = reading.captured_at;
   if (!rawTime) return false;
   return Date.now() - new Date(rawTime).getTime() > 12 * 60 * 60 * 1000;
+}
+
+function mergeAirtouchStatus(current, next) {
+  if (!current || next?.available !== false) return next;
+  if (current.available !== false) {
+    return {
+      ...current,
+      transient_error: next.message,
+      message: current.message || next.message,
+    };
+  }
+  return {
+    ...current,
+    ...next,
+  };
 }
 
 function IoTPage({

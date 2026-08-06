@@ -791,12 +791,16 @@ def airtouch_command(request: AirtouchCommandRequest):
 def zigbee_meter_status():
     snapshot = get_snapshot("iot.zigbee_meters")
     status = get_zigbee_meter_status()
+    snapshot_payload = snapshot["payload"] if snapshot else {}
 
     return {
         **status,
         "snapshot_status": snapshot["status"] if snapshot else "unknown",
         "captured_at": snapshot["captured_at"] if snapshot else None,
         "snapshot_error": snapshot["error"] if snapshot else None,
+        "snapshot_devices": snapshot_payload.get("devices") if snapshot_payload else None,
+        "snapshot_readings": snapshot_payload.get("readings") if snapshot_payload else None,
+        "snapshot_errors": snapshot_payload.get("errors") if snapshot_payload else None,
     }
 
 @app.post("/iot/zigbee/meters/refresh")
