@@ -299,13 +299,17 @@ def run_direct_airtouch_command(config, command, mode=None, zone=None, target_te
 
 
 async def write_direct_airtouch_command(config, command, mode=None, zone=None, target_temperature=None):
+    requested_command = command
+
     async def write_command(airtouch, pyairtouch):
         aircon = first_air_conditioner(airtouch)
         normalised_mode = (mode or "").strip().lower()
+        completed_command = requested_command
 
-        if command == "set_mode":
+        if requested_command == "set_mode":
             if normalised_mode == "off":
                 await aircon.set_power(pyairtouch.AcPowerControl.TURN_OFF)
+                completed_command = "turn_off"
             else:
                 enum_mode = lookup_enum(
                     pyairtouch.AcMode,
@@ -313,19 +317,19 @@ async def write_direct_airtouch_command(config, command, mode=None, zone=None, t
                     "AirTouch mode",
                 )
                 await aircon.set_mode(enum_mode, power_on=True)
-        elif command == "set_temperature":
+        elif requested_command == "set_temperature":
             await aircon.set_target_temperature(normalise_target_temperature(target_temperature))
-        elif command in ["turn_on", "on"]:
+        elif requested_command in ["turn_on", "on"]:
             await aircon.set_power(pyairtouch.AcPowerControl.TURN_ON)
-            command = "turn_on"
-        elif command in ["turn_off", "off"]:
+            completed_command = "turn_on"
+        elif requested_command in ["turn_off", "off"]:
             await aircon.set_power(pyairtouch.AcPowerControl.TURN_OFF)
-            command = "turn_off"
-        elif command == "zone_on":
+            completed_command = "turn_off"
+        elif requested_command == "zone_on":
             await find_direct_zone(aircon, zone).set_power(pyairtouch.ZonePowerState.ON)
-        elif command == "zone_off":
+        elif requested_command == "zone_off":
             await find_direct_zone(aircon, zone).set_power(pyairtouch.ZonePowerState.OFF)
-        elif command == "toggle_zone":
+        elif requested_command == "toggle_zone":
             selected_zone = find_direct_zone(aircon, zone)
             selected_state = enum_name(selected_zone.power_state)
             next_state = (
@@ -339,7 +343,7 @@ async def write_direct_airtouch_command(config, command, mode=None, zone=None, t
                 "Unsupported AirTouch command. Use set_mode, turn_on, turn_off, zone_on, zone_off or toggle_zone."
             )
 
-        return {"command": command}
+        return {"command": completed_command}
 
     return await with_direct_airtouch(config, write_command)
 

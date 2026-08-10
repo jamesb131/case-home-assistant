@@ -6095,26 +6095,59 @@ const KID_THEMES = {
   Benny: PERSON_THEMES.Benny,
 };
 
+const DEFAULT_KID_RESPONSIBILITIES = [
+  "Get dressed",
+  "Dishes on sink",
+  "Help pack away",
+  "Feed / walk Monty",
+  "Get ready by yourself",
+];
+
 function KidsPage({ tasks, isMobile = false }) {
   const [selectedKid, setSelectedKid] = useState("Leo");
+  const [editMode, setEditMode] = useState(false);
+  const [responsibilities, setResponsibilities] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem("case:kidResponsibilities");
+      const parsed = saved ? JSON.parse(saved) : null;
+      return Array.isArray(parsed) && parsed.length ? parsed : DEFAULT_KID_RESPONSIBILITIES;
+    } catch {
+      return DEFAULT_KID_RESPONSIBILITIES;
+    }
+  });
 
   const theme = KID_THEMES[selectedKid];
 
   const kids = ["Leo", "Benny"];
   const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-  const responsibilities = [
-    "Get dressed",
-    "Dishes on sink",
-    "Help pack away",
-    "Feed / walk Monty",
-    "Get ready by yourself",
-  ];
-
   const [done, setDone] = useState({});
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("case:kidResponsibilities", JSON.stringify(responsibilities));
+    } catch {
+      // Local edits are best-effort until responsibilities move into the shared API.
+    }
+  }, [responsibilities]);
 
   function keyFor(task, day) {
     return `${selectedKid}-${task}-${day}`;
+  }
+
+  function addResponsibility() {
+    const label = window.prompt("Add chore");
+    const trimmed = label?.trim();
+    if (!trimmed) return;
+
+    setResponsibilities((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+  }
+
+  function removeResponsibility(label) {
+    setResponsibilities((prev) => prev.filter((item) => item !== label));
+    setDone((prev) =>
+      Object.fromEntries(Object.entries(prev).filter(([key]) => !key.includes(`-${label}-`)))
+    );
   }
 
   const kidTasksThisWeek = tasks.filter((task) => {
@@ -6181,16 +6214,32 @@ function KidsPage({ tasks, isMobile = false }) {
               <h2 style={{ margin: "4px 0 0" }}>{selectedKid}'s week</h2>
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                gap: "8px",
-                background: "#e5e7eb",
-                padding: "5px",
-                borderRadius: "999px",
-              }}
-            >
-              {kids.map((kid) => (
+            <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setEditMode((current) => !current)}
+                className="button"
+                style={{
+                  minHeight: "40px",
+                  padding: "10px 14px",
+                  borderRadius: "999px",
+                  fontSize: "13px",
+                  background: editMode ? "#111827" : "#e5e7eb",
+                  color: editMode ? "white" : "#111827",
+                }}
+              >
+                {editMode ? "Done" : "Edit"}
+              </button>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: "8px",
+                  background: "#e5e7eb",
+                  padding: "5px",
+                  borderRadius: "999px",
+                }}
+              >
+                {kids.map((kid) => (
                 <button
                   key={kid}
                   onClick={() => setSelectedKid(kid)}
@@ -6213,7 +6262,8 @@ function KidsPage({ tasks, isMobile = false }) {
                 >
                   {kid}
                 </button>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
 
@@ -6242,13 +6292,15 @@ function KidsPage({ tasks, isMobile = false }) {
             ))}
 
             {responsibilities.map((responsibility) => (
-              <>
+              <div key={responsibility} style={{ display: "contents" }}>
                 <div
                   key={`${responsibility}-label`}
                   style={{
+                    position: "relative",
                     background: theme.soft,
                     borderRadius: "14px",
                     padding: "14px",
+                    paddingRight: editMode ? "40px" : "14px",
                     fontWeight: 800,
                     display: "flex",
                     alignItems: "center",
@@ -6257,6 +6309,29 @@ function KidsPage({ tasks, isMobile = false }) {
                   }}
                 >
                   {responsibility}
+                  {editMode && (
+                    <button
+                      type="button"
+                      onClick={() => removeResponsibility(responsibility)}
+                      aria-label={`Remove ${responsibility}`}
+                      style={{
+                        position: "absolute",
+                        top: "8px",
+                        right: "8px",
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "999px",
+                        border: "none",
+                        background: theme.primary,
+                        color: "white",
+                        fontWeight: 950,
+                        cursor: "pointer",
+                        lineHeight: 1,
+                      }}
+                    >
+                      -
+                    </button>
+                  )}
                 </div>
 
                 {days.map((day) => {
@@ -6293,9 +6368,20 @@ function KidsPage({ tasks, isMobile = false }) {
                     </button>
                   );
                 })}
-              </>
+              </div>
             ))}
           </div>
+
+          {editMode && (
+            <button
+              type="button"
+              onClick={addResponsibility}
+              className="button secondary"
+              style={{ marginTop: "12px", width: "100%", minHeight: "44px" }}
+            >
+              + Add chore
+            </button>
+          )}
         </section>
 
         <aside className="card" style={isMobile ? undefined : { gridColumn: "10 / span 3", minWidth: 0 }}>
@@ -6512,7 +6598,7 @@ function EnergyPage({
           display: "grid",
           gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) 310px",
           gap: "18px",
-          alignItems: "start",
+          alignItems: isMobile ? "start" : "stretch",
         }}
       >
         <div style={{ display: "grid", gap: "18px", minWidth: 0 }}>
@@ -6538,9 +6624,16 @@ function EnergyPage({
           </section>
         </div>
 
-        <aside style={{ display: "grid", gap: "14px" }}>
+        <aside
+          style={{
+            display: "grid",
+            gap: "14px",
+            gridTemplateRows: isMobile ? undefined : "auto 1fr",
+            minHeight: 0,
+          }}
+        >
           <BatteryReserveCard state={state} />
-          <section className="card">
+          <section className="card" style={{ minHeight: 0 }}>
             <div className="muted">Day stats</div>
             <div style={{ display: "grid", gap: "10px", marginTop: "14px" }}>
               <DeviceDetail icon="☀️" label="Solar yield" value={`${Number(summary?.solar_kwh || 0).toFixed(1)} kWh`} />
@@ -6595,19 +6688,50 @@ function DeviceEnergyFlowCard({ summary, activePeriod, onPeriodChange, zigbeeMet
     (device) => device.value > 0.005 || device.id === "unmetered" || device.id === "ev" || device.isConfiguredMeter
   );
   const flows = buildDeviceFlowRibbons(sources, visibleDevices);
+  const periodControls = ["now", "today", "yesterday", "week"];
 
   return (
     <section className="card">
-      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "12px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "12px", alignItems: "flex-start" }}>
         <div>
           <div className="muted">Device flow</div>
           <h2 style={{ margin: "2px 0 0", fontSize: "24px" }}>{periodLabel(activePeriod)}</h2>
         </div>
-        <div
-          className="quietLinkButton"
-          style={{ alignSelf: "flex-start", pointerEvents: "none" }}
-        >
-          {unit}
+        <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: "6px",
+              background: "#e5e7eb",
+              padding: "4px",
+              borderRadius: "16px",
+            }}
+          >
+            {periodControls.map((period) => (
+              <button
+                key={period}
+                className="button"
+                onClick={() => onPeriodChange(period)}
+                style={{
+                  minHeight: "34px",
+                  padding: "7px 11px",
+                  borderRadius: "12px",
+                  fontSize: "12px",
+                  background: activePeriod === period ? "#111827" : "transparent",
+                  color: activePeriod === period ? "white" : "#111827",
+                  boxShadow: "none",
+                }}
+              >
+                {period === "week" ? "Week" : periodLabel(period)}
+              </button>
+            ))}
+          </div>
+          <div
+            className="quietLinkButton"
+            style={{ alignSelf: "flex-start", pointerEvents: "none" }}
+          >
+            {unit}
+          </div>
         </div>
       </div>
 
@@ -6627,42 +6751,8 @@ function DeviceEnergyFlowCard({ summary, activePeriod, onPeriodChange, zigbeeMet
         </div>
       )}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: isMobile ? "1fr" : "112px minmax(0, 1fr)",
-          gap: "12px",
-          alignItems: "center",
-        }}
-      >
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile ? "repeat(4, minmax(0, 1fr))" : "1fr",
-            gap: "8px",
-            alignContent: "center",
-          }}
-        >
-          {["now", "today", "yesterday", "week"].map((period) => (
-            <button
-              key={period}
-              className="button"
-              onClick={() => onPeriodChange(period)}
-              style={{
-                minHeight: "42px",
-                padding: "8px 6px",
-                borderRadius: "14px",
-                fontSize: "12px",
-                background: activePeriod === period ? "#111827" : "#e5e7eb",
-                color: activePeriod === period ? "white" : "#111827",
-              }}
-            >
-              {period === "week" ? "Week" : periodLabel(period)}
-            </button>
-          ))}
-        </div>
-
-        <svg viewBox="0 0 760 320" style={{ width: "100%", display: "block", minHeight: isMobile ? "240px" : "320px" }}>
+      <div style={{ minWidth: 0 }}>
+        <svg viewBox="0 0 760 250" style={{ width: "100%", display: "block", minHeight: isMobile ? "210px" : "250px" }}>
           <defs>
             {flows.map((flow, index) => (
               <linearGradient key={`device-flow-gradient-${index}`} id={`device-flow-gradient-${index}`} x1="0" x2="0" y1="0" y2="1">
@@ -6681,12 +6771,12 @@ function DeviceEnergyFlowCard({ summary, activePeriod, onPeriodChange, zigbeeMet
             />
           ))}
 
-          {layoutHorizontalBlocks(sources, 24, 90).map((item) => (
-            <DeviceFlowNode key={item.id} item={item} y={24} height={66} unit={unit} />
+          {layoutHorizontalBlocks(sources, DEVICE_FLOW_SOURCE_TOP, DEVICE_FLOW_SOURCE_BOTTOM).map((item) => (
+            <DeviceFlowNode key={item.id} item={item} y={DEVICE_FLOW_SOURCE_TOP} height={DEVICE_FLOW_SOURCE_BOTTOM - DEVICE_FLOW_SOURCE_TOP} unit={unit} />
           ))}
 
-          {layoutHorizontalBlocks(visibleDevices, 216, 292).map((item) => (
-            <DeviceFlowNode key={item.id} item={item} y={216} height={76} unit={unit} />
+          {layoutHorizontalBlocks(visibleDevices, DEVICE_FLOW_SINK_TOP, DEVICE_FLOW_SINK_BOTTOM).map((item) => (
+            <DeviceFlowNode key={item.id} item={item} y={DEVICE_FLOW_SINK_TOP} height={DEVICE_FLOW_SINK_BOTTOM - DEVICE_FLOW_SINK_TOP} unit={unit} />
           ))}
         </svg>
       </div>
@@ -6699,6 +6789,10 @@ function DeviceEnergyFlowCard({ summary, activePeriod, onPeriodChange, zigbeeMet
 }
 
 const DEVICE_FLOW_COLORS = ["#0ea5e9", "#f97316", "#84cc16", "#ec4899", "#64748b"];
+const DEVICE_FLOW_SOURCE_TOP = 28;
+const DEVICE_FLOW_SOURCE_BOTTOM = 78;
+const DEVICE_FLOW_SINK_TOP = 176;
+const DEVICE_FLOW_SINK_BOTTOM = 230;
 
 function buildZigbeeDeviceLoads(zigbeeMeters, activePeriod) {
   const readings = zigbeeMeters?.readings || [];
@@ -6786,7 +6880,7 @@ function compactDeviceName(name) {
 }
 
 function layoutHorizontalBlocks(items, yTop, yBottom) {
-  const minWidth = 104;
+  const minWidth = 92;
   const gap = 12;
   const left = 10;
   const right = 750;
@@ -6815,8 +6909,8 @@ function layoutHorizontalBlocks(items, yTop, yBottom) {
 }
 
 function buildDeviceFlowRibbons(sources, sinks) {
-  const sourceBlocks = layoutHorizontalBlocks(sources, 24, 90);
-  const sinkBlocks = layoutHorizontalBlocks(sinks, 216, 292);
+  const sourceBlocks = layoutHorizontalBlocks(sources, DEVICE_FLOW_SOURCE_TOP, DEVICE_FLOW_SOURCE_BOTTOM);
+  const sinkBlocks = layoutHorizontalBlocks(sinks, DEVICE_FLOW_SINK_TOP, DEVICE_FLOW_SINK_BOTTOM);
   const sourceTotal = sourceBlocks.reduce((sum, source) => sum + Math.max(0, source.value || 0), 0);
   const sinkTotal = sinkBlocks.reduce((sum, sink) => sum + Math.max(0, sink.value || 0), 0);
   if (sourceTotal <= 0.005 || sinkTotal <= 0.005) return [];
@@ -6842,7 +6936,14 @@ function buildDeviceFlowRibbons(sources, sinks) {
       flows.push({
         source,
         sink,
-        path: verticalRibbonPath(sourceLeft, sourceRight, 90, sinkLeft, sinkRight, 216),
+        path: verticalRibbonPath(
+          sourceLeft,
+          sourceRight,
+          DEVICE_FLOW_SOURCE_BOTTOM,
+          sinkLeft,
+          sinkRight,
+          DEVICE_FLOW_SINK_TOP
+        ),
       });
 
       source.cursor += sourceWidth;
@@ -6856,8 +6957,8 @@ function buildDeviceFlowRibbons(sources, sinks) {
 }
 
 function verticalRibbonPath(sourceLeft, sourceRight, sourceY, sinkLeft, sinkRight, sinkY) {
-  const c1 = sourceY + 58;
-  const c2 = sinkY - 58;
+  const c1 = sourceY + 42;
+  const c2 = sinkY - 42;
 
   return [
     `M ${sourceLeft} ${sourceY}`,
@@ -6871,17 +6972,20 @@ function verticalRibbonPath(sourceLeft, sourceRight, sourceY, sinkLeft, sinkRigh
 function DeviceFlowNode({ item, y, height, unit }) {
   const textColor = getEnergyFlowTextColor(item.color);
   const formatted = formatDeviceFlowValue(item.value, unit, item.stale);
+  const compact = item.width < 120;
+  const labelSize = compact ? 12 : 14;
+  const valueSize = compact ? 18 : 20;
 
   return (
     <g>
       <rect x={item.x} y={y} width={item.width} height={height} rx="8" fill={item.color} opacity="0.93" />
-      <text x={item.x + 10} y={y + 27} fontSize="18" fontWeight="900" fill={textColor}>
+      <text x={item.x + 10} y={y + 21} fontSize={labelSize} fontWeight="900" fill={textColor}>
         {item.label}
       </text>
-      <text x={item.x + 10} y={y + 55} fontSize="24" fontWeight="950" fill={textColor}>
+      <text x={item.x + 10} y={y + 45} fontSize={valueSize} fontWeight="950" fill={textColor}>
         {formatted.value}
       </text>
-      <text x={item.x + item.width - 10} y={y + height - 12} textAnchor="end" fontSize="12" fontWeight="900" fill={textColor} opacity="0.75">
+      <text x={item.x + item.width - 10} y={y + height - 10} textAnchor="end" fontSize="10" fontWeight="900" fill={textColor} opacity="0.75">
         {formatted.unit}
       </text>
     </g>
