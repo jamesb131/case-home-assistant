@@ -55,6 +55,13 @@ case "$MODE" in
                 -t "$REGISTRY/case-core:$VERSION" \
                 .
         fi
+
+        if should_build "internet-monitor"; then
+            docker build \
+                -f case_internet_monitor/Dockerfile \
+                -t "$REGISTRY/case-internet-monitor:$VERSION" \
+                case_internet_monitor
+        fi
         ;;
     push)
         if should_build "https-proxy"; then
@@ -89,9 +96,19 @@ case "$MODE" in
                 --push \
                 .
         fi
+
+        if should_build "internet-monitor"; then
+            docker buildx build \
+                --platform "$PLATFORMS" \
+                $BUILDX_CACHE_ARGS \
+                -f case_internet_monitor/Dockerfile \
+                -t "$REGISTRY/case-internet-monitor:$VERSION" \
+                --push \
+                case_internet_monitor
+        fi
         ;;
     *)
-        echo "Usage: $0 [local|push] [all|core|postgres|https-proxy...]" >&2
+        echo "Usage: $0 [local|push] [all|core|postgres|https-proxy|internet-monitor...]" >&2
         exit 2
         ;;
 esac

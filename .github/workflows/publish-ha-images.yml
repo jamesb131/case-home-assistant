@@ -10,6 +10,7 @@ on:
       - web/**
       - deploy/ha/**
       - case_core/config.yaml
+      - case_internet_monitor/**
       - case_postgres/config.yaml
       - case_https_proxy/**
       - scripts/build-ha-images.sh
@@ -64,6 +65,10 @@ jobs:
             targets+=("core")
           fi
 
+          if echo "$changed_files" | grep -Eq '^case_internet_monitor/'; then
+            targets+=("internet-monitor")
+          fi
+
           if echo "$changed_files" | grep -Eq '^(case_postgres/|deploy/ha/case-postgres/)'; then
             targets+=("postgres")
           fi
@@ -81,4 +86,4 @@ jobs:
           echo "Building images: $unique_targets"
 
       - name: Build and push images
-        run: scripts/build-ha-images.sh push "${{ steps.images.outputs.targets }}"
+        run: scripts/build-ha-images.sh push "${{ steps.images.outputs.targets }} internet-monitor"
