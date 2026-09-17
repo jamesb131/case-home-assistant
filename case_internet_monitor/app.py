@@ -23,8 +23,8 @@ except json.JSONDecodeError:
     TARGETS = []
 
 # V1 deliberately follows only the primary PingPlotter-style destination.
-TARGETS = [target for target in TARGETS if target.get("host") == "1.1.1.1"] or [
-    {"name": "1.1.1.1", "host": "1.1.1.1", "test_type": "ping"}
+TARGETS = [{**target, "test_type": "tcp"} for target in TARGETS if target.get("host") == "1.1.1.1"] or [
+    {"name": "1.1.1.1", "host": "1.1.1.1", "test_type": "tcp"}
 ]
 
 
@@ -98,6 +98,7 @@ async def probe(session, target):
             row["success"], row["latency_ms"], row["error"] = await ping(host)
         elif test_type == "tcp":
             row["success"], row["connect_ms"], row["error"] = await tcp_connect(host)
+            row["latency_ms"] = row["connect_ms"]
         else:
             url = host if host.startswith("http") else f"https://{host}"
             started = time.perf_counter()

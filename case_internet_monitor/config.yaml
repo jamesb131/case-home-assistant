@@ -1,5 +1,5 @@
 name: CASE Internet Monitor
-version: "0.1.66"
+version: "0.1.67"
 slug: case_internet_monitor
 description: Local PingPlotter-style latency, loss and HTTPS monitor.
 url: https://github.com/jamesb131/case-home-assistant
@@ -16,7 +16,7 @@ ports_description:
   8090/tcp: Internet monitor UI/API
 options:
   interval_seconds: 5
-  targets_json: '[{"name":"1.1.1.1","host":"1.1.1.1","test_type":"ping"}]'
+  targets_json: '[{"name":"1.1.1.1","host":"1.1.1.1","test_type":"tcp"}]'
 schema:
   interval_seconds: int(2,30)
   targets_json: str

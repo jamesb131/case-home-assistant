@@ -7068,7 +7068,9 @@ function InternetHealthLights() {
   const levels = [1, 24, 24 * 7].map((hours) => {
     const windowRows = rows.filter((row) => now - new Date(row.timestamp).getTime() <= hours * 3600000);
     const failures = windowRows.filter((row) => !row.success).length;
-    if (!windowRows.length || failures >= Math.max(3, windowRows.length * 0.2)) return "#ef4444";
+    const successes = windowRows.filter((row) => row.success);
+    if (successes.length < 3) return "#94a3b8";
+    if (failures >= Math.max(3, windowRows.length * 0.2)) return "#ef4444";
     if (failures) return "#f59e0b";
     return "#22c55e";
   });
