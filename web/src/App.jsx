@@ -6708,7 +6708,7 @@ function DeviceEnergyFlowCard({ summary, activePeriod, onPeriodChange, zigbeeMet
     ...allMeterDevices.map((device, index) => ({
       ...device,
       id: `meter-${index}`,
-      color: DEVICE_FLOW_COLORS[index % DEVICE_FLOW_COLORS.length],
+      color: device.color || DEVICE_FLOW_COLORS[index % DEVICE_FLOW_COLORS.length],
       isConfiguredMeter: true,
     })),
   ];

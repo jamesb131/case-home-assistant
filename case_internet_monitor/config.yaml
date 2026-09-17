@@ -1,5 +1,5 @@
 name: CASE Internet Monitor
-version: "0.1.62"
+version: "0.1.63"
 slug: case_internet_monitor
 description: Local PingPlotter-style latency, loss and HTTPS monitor.
 url: https://github.com/jamesb131/case-home-assistant
@@ -18,10 +18,10 @@ options:
   interval_seconds: 5
   targets_json: '[{"name":"Router","host":"192.168.0.1","test_type":"ping"},{"name":"Cloudflare DNS","host":"1.1.1.1","test_type":"ping"},{"name":"Google","host":"www.google.com","test_type":"tcp"},{"name":"Microsoft connectivity","host":"www.msftconnecttest.com","test_type":"https"},{"name":"Cloudflare trace","host":"https://www.cloudflare.com/cdn-cgi/trace","test_type":"https"}]'
 schema:
-  interval_seconds: list(2.5|5|10|30)
+  interval_seconds: int(2,30)
   targets_json: str
 map:
   - type: data
     read_only: false
-image: ghcr.io/jamesb131/case-home-assistant/case-internet-monitor:0.1.62
+image: ghcr.io/jamesb131/case-home-assistant/case-internet-monitor:0.1.63
 webui: http://[HOST]:[PORT:8090]
