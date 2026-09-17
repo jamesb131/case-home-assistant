@@ -4,6 +4,7 @@ import os
 import sqlite3
 import subprocess
 import time
+import re
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -60,6 +61,16 @@ def init_db():
             destination TEXT NOT NULL,
             raw_output TEXT
         );
+        CREATE TABLE IF NOT EXISTS trace_hops (
+            id INTEGER PRIMARY KEY,
+            trace_run_id INTEGER NOT NULL,
+            hop_number INTEGER NOT NULL,
+            address TEXT,
+            hostname TEXT,
+            latency_ms REAL,
+            success INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY(trace_run_id) REFERENCES trace_runs(id)
+        );
         """)
 
 
@@ -89,6 +100,30 @@ async def tcp_connect(host, port=443):
     return True, (time.perf_counter() - started) * 1000, None
 
 
+async def trace_destination(host="1.1.1.1"):
+    process = await asyncio.create_subprocess_exec(
+        "traceroute", "-T", "-p", "443", "-n", "-m", "12", "-w", "1", host,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
+    stdout, _ = await process.communicate()
+    run_timestamp = timestamp()
+    lines = stdout.decode(errors="replace").splitlines()
+    hops = []
+    pattern = re.compile(r"^\s*(\d+)\s+(?:\*\s+)+$|^\s*(\d+)\s+([^\s(]+)(?:\s+\(([^)]+)\))?\s+([0-9.]+)\s+ms")
+    for line in lines:
+        match = pattern.search(line)
+        if not match:
+            continue
+        if match.group(1):
+            hops.append({"hop_number": int(match.group(1)), "address": None, "hostname": None, "latency_ms": None, "success": 0})
+        else:
+            hops.append({"hop_number": int(match.group(2)), "address": match.group(4) or match.group(3), "hostname": match.group(3) if match.group(4) else None, "latency_ms": float(match.group(5)), "success": 1})
+    with db() as connection:
+        cursor = connection.execute("INSERT INTO trace_runs (timestamp, destination, raw_output) VALUES (?, ?, ?)", (run_timestamp, host, stdout.decode(errors="replace")))
+        run_id = cursor.lastrowid
+        connection.executemany("INSERT INTO trace_hops (trace_run_id, hop_number, address, hostname, latency_ms, success) VALUES (?, ?, ?, ?, ?, ?)", [(run_id, hop["hop_number"], hop["address"], hop["hostname"], hop["latency_ms"], hop["success"]) for hop in hops])
+
+
 async def probe(session, target):
     host = target.get("host", "")
     name, test_type = target.get("name", host), target.get("test_type", "ping")
@@ -115,9 +150,16 @@ async def probe(session, target):
 async def monitor():
     timeout = ClientTimeout(total=5)
     async with ClientSession(timeout=timeout) as session:
+        last_trace = 0
         while True:
             started = time.perf_counter()
             await asyncio.gather(*(probe(session, target) for target in TARGETS))
+            if time.time() - last_trace >= 60:
+                try:
+                    await trace_destination()
+                except Exception as exc:
+                    print(f"Traceroute unavailable: {exc}", flush=True)
+                last_trace = time.time()
             await asyncio.sleep(max(0, INTERVAL - (time.perf_counter() - started)))
 
 
@@ -132,11 +174,21 @@ async def measurements(request):
     return web.json_response({"measurements": rows})
 
 
+async def traces(request):
+    with db() as connection:
+        run = connection.execute("SELECT id, timestamp, destination FROM trace_runs ORDER BY id DESC LIMIT 1").fetchone()
+        if not run:
+            return web.json_response({"run": None, "hops": []})
+        hops = [dict(row) for row in connection.execute("SELECT hop_number, address, hostname, latency_ms, success FROM trace_hops WHERE trace_run_id = ? ORDER BY hop_number", (run["id"],))]
+    return web.json_response({"run": dict(run), "hops": hops})
+
+
 async def main():
     init_db()
     app = web.Application()
     app.router.add_get("/health", health)
     app.router.add_get("/api/measurements", measurements)
+    app.router.add_get("/api/traces", traces)
     app.router.add_get("/", health)
     runner = web.AppRunner(app)
     await runner.setup()

@@ -1,5 +1,5 @@
 name: CASE Internet Monitor
-version: "0.1.67"
+version: "0.1.69"
 slug: case_internet_monitor
 description: Local PingPlotter-style latency, loss and HTTPS monitor.
 url: https://github.com/jamesb131/case-home-assistant
@@ -10,6 +10,8 @@ startup: application
 boot: auto
 stage: stable
 init: false
+privileged:
+  - NET_RAW
 ports:
   8090/tcp: 8090
 ports_description:
