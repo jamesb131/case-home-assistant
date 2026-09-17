@@ -64,6 +64,7 @@ OPTION_ENV_MAP = {
     "school_calendar_feeds": "SCHOOL_CALENDAR_FEEDS",
     "school_calendar_refresh_interval_seconds": "SCHOOL_CALENDAR_REFRESH_INTERVAL_SECONDS",
     "school_calendar_primary_audience": "SCHOOL_CALENDAR_PRIMARY_AUDIENCE",
+    "internet_monitor_url": "INTERNET_MONITOR_URL",
 }
 
 

@@ -88,7 +88,7 @@ RADIO_STREAMS = {
     "nova-929": "https://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_937.mp3",
 }
 
-INTERNET_MONITOR_URL = os.getenv("INTERNET_MONITOR_URL", "http://case-internet-monitor:8090").rstrip("/")
+INTERNET_MONITOR_URL = os.getenv("INTERNET_MONITOR_URL", "http://2e435b46-case-internet-monitor:8090").rstrip("/")
 
 
 @app.get("/internet-monitor/measurements")
