@@ -60,21 +60,23 @@ const RADIO_STATIONS = [
     label: "ABC",
     title: "ABC Perth",
     subtitle: "Live radio",
-    streamUrls: [`${API_BASE}/radio/stream?station=abc`],
+    streamUrls: ["https://mediaserviceslive.akamaized.net/hls/live/2038301/localperth/master.m3u8"],
+    streamType: "hls",
   },
   {
     id: "triple-j",
     label: "triple j",
     title: "triple j",
     subtitle: "101.7 FM Perth",
-    streamUrls: [`${API_BASE}/radio/stream?station=triple-j`],
+    streamUrls: ["https://mediaserviceslive.akamaized.net/hls/live/2038308/triplejnsw/masterhq.m3u8"],
+    streamType: "hls",
   },
   {
     id: "nova-929",
     label: "92.9",
     title: "92.9",
     subtitle: "Perth FM",
-    streamUrls: [`${API_BASE}/radio/stream?station=nova-929`],
+    streamUrls: ["https://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_937.mp3"],
   },
 ];
 
@@ -900,7 +902,7 @@ function App() {
         if (!isSpeaking) {
           setAssistantPhase("idle");
         }
-    } catch {
+    } catch (error) {
       setAssistantMessages((prev) => [
         ...prev,
         {
@@ -3380,17 +3382,6 @@ function TopNavigation({
           ))}
         </nav>
 
-        <CompactAskCase
-          assistantAvailable={assistantAvailable}
-          assistantPhase={assistantPhase}
-          assistantPhaseText={assistantPhaseText}
-          voiceAvailable={voiceAvailable}
-          voiceUnavailableTitle={voiceUnavailableTitle}
-          isListening={isListening}
-          startVoiceRecognition={startVoiceRecognition}
-          onOpenAssistant={onOpenAssistant}
-          width="calc((100vw - 56px - 32px) / 4)"
-        />
         {fullscreenAvailable && (
           <button
             onClick={onToggleFullscreen}
@@ -3402,8 +3393,9 @@ function TopNavigation({
               height: "42px",
               borderRadius: "14px",
               border: "1px solid #e2e8f0",
-              background: "white",
-              color: "#111827",
+              background: isFullscreen ? "#111827" : "white",
+              color: isFullscreen ? "white" : "#111827",
+              boxShadow: isFullscreen ? "0 8px 18px rgba(15, 23, 42, 0.18)" : "none",
               cursor: "pointer",
               fontSize: "22px",
               fontWeight: 900,
@@ -3411,9 +3403,20 @@ function TopNavigation({
               placeItems: "center",
             }}
           >
-            {isFullscreen ? "⛶" : "⛶"}
+            ⛶
           </button>
         )}
+        <CompactAskCase
+          assistantAvailable={assistantAvailable}
+          assistantPhase={assistantPhase}
+          assistantPhaseText={assistantPhaseText}
+          voiceAvailable={voiceAvailable}
+          voiceUnavailableTitle={voiceUnavailableTitle}
+          isListening={isListening}
+          startVoiceRecognition={startVoiceRecognition}
+          onOpenAssistant={onOpenAssistant}
+          width="calc((100vw - 56px - 32px) / 4)"
+        />
       </div>
     </header>
   );
@@ -4032,7 +4035,8 @@ function MusicHomeCard() {
       setIsPlaying(true);
     } catch {
       setIsPlaying(false);
-      setError("Radio stream was blocked by this browser.");
+      const detail = error?.name === "NotSupportedError" ? "This browser does not support this station's audio format." : "The station stream could not start.";
+      setError(detail);
     }
   }
 
@@ -7292,7 +7296,7 @@ function InternetLatencyChart({ samples }) {
   const values = samples.map((row) => Number(row.latency_ms)).filter(Number.isFinite);
   const max = Math.max(30, ...values) * 1.15;
   const points = samples.map((row, index) => `${(index / Math.max(1, samples.length - 1)) * width},${row.success && row.latency_ms != null ? height - (Number(row.latency_ms) / max) * (height - 24) : height}`).join(" ");
-  return <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", minHeight: "360px", height: "100%", display: "block", marginTop: "12px", background: "#e0f2d8" }}><line x1="0" x2={width} y1={height - 1} y2={height - 1} stroke="#94a38d" /><line x1="0" x2={width} y1={height / 2} y2={height / 2} stroke="#b6c5ad" strokeDasharray="6 6" /><polyline points={points} fill="none" stroke="#1f2937" strokeWidth="1.25" strokeLinejoin="round" />{samples.map((row, index) => !row.success ? <circle key={`${row.timestamp}-${index}`} cx={(index / Math.max(1, samples.length - 1)) * width} cy={height - 8} r="3" fill="#ef4444" /> : null)}</svg>;
+  return <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "360px", display: "block", marginTop: "12px", background: "#e0f2d8" }}><line x1="0" x2={width} y1={height - 1} y2={height - 1} stroke="#94a38d" /><line x1="0" x2={width} y1={height / 2} y2={height / 2} stroke="#b6c5ad" strokeDasharray="6 6" /><polyline points={points} fill="none" stroke="#1f2937" strokeWidth="1.25" strokeLinejoin="round" />{samples.map((row, index) => !row.success ? <circle key={`${row.timestamp}-${index}`} cx={(index / Math.max(1, samples.length - 1)) * width} cy={height - 8} r="3" fill="#ef4444" /> : null)}</svg>;
 }
 
 function WeatherPage({
