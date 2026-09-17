@@ -1,5 +1,5 @@
 name: CASE Core
-version: "0.1.59"
+version: "0.1.60"
 slug: case_core
 description: Local-first household assistant API, worker and web UI.
 url: https://github.com/jamesb131/case-home-assistant
@@ -50,6 +50,10 @@ options:
   energy_retention_days: 0
   sigenergy_host: 192.168.0.2
   sigenergy_port: 502
+  shelly_em_host: 192.168.0.4
+  shelly_em_timeout: 3
+  shelly_hot_water_channel: 0
+  shelly_oven_channel: 1
   gaggimate_host: 192.168.0.116
   gaggimate_ws_protocol: ws
   gaggimate_timeout: 3
@@ -108,6 +112,10 @@ schema:
   energy_retention_days: int(0,)
   sigenergy_host: str
   sigenergy_port: port
+  shelly_em_host: str
+  shelly_em_timeout: int(1,30)
+  shelly_hot_water_channel: int(0,2)
+  shelly_oven_channel: int(0,2)
   gaggimate_host: str
   gaggimate_ws_protocol: list(ws|wss)
   gaggimate_timeout: int(1,30)

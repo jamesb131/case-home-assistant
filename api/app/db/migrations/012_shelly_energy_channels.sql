@@ -1,0 +1,3 @@
+ALTER TABLE energy_readings
+    ADD COLUMN IF NOT EXISTS hot_water_kw NUMERIC,
+    ADD COLUMN IF NOT EXISTS oven_kw NUMERIC;

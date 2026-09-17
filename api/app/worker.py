@@ -27,6 +27,7 @@ from app.services.sigenergy_repository import insert_raw_registers
 from app.services.weather_client import get_weather_summary
 from app.services.zigbee_environment_service import poll_zigbee_environment
 from app.services.zigbee_meter_service import poll_zigbee_meters
+from app.services.shelly_energy_client import ShellyEnergyUnavailable, read_shelly_em
 
 
 LOG_INTERVAL_SECONDS = int(os.getenv("LOG_INTERVAL", "30"))
@@ -48,6 +49,15 @@ PERTH_TZ = ZoneInfo("Australia/Perth")
 
 def log_energy_snapshot():
     snapshot = get_energy_snapshot()
+    try:
+        shelly = read_shelly_em()
+        snapshot.update({
+            "hot_water_kw": shelly.get("hot_water_kw"),
+            "oven_kw": shelly.get("oven_kw"),
+        })
+    except ShellyEnergyUnavailable as exc:
+        print(f"Shelly energy reading skipped: {exc}")
+        snapshot.update({"hot_water_kw": None, "oven_kw": None})
     result = insert_energy_reading(snapshot)
 
     raw_register_count = 0

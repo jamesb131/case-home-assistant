@@ -23,6 +23,8 @@ ENERGY_COLUMNS = [
     "house_load_kw",
     "ev_kw",
     "ev_total_kwh",
+    "hot_water_kw",
+    "oven_kw",
 
     "ems_work_mode",
     "grid_sensor_status",

@@ -61,21 +61,21 @@ const RADIO_STATIONS = [
     label: "ABC",
     title: "ABC Perth",
     subtitle: "Live radio",
-    streamUrl: ABC_RADIO_PERTH_STREAM_URL,
+    streamUrls: [ABC_RADIO_PERTH_STREAM_URL, "https://live-radio01.mediahubaustralia.com/6LR/mp3/"],
   },
   {
     id: "triple-j",
     label: "triple j",
     title: "triple j",
     subtitle: "101.7 FM Perth",
-    streamUrl: "https://live-radio01.mediahubaustralia.com/2TJW/mp3/",
+    streamUrls: ["https://live-radio01.mediahubaustralia.com/2TJW/mp3/"],
   },
   {
     id: "nova-929",
     label: "92.9",
     title: "92.9",
     subtitle: "Perth FM",
-    streamUrl: "https://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_937.mp3",
+    streamUrls: ["https://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_937.mp3"],
   },
 ];
 
@@ -3898,6 +3898,7 @@ function MusicHomeCard() {
   const [error, setError] = useState(null);
   const audioRef = useRef(null);
   const station = RADIO_STATIONS[stationIndex] || RADIO_STATIONS[0];
+  const streamAttemptRef = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -3923,12 +3924,21 @@ function MusicHomeCard() {
     setError(null);
 
     if (!audioRef.current) {
-      audioRef.current = new Audio(station.streamUrl);
+      streamAttemptRef.current = 0;
+      audioRef.current = new Audio(station.streamUrls[0]);
       audioRef.current.preload = "none";
       audioRef.current.onended = () => setIsPlaying(false);
       audioRef.current.onerror = () => {
+        const fallbackUrl = station.streamUrls[streamAttemptRef.current + 1];
+        if (fallbackUrl) {
+          streamAttemptRef.current += 1;
+          audioRef.current.src = fallbackUrl;
+          audioRef.current.load();
+          audioRef.current.play().then(() => setIsPlaying(true)).catch(() => setIsPlaying(false));
+          return;
+        }
         setIsPlaying(false);
-        setError("Radio stream could not play here.");
+        setError("Radio stream could not play here. Try another station or refresh.");
       };
     }
 
@@ -6665,9 +6675,14 @@ function DeviceEnergyFlowCard({ summary, activePeriod, onPeriodChange, zigbeeMet
   const unit = summary?.unit || (activePeriod === "now" ? "kW" : "kWh");
   const values = summary?.values || {};
   const meterDevices = buildZigbeeDeviceLoads(zigbeeMeters, activePeriod);
+  const builtInDevices = [
+    { label: "Hot water", value: Number(values.hot_water || 0), color: "#f59e0b", isConfiguredMeter: true },
+    { label: "Oven", value: Number(values.oven || 0), color: "#8b5cf6", isConfiguredMeter: true },
+  ];
+  const allMeterDevices = [...builtInDevices, ...meterDevices];
   const evValue = Math.max(0, Number(values.ev || 0));
   const homeLoadNet = Math.max(0, Number(values.home_load_net ?? values.home_load ?? 0));
-  const otherMeteredTotal = meterDevices.reduce((sum, device) => sum + device.value, 0);
+  const otherMeteredTotal = allMeterDevices.reduce((sum, device) => sum + device.value, 0);
   const unmeteredValue = Math.max(0, homeLoadNet - otherMeteredTotal);
   const sources = [
     { id: "solar", label: "Solar", value: Math.max(0, Number(values.solar || 0)), color: "#facc15" },
@@ -6677,7 +6692,7 @@ function DeviceEnergyFlowCard({ summary, activePeriod, onPeriodChange, zigbeeMet
   const devices = [
     { id: "unmetered", label: "Unmetered", value: unmeteredValue, color: "#a855f7" },
     { id: "ev", label: "EV", value: evValue, color: "#ef4444" },
-    ...meterDevices.map((device, index) => ({
+    ...allMeterDevices.map((device, index) => ({
       ...device,
       id: `meter-${index}`,
       color: DEVICE_FLOW_COLORS[index % DEVICE_FLOW_COLORS.length],

@@ -401,7 +401,9 @@ def get_energy_flow_summary(period: str = "today"):
                         COALESCE(ev_kw, 0),
                         COALESCE(grid_kw, 0),
                         COALESCE(battery_kw, 0),
-                        battery_soc
+                        battery_soc,
+                        COALESCE(hot_water_kw, 0),
+                        COALESCE(oven_kw, 0)
                     FROM energy_readings
                     ORDER BY captured_at DESC
                     LIMIT 1;
@@ -422,6 +424,8 @@ def get_energy_flow_summary(period: str = "today"):
                 home_load_total = float(row[2] or 0)
                 ev_load = float(row[3] or 0)
                 home_load_net = max(home_load_total - ev_load, 0)
+                hot_water_kw = max(float(row[7] or 0), 0)
+                oven_kw = max(float(row[8] or 0), 0)
 
                 return {
                     "period": selected_period,
@@ -440,6 +444,8 @@ def get_energy_flow_summary(period: str = "today"):
                         "battery_charge": round(max(battery_kw, 0), 2),
                         "battery_discharge": round(max(-battery_kw, 0), 2),
                         "battery_soc": round(float(row[6]), 1) if row[6] is not None else None,
+                        "hot_water": round(hot_water_kw, 3),
+                        "oven": round(oven_kw, 3),
                     },
                 }
 
@@ -452,6 +458,8 @@ def get_energy_flow_summary(period: str = "today"):
                         COALESCE(ev_kw, 0) AS ev_kw,
                         COALESCE(grid_kw, 0) AS grid_kw,
                         COALESCE(battery_kw, 0) AS battery_kw,
+                        COALESCE(hot_water_kw, 0) AS hot_water_kw,
+                        COALESCE(oven_kw, 0) AS oven_kw,
                         LEAD(captured_at) OVER (ORDER BY captured_at) AS next_at
                     FROM energy_readings
                     WHERE captured_at >= %(start_at)s
@@ -464,6 +472,8 @@ def get_energy_flow_summary(period: str = "today"):
                         ev_kw,
                         grid_kw,
                         battery_kw,
+                        hot_water_kw,
+                        oven_kw,
                         LEAST(EXTRACT(EPOCH FROM (next_at - captured_at)), 1800) / 3600 AS hours
                     FROM readings
                     WHERE next_at IS NOT NULL
@@ -477,6 +487,8 @@ def get_energy_flow_summary(period: str = "today"):
                     COALESCE(SUM(GREATEST(-grid_kw, 0) * hours), 0) AS grid_export_kwh,
                     COALESCE(SUM(GREATEST(battery_kw, 0) * hours), 0) AS battery_charge_kwh,
                     COALESCE(SUM(GREATEST(-battery_kw, 0) * hours), 0) AS battery_discharge_kwh
+                    ,COALESCE(SUM(GREATEST(hot_water_kw, 0) * hours), 0) AS hot_water_kwh
+                    ,COALESCE(SUM(GREATEST(oven_kw, 0) * hours), 0) AS oven_kwh
                 FROM intervals;
             """, {"start_at": start_local, "end_at": end_local})
 
@@ -499,6 +511,8 @@ def get_energy_flow_summary(period: str = "today"):
                     "grid_export": round(float(row[5] or 0), 2),
                     "battery_charge": round(float(row[6] or 0), 2),
                     "battery_discharge": round(float(row[7] or 0), 2),
+                    "hot_water": round(float(row[8] or 0), 2),
+                    "oven": round(float(row[9] or 0), 2),
                 },
             }
 
