@@ -327,6 +327,30 @@ function App() {
   const [activePage, setActivePage] = useState("Home");
   const isMobile = useIsMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fullscreenAvailable, setFullscreenAvailable] = useState(false);
+
+  useEffect(() => {
+    const supported = Boolean(document.documentElement.requestFullscreen);
+    setFullscreenAvailable(supported);
+    const syncFullscreenState = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    syncFullscreenState();
+    return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
+  }, []);
+
+  async function toggleFullscreen() {
+    if (!fullscreenAvailable) return;
+    try {
+      if (document.fullscreenElement) {
+        await document.exitFullscreen();
+      } else {
+        await document.documentElement.requestFullscreen({ navigationUI: "hide" });
+      }
+    } catch (err) {
+      console.warn("Fullscreen unavailable", err);
+    }
+  }
 
   const [data, setData] = useState(null);
   const [recentEnergy, setRecentEnergy] = useState([]);
@@ -1881,6 +1905,9 @@ function App() {
           isListening={isListening}
           startVoiceRecognition={startVoiceRecognition}
           onOpenAssistant={() => setAssistantOpen(!assistantOpen)}
+          fullscreenAvailable={fullscreenAvailable}
+          isFullscreen={isFullscreen}
+          onToggleFullscreen={toggleFullscreen}
         />
         {activePage === "Home" && (
           <>
@@ -3230,6 +3257,9 @@ function TopNavigation({
   isListening,
   startVoiceRecognition,
   onOpenAssistant,
+  fullscreenAvailable,
+  isFullscreen,
+  onToggleFullscreen,
 }) {
   const items = isMobile ? navItems : [...navItems].reverse();
 
@@ -3249,34 +3279,56 @@ function TopNavigation({
       }}
     >
       {isMobile && (
-        <button
-          onClick={() => setActivePage("Home")}
-          style={{
-            border: "none",
-            background: "transparent",
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            cursor: "pointer",
-            padding: 0,
-            color: "#111827",
-          }}
-          aria-label="Home"
-        >
-          <img
-            src="/case-house.png"
-            alt=""
-            aria-hidden="true"
+        <>
+          <button
+            onClick={() => setActivePage("Home")}
             style={{
-              width: "46px",
-              height: "34px",
-              objectFit: "contain",
+              border: "none",
+              background: "transparent",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              cursor: "pointer",
+              padding: 0,
+              color: "#111827",
             }}
-          />
-          <span style={{ fontSize: "30px", fontWeight: 950, letterSpacing: 0 }}>
-            CASE
-          </span>
-        </button>
+            aria-label="Home"
+          >
+            <img
+              src="/case-house.png"
+              alt=""
+              aria-hidden="true"
+              style={{
+                width: "46px",
+                height: "34px",
+                objectFit: "contain",
+              }}
+            />
+            <span style={{ fontSize: "30px", fontWeight: 950, letterSpacing: 0 }}>
+              CASE
+            </span>
+          </button>
+          {fullscreenAvailable && (
+            <button
+              onClick={onToggleFullscreen}
+              aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+              style={{
+                width: "42px",
+                height: "42px",
+                border: "1px solid #e2e8f0",
+                borderRadius: "14px",
+                background: "white",
+                color: "#111827",
+                cursor: "pointer",
+                fontSize: "22px",
+                fontWeight: 900,
+              }}
+            >
+              ⛶
+            </button>
+          )}
+        </>
       )}
 
       <div
@@ -3339,6 +3391,29 @@ function TopNavigation({
           onOpenAssistant={onOpenAssistant}
           width="calc((100vw - 56px - 32px) / 4)"
         />
+        {fullscreenAvailable && (
+          <button
+            onClick={onToggleFullscreen}
+            aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+            title={isFullscreen ? "Exit fullscreen" : "Fullscreen"}
+            className="topNavIconButton"
+            style={{
+              width: "42px",
+              height: "42px",
+              borderRadius: "14px",
+              border: "1px solid #e2e8f0",
+              background: "white",
+              color: "#111827",
+              cursor: "pointer",
+              fontSize: "22px",
+              fontWeight: 900,
+              display: "grid",
+              placeItems: "center",
+            }}
+          >
+            {isFullscreen ? "⛶" : "⛶"}
+          </button>
+        )}
       </div>
     </header>
   );
@@ -7084,15 +7159,22 @@ function InternetPage() {
   const isMobile = useIsMobile();
   const [rows, setRows] = useState([]);
   const [hops, setHops] = useState([]);
+  const [traceRun, setTraceRun] = useState(null);
+  const [range, setRange] = useState("hour");
+  const [focusedEvent, setFocusedEvent] = useState(null);
   const [error, setError] = useState(null);
 
   async function load() {
     try {
-      const response = await apiFetch(`${API_BASE}/internet-monitor/measurements?limit=500`);
+      const response = await apiFetch(`${API_BASE}/internet-monitor/measurements?limit=25000`);
       if (!response.ok) throw new Error(`Internet monitor returned ${response.status}`);
       setRows((await response.json()).measurements || []);
       const traceResponse = await apiFetch(`${API_BASE}/internet-monitor/traces`);
-      if (traceResponse.ok) setHops((await traceResponse.json()).hops || []);
+      if (traceResponse.ok) {
+        const trace = await traceResponse.json();
+        setTraceRun(trace.run || null);
+        setHops(trace.hops || []);
+      }
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -7110,6 +7192,14 @@ function InternetPage() {
     .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
   const latest = samples[samples.length - 1];
   const now = Date.now();
+  const outageEvents = buildInternetOutageEvents(samples);
+  const rangeMs = range === "10m" ? 10 * 60000 : range === "day" ? 24 * 3600000 : 60 * 60000;
+  const chartSamples = focusedEvent
+    ? samples.filter((row) => {
+        const at = new Date(row.timestamp).getTime();
+        return at >= focusedEvent.start - 30 * 60000 && at <= focusedEvent.end + 30 * 60000;
+      })
+    : samples.filter((row) => now - new Date(row.timestamp).getTime() <= rangeMs);
   const periodStats = [
     ["Today", 24],
     ["This week", 24 * 7],
@@ -7127,23 +7217,52 @@ function InternetPage() {
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap: "12px", marginBottom: "16px" }}>
         {periodStats.map((stat) => <InternetStatCard key={stat.label} stat={stat} />)}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) 300px", gap: "16px", alignItems: "stretch" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) 420px", gap: "16px", alignItems: "stretch" }}>
       <section className="card" style={{ padding: "16px", overflow: "hidden" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
           <div><div className="muted">Latency</div><h2 style={{ margin: "3px 0" }}>1.1.1.1</h2></div>
-          <div className="tiny">Last {Math.min(samples.length, 120)} samples</div>
+          <div style={{ display: "flex", gap: "6px" }}>{[["10m", "10 min"], ["hour", "Hour"], ["day", "Day"]].map(([value, label]) => <button key={value} className="quietLinkButton" onClick={() => { setFocusedEvent(null); setRange(value); }} style={{ background: range === value && !focusedEvent ? "#111827" : "#eef2f7", color: range === value && !focusedEvent ? "white" : "#111827", padding: "7px 10px" }}>{label}</button>)}</div>
         </div>
-        <InternetLatencyChart samples={samples.slice(-120)} />
+        <div className="tiny" style={{ marginTop: "8px" }}>{focusedEvent ? "Outage focus · 30 min before and after" : `${chartSamples.length} readings in ${range === "10m" ? "10 minutes" : range === "hour" ? "the last hour" : "the last day"}`}</div>
+        <InternetLatencyChart samples={chartSamples} />
       </section>
       <section className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "70px 1fr 100px 80px 80px", gap: "8px", padding: "10px 14px", background: "#f8fafc", fontSize: "12px", fontWeight: 900, color: "#667085" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "52px 1fr 86px 76px 64px", gap: "8px", padding: "10px 14px", background: "#f8fafc", fontSize: "12px", fontWeight: 900, color: "#667085" }}>
           <span>Hop</span><span>IP / Name</span><span>Avg</span><span>Min</span><span>PL%</span>
         </div>
-        {hops.length ? hops.map((hop) => <InternetHopRow key={hop.hop_number} hop={hop} />) : <div style={{ padding: "16px" }} className="muted">Waiting for the first TCP trace.</div>}
+        {hops.length ? hops.map((hop) => <InternetHopRow key={hop.hop_number} hop={hop} />) : <div style={{ padding: "16px" }} className="muted">{traceRun ? "The latest TCP trace returned no hops." : "Waiting for the first TCP trace."}</div>}
       </section>
       </div>
+      <section className="card" style={{ marginTop: "16px", padding: 0, overflow: "hidden" }}>
+        <div style={{ padding: "16px 16px 10px" }}><div className="muted">Outage events</div><h2 style={{ margin: "3px 0 0", fontSize: "22px" }}>Recent interruptions</h2></div>
+        {outageEvents.length === 0 ? <div className="muted" style={{ padding: "0 16px 16px" }}>No sustained outages detected.</div> : outageEvents.slice(0, 20).map((event) => <button key={event.id} onClick={() => { setFocusedEvent(event); setRange("event"); }} style={{ width: "100%", border: 0, borderTop: "1px solid #eef2f7", background: focusedEvent?.id === event.id ? "#fff7ed" : "white", textAlign: "left", padding: "13px 16px", cursor: "pointer" }}><strong>{new Date(event.start).toLocaleString()}</strong><span className="muted"> · {formatDuration(event.end - event.start)} · {event.failures} failed readings</span></button>)}
+      </section>
     </div>
   );
+}
+
+function buildInternetOutageEvents(samples) {
+  const failures = samples.filter((row) => !row.success).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const events = [];
+  let current = null;
+  failures.forEach((row) => {
+    const at = new Date(row.timestamp).getTime();
+    if (!current || at - current.end > 30000) {
+      if (current && current.failures >= 2) events.push(current);
+      current = { id: `${at}`, start: at, end: at, failures: 1 };
+    } else {
+      current.end = at;
+      current.failures += 1;
+    }
+  });
+  if (current && current.failures >= 2) events.push(current);
+  return events.sort((a, b) => b.start - a.start);
+}
+
+function formatDuration(milliseconds) {
+  const seconds = Math.max(0, Math.round(milliseconds / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
 
 function summarizeInternet(samples, label) {
@@ -7159,12 +7278,12 @@ function formatInternetLatency(row) {
 }
 
 function InternetStatCard({ stat }) {
-  return <section className="card" style={{ padding: "14px 16px" }}><div className="muted">{stat.label}</div><h2 style={{ margin: "4px 0", fontSize: "24px" }}>{stat.avg == null ? "--" : `${Math.round(stat.avg)} ms`}</h2><div className="tiny">{stat.count ? `${stat.loss.toFixed(1)}% loss · p95 ${Math.round(stat.p95)} ms` : "Waiting for samples"}</div></section>;
+  return <section className="card" style={{ padding: "14px 16px" }}><div className="muted">{stat.label}</div><h2 style={{ margin: "4px 0", fontSize: "24px" }}>{stat.avg == null ? "--" : `${Math.round(stat.avg)} ms`}</h2><div className="tiny">{stat.count ? `${stat.loss.toFixed(1)}% loss · p95 ${stat.p95 == null ? "--" : `${Math.round(stat.p95)} ms`}` : "Waiting for readings"}</div></section>;
 }
 
 function InternetHopRow({ hop }) {
   const color = hop.success ? (Number(hop.latency_ms) >= 200 ? "#f59e0b" : "#22c55e") : "#94a3b8";
-  return <div style={{ display: "grid", gridTemplateColumns: "70px 1fr 100px 80px 80px", gap: "8px", padding: "14px", alignItems: "center", borderTop: "1px solid #eef2f7" }}><strong>{hop.hop_number}</strong><strong style={{ color }}>{hop.address || "*"} <span className="muted" style={{ fontWeight: 500 }}>{hop.hostname || ""}</span></strong><span>{hop.latency_ms == null ? "--" : `${Number(hop.latency_ms).toFixed(1)} ms`}</span><span>{hop.latency_ms == null ? "--" : `${Number(hop.latency_ms).toFixed(1)} ms`}</span><span>{hop.success ? "0.0%" : "100%"}</span></div>;
+  return <div style={{ display: "grid", gridTemplateColumns: "52px 1fr 86px 76px 64px", gap: "8px", padding: "14px", alignItems: "center", borderTop: "1px solid #eef2f7" }}><strong>{hop.hop_number}</strong><strong style={{ color, overflow: "hidden", textOverflow: "ellipsis" }}>{hop.address || "*"} <span className="muted" style={{ fontWeight: 500 }}>{hop.hostname || ""}</span></strong><span>{hop.latency_ms == null ? "--" : `${Number(hop.latency_ms).toFixed(1)} ms`}</span><span>{hop.latency_ms == null ? "--" : `${Number(hop.latency_ms).toFixed(1)} ms`}</span><span>{hop.success ? "0.0%" : "100%"}</span></div>;
 }
 
 function InternetLatencyChart({ samples }) {

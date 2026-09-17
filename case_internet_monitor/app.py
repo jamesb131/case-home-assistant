@@ -168,7 +168,7 @@ async def health(request):
 
 
 async def measurements(request):
-    limit = min(int(request.query.get("limit", "500")), 5000)
+    limit = min(int(request.query.get("limit", "500")), 25000)
     with db() as connection:
         rows = [dict(row) for row in connection.execute("SELECT * FROM measurements ORDER BY id DESC LIMIT ?", (limit,))]
     return web.json_response({"measurements": rows})
@@ -180,7 +180,7 @@ async def traces(request):
         if not run:
             return web.json_response({"run": None, "hops": []})
         hops = [dict(row) for row in connection.execute("SELECT hop_number, address, hostname, latency_ms, success FROM trace_hops WHERE trace_run_id = ? ORDER BY hop_number", (run["id"],))]
-    return web.json_response({"run": dict(run), "hops": hops})
+    return web.json_response({"run": dict(run), "hops": hops, "hop_count": len(hops)})
 
 
 async def main():

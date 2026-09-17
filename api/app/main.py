@@ -112,12 +112,23 @@ def radio_stream(station: str = "abc"):
         return JSONResponse({"error": "Unknown radio station."}, status_code=404)
 
     try:
-        response = requests.get(stream_url, stream=True, timeout=(5, 15), headers={"User-Agent": "CASE/1.0"})
+        response = requests.get(
+            stream_url,
+            stream=True,
+            timeout=(5, 15),
+            allow_redirects=True,
+            headers={
+                "User-Agent": "Mozilla/5.0 (CASE local radio player)",
+                "Accept": "audio/mpeg,audio/aac,application/octet-stream;q=0.9,*/*;q=0.1",
+                "Icy-MetaData": "0",
+                "Referer": "https://www.abc.net.au/listen/",
+            },
+        )
         response.raise_for_status()
     except requests.RequestException as exc:
         return JSONResponse({"error": f"Radio stream unavailable: {exc}"}, status_code=502)
 
-    content_type = response.headers.get("content-type", "audio/mpeg")
+    content_type = response.headers.get("content-type", "audio/mpeg").split(";", 1)[0].strip()
 
     def chunks():
         try:
@@ -127,7 +138,15 @@ def radio_stream(station: str = "abc"):
         finally:
             response.close()
 
-    return StreamingResponse(chunks(), media_type=content_type)
+    return StreamingResponse(
+        chunks(),
+        media_type=content_type or "audio/mpeg",
+        headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Access-Control-Allow-Origin": "*",
+        },
+    )
 
 app.include_router(lists_router)
 
