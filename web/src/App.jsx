@@ -7221,7 +7221,7 @@ function InternetPage() {
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3, minmax(0, 1fr))", gap: "12px", marginBottom: "16px" }}>
         {periodStats.map((stat) => <InternetStatCard key={stat.label} stat={stat} />)}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 1fr) 420px", gap: "16px", alignItems: "stretch" }}>
+      <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "minmax(0, 2fr) minmax(380px, 1fr)", gap: "16px", alignItems: "stretch" }}>
       <section className="card" style={{ padding: "16px", overflow: "hidden" }}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center", flexWrap: "wrap" }}>
           <div><div className="muted">Latency</div><h2 style={{ margin: "3px 0" }}>1.1.1.1</h2></div>
@@ -7231,7 +7231,7 @@ function InternetPage() {
         <InternetLatencyChart samples={chartSamples} />
       </section>
       <section className="card" style={{ padding: 0, overflow: "hidden" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "52px 1fr 86px 76px 64px", gap: "8px", padding: "10px 14px", background: "#f8fafc", fontSize: "12px", fontWeight: 900, color: "#667085" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "42px 1fr 72px 72px 58px", gap: "6px", padding: "10px 14px", background: "#f8fafc", fontSize: "11px", fontWeight: 800, color: "#667085" }}>
           <span>Hop</span><span>IP / Name</span><span>Avg</span><span>Min</span><span>PL%</span>
         </div>
         {hops.length ? hops.map((hop) => <InternetHopRow key={hop.hop_number} hop={hop} />) : <div style={{ padding: "16px" }} className="muted">{traceRun ? "The latest TCP trace returned no hops." : "Waiting for the first TCP trace."}</div>}
@@ -7287,7 +7287,7 @@ function InternetStatCard({ stat }) {
 
 function InternetHopRow({ hop }) {
   const color = hop.success ? (Number(hop.latency_ms) >= 200 ? "#f59e0b" : "#22c55e") : "#94a3b8";
-  return <div style={{ display: "grid", gridTemplateColumns: "52px 1fr 86px 76px 64px", gap: "8px", padding: "14px", alignItems: "center", borderTop: "1px solid #eef2f7" }}><strong>{hop.hop_number}</strong><strong style={{ color, overflow: "hidden", textOverflow: "ellipsis" }}>{hop.address || "*"} <span className="muted" style={{ fontWeight: 500 }}>{hop.hostname || ""}</span></strong><span>{hop.latency_ms == null ? "--" : `${Number(hop.latency_ms).toFixed(1)} ms`}</span><span>{hop.latency_ms == null ? "--" : `${Number(hop.latency_ms).toFixed(1)} ms`}</span><span>{hop.success ? "0.0%" : "100%"}</span></div>;
+  return <div style={{ display: "grid", gridTemplateColumns: "42px 1fr 72px 72px 58px", gap: "6px", padding: "11px 14px", alignItems: "center", borderTop: "1px solid #eef2f7", fontSize: "13px" }}><strong style={{ fontWeight: 750 }}>{hop.hop_number}</strong><strong style={{ color, minWidth: 0, whiteSpace: "nowrap", fontSize: "13px", fontWeight: 750 }}>{hop.address || "*"} <span className="muted" style={{ fontWeight: 500 }}>{hop.hostname || ""}</span></strong><span>{hop.latency_ms == null ? "--" : `${Number(hop.latency_ms).toFixed(1)} ms`}</span><span>{hop.latency_ms == null ? "--" : `${Number(hop.latency_ms).toFixed(1)} ms`}</span><span>{hop.success ? "0.0%" : "100%"}</span></div>;
 }
 
 function InternetLatencyChart({ samples }) {
@@ -7296,7 +7296,7 @@ function InternetLatencyChart({ samples }) {
   const values = samples.map((row) => Number(row.latency_ms)).filter(Number.isFinite);
   const max = Math.max(30, ...values) * 1.15;
   const points = samples.map((row, index) => `${(index / Math.max(1, samples.length - 1)) * width},${row.success && row.latency_ms != null ? height - (Number(row.latency_ms) / max) * (height - 24) : height}`).join(" ");
-  return <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "360px", display: "block", marginTop: "12px", background: "#e0f2d8" }}><line x1="0" x2={width} y1={height - 1} y2={height - 1} stroke="#94a38d" /><line x1="0" x2={width} y1={height / 2} y2={height / 2} stroke="#b6c5ad" strokeDasharray="6 6" /><polyline points={points} fill="none" stroke="#1f2937" strokeWidth="1.25" strokeLinejoin="round" />{samples.map((row, index) => !row.success ? <circle key={`${row.timestamp}-${index}`} cx={(index / Math.max(1, samples.length - 1)) * width} cy={height - 8} r="3" fill="#ef4444" /> : null)}</svg>;
+  return <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "300px", display: "block", marginTop: "12px", background: "#e0f2d8" }}><line x1="0" x2={width} y1={height - 1} y2={height - 1} stroke="#94a38d" /><line x1="0" x2={width} y1={height / 2} y2={height / 2} stroke="#b6c5ad" strokeDasharray="6 6" /><polyline points={points} fill="none" stroke="#1f2937" strokeWidth="1.25" strokeLinejoin="round" />{samples.map((row, index) => !row.success ? <circle key={`${row.timestamp}-${index}`} cx={(index / Math.max(1, samples.length - 1)) * width} cy={height - 8} r="3" fill="#ef4444" /> : null)}</svg>;
 }
 
 function WeatherPage({
