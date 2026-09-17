@@ -22,6 +22,11 @@ try:
 except json.JSONDecodeError:
     TARGETS = []
 
+# V1 deliberately follows only the primary PingPlotter-style destination.
+TARGETS = [target for target in TARGETS if target.get("host") == "1.1.1.1"] or [
+    {"name": "1.1.1.1", "host": "1.1.1.1", "test_type": "ping"}
+]
+
 
 def db():
     connection = sqlite3.connect(DB_PATH)

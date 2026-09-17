@@ -3299,7 +3299,9 @@ function TopNavigation({
           aria-label="Primary"
         >
           {items.map(([icon, item]) => (
-            <button
+            <div key={item} style={{ position: "relative", display: "grid", placeItems: "center" }}>
+              {item === "Internet" && <InternetHealthLights />}
+              <button
               key={item}
               onClick={() => setActivePage(item)}
               aria-label={item}
@@ -3319,9 +3321,10 @@ function TopNavigation({
                 display: "grid",
                 placeItems: "center",
               }}
-            >
-              {icon}
-            </button>
+              >
+                {icon}
+              </button>
+            </div>
           ))}
         </nav>
 
@@ -7043,6 +7046,36 @@ function formatDeviceFlowValue(value, unit, stale = false) {
   };
 }
 
+function InternetHealthLights() {
+  const [rows, setRows] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    const load = async () => {
+      try {
+        const response = await apiFetch(`${API_BASE}/internet-monitor/measurements?limit=2000`);
+        if (response.ok && active) setRows((await response.json()).measurements || []);
+      } catch {
+        // The page still works if the monitor is temporarily unavailable.
+      }
+    };
+    load();
+    const interval = setInterval(load, 30000);
+    return () => { active = false; clearInterval(interval); };
+  }, []);
+
+  const now = Date.now();
+  const levels = [1, 24, 24 * 7].map((hours) => {
+    const windowRows = rows.filter((row) => now - new Date(row.timestamp).getTime() <= hours * 3600000);
+    const failures = windowRows.filter((row) => !row.success).length;
+    if (!windowRows.length || failures >= Math.max(3, windowRows.length * 0.2)) return "#ef4444";
+    if (failures) return "#f59e0b";
+    return "#22c55e";
+  });
+
+  return <div style={{ display: "flex", gap: "3px", position: "absolute", top: "-9px" }} aria-label="Internet health: last hour, day and week">{levels.map((color, index) => <span key={index} style={{ width: "5px", height: "5px", borderRadius: "50%", background: color, boxShadow: `0 0 4px ${color}` }} />)}</div>;
+}
+
 function InternetPage() {
   const [rows, setRows] = useState([]);
   const [error, setError] = useState(null);
@@ -7064,10 +7097,16 @@ function InternetPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const latest = new Map();
-  rows.forEach((row) => {
-    if (!latest.has(row.target)) latest.set(row.target, row);
-  });
+  const samples = rows
+    .filter((row) => row.host === "1.1.1.1")
+    .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  const latest = samples[samples.length - 1];
+  const now = Date.now();
+  const periodStats = [
+    ["Today", 24],
+    ["This week", 24 * 7],
+    ["This month", 24 * 30],
+  ].map(([label, hours]) => summarizeInternet(samples.filter((row) => now - new Date(row.timestamp).getTime() <= hours * 3600000), label));
 
   return (
     <div>
@@ -7076,18 +7115,56 @@ function InternetPage() {
         <div className="muted" style={{ marginTop: "8px" }}>Local connection quality and availability</div>
       </section>
       {error && <div className="card" style={{ color: "#991b1b" }}>{error}. Install and start the CASE Internet Monitor add-on.</div>}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
-        {[...latest.values()].map((row) => (
-          <section className="card" key={row.target}>
-            <div className="muted">{row.target}</div>
-            <h2 style={{ margin: "6px 0" }}>{row.success ? "Online" : "Problem"}</h2>
-            <div className="tiny">{row.latency_ms != null ? `${Math.round(row.latency_ms)} ms` : row.total_ms != null ? `${Math.round(row.total_ms)} ms` : "No response"}</div>
-            <div className="tiny" style={{ marginTop: "8px" }}>{new Date(row.timestamp).toLocaleString()}</div>
-          </section>
-        ))}
+      {latest && <div className="card" style={{ marginBottom: "16px", padding: "12px 16px" }}><strong>1.1.1.1 / one.one.one.one</strong><span className="muted"> · Last sample {formatInternetLatency(latest)}</span></div>}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "12px", marginBottom: "16px" }}>
+        {periodStats.map((stat) => <InternetStatCard key={stat.label} stat={stat} />)}
       </div>
+      <section className="card" style={{ padding: "16px", overflow: "hidden" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
+          <div><div className="muted">Latency</div><h2 style={{ margin: "3px 0" }}>1.1.1.1</h2></div>
+          <div className="tiny">Last {Math.min(samples.length, 120)} samples</div>
+        </div>
+        <InternetLatencyChart samples={samples.slice(-120)} />
+      </section>
+      <section className="card" style={{ marginTop: "16px", padding: 0, overflow: "hidden" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "70px 1fr 100px 80px 80px", gap: "8px", padding: "10px 14px", background: "#f8fafc", fontSize: "12px", fontWeight: 900, color: "#667085" }}>
+          <span>Hop</span><span>IP / Name</span><span>Avg</span><span>Min</span><span>PL%</span>
+        </div>
+        <InternetHopRow samples={samples} />
+      </section>
     </div>
   );
+}
+
+function summarizeInternet(samples, label) {
+  const successful = samples.filter((row) => row.success && row.latency_ms != null);
+  const latencies = successful.map((row) => Number(row.latency_ms)).sort((a, b) => a - b);
+  const loss = samples.length ? ((samples.length - successful.length) / samples.length) * 100 : 0;
+  return { label, count: samples.length, loss, avg: latencies.length ? latencies.reduce((sum, value) => sum + value, 0) / latencies.length : null, p95: latencies.length ? latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * 0.95))] : null };
+}
+
+function formatInternetLatency(row) {
+  if (!row?.success) return "lost";
+  return row.latency_ms == null ? "available" : `${Math.round(row.latency_ms)} ms`;
+}
+
+function InternetStatCard({ stat }) {
+  return <section className="card" style={{ padding: "14px 16px" }}><div className="muted">{stat.label}</div><h2 style={{ margin: "4px 0", fontSize: "24px" }}>{stat.avg == null ? "--" : `${Math.round(stat.avg)} ms`}</h2><div className="tiny">{stat.count ? `${stat.loss.toFixed(1)}% loss · p95 ${Math.round(stat.p95)} ms` : "Waiting for samples"}</div></section>;
+}
+
+function InternetHopRow({ samples }) {
+  const stat = summarizeInternet(samples, "");
+  const latencies = samples.filter((row) => row.success && row.latency_ms != null).map((row) => Number(row.latency_ms));
+  return <div style={{ display: "grid", gridTemplateColumns: "70px 1fr 100px 80px 80px", gap: "8px", padding: "14px", alignItems: "center" }}><strong>1</strong><strong>1.1.1.1 <span className="muted" style={{ fontWeight: 500 }}>one.one.one.one</span></strong><span>{stat.avg == null ? "--" : `${stat.avg.toFixed(1)} ms`}</span><span>{latencies.length ? `${Math.min(...latencies).toFixed(1)} ms` : "--"}</span><span>{stat.loss.toFixed(1)}%</span></div>;
+}
+
+function InternetLatencyChart({ samples }) {
+  const width = 1000;
+  const height = 280;
+  const values = samples.map((row) => Number(row.latency_ms)).filter(Number.isFinite);
+  const max = Math.max(30, ...values) * 1.15;
+  const points = samples.map((row, index) => `${(index / Math.max(1, samples.length - 1)) * width},${row.success && row.latency_ms != null ? height - (Number(row.latency_ms) / max) * (height - 24) : height}`).join(" ");
+  return <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", minHeight: "240px", display: "block", marginTop: "12px", background: "#e0f2d8" }}><line x1="0" x2={width} y1={height - 1} y2={height - 1} stroke="#94a38d" /><line x1="0" x2={width} y1={height / 2} y2={height / 2} stroke="#b6c5ad" strokeDasharray="6 6" /><polyline points={points} fill="none" stroke="#1f2937" strokeWidth="2" strokeLinejoin="round" />{samples.map((row, index) => !row.success ? <circle key={`${row.timestamp}-${index}`} cx={(index / Math.max(1, samples.length - 1)) * width} cy={height - 8} r="4" fill="#ef4444" /> : null)}</svg>;
 }
 
 function WeatherPage({
