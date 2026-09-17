@@ -4510,8 +4510,9 @@ function EnergyFlowCard({ summary, activePeriod, onPeriodChange }) {
     { id: "grid", label: "Grid", value: values.grid_import || 0, color: "#60a5fa" },
   ];
   const homeLoad = Math.max(0, values.home_load_net ?? values.home_load ?? 0);
+  const hotWater = Math.max(0, Number(values.hot_water || 0));
   const sinks = [
-    { id: "load", label: "Load", value: homeLoad, color: "#a855f7" },
+    { id: "load", label: "Load", value: Math.max(0, homeLoad - hotWater), color: "#a855f7" },
     {
       id: "battery",
       label: "Battery",
@@ -4520,6 +4521,7 @@ function EnergyFlowCard({ summary, activePeriod, onPeriodChange }) {
       optional: true,
     },
     { id: "ev", label: "EV", value: values.ev || 0, color: "#ef4444" },
+    { id: "hot-water", label: "HW", value: hotWater, color: "#f97316" },
     { id: "grid", label: "Grid", value: values.grid_export || 0, color: "#4f46e5" },
   ].filter((item) => !item.optional || item.value > 0.01);
 
@@ -4644,9 +4646,12 @@ function buildEnergyFlowRibbons(sources, sinks) {
   allocate("solar", "battery");
   allocate("solar", "load");
   allocate("solar", "ev");
+  allocate("solar", "hot-water");
   allocate("solar", "grid");
   allocate("grid", "ev");
+  allocate("grid", "hot-water");
   allocate("battery", "ev");
+  allocate("battery", "hot-water");
 
   const flows = [];
   const sourceCursor = Object.fromEntries(sources.map((item) => [item.id, item.y]));
@@ -6690,7 +6695,7 @@ function DeviceEnergyFlowCard({ summary, activePeriod, onPeriodChange, zigbeeMet
   const meterDevices = buildZigbeeDeviceLoads(zigbeeMeters, activePeriod);
   const builtInDevices = [
     { label: "HW", value: Number(values.hot_water || 0), color: "#f97316", isConfiguredMeter: true },
-    { label: "Oven", value: Number(values.oven || 0), color: "#f97316", isConfiguredMeter: true },
+    { label: "Oven", value: Number(values.oven || 0), color: "#db2777", isConfiguredMeter: true },
   ];
   const allMeterDevices = [...builtInDevices, ...meterDevices];
   const evValue = Math.max(0, Number(values.ev || 0));
