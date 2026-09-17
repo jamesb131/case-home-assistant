@@ -96,9 +96,19 @@ def internet_monitor_measurements(limit: int = 500):
     try:
         response = requests.get(
             f"{INTERNET_MONITOR_URL}/api/measurements",
-            params={"limit": min(max(limit, 1), 5000)},
+            params={"limit": min(max(limit, 1), 25000)},
             timeout=3,
         )
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as exc:
+        return JSONResponse({"error": f"Internet monitor unavailable: {exc}"}, status_code=503)
+
+
+@app.get("/internet-monitor/traces")
+def internet_monitor_traces():
+    try:
+        response = requests.get(f"{INTERNET_MONITOR_URL}/api/traces", timeout=3)
         response.raise_for_status()
         return response.json()
     except requests.RequestException as exc:
