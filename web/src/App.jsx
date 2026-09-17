@@ -54,28 +54,27 @@ const PERSON_THEMES = {
   },
 };
 
-const ABC_RADIO_PERTH_STREAM_URL = "https://live-radio01.mediahubaustralia.com/6LRW/mp3/";
 const RADIO_STATIONS = [
   {
     id: "abc-perth",
     label: "ABC",
     title: "ABC Perth",
     subtitle: "Live radio",
-    streamUrls: [ABC_RADIO_PERTH_STREAM_URL, "https://live-radio01.mediahubaustralia.com/6LR/mp3/"],
+    streamUrls: [`${API_BASE}/radio/stream?station=abc`],
   },
   {
     id: "triple-j",
     label: "triple j",
     title: "triple j",
     subtitle: "101.7 FM Perth",
-    streamUrls: ["https://live-radio01.mediahubaustralia.com/2TJW/mp3/"],
+    streamUrls: [`${API_BASE}/radio/stream?station=triple-j`],
   },
   {
     id: "nova-929",
     label: "92.9",
     title: "92.9",
     subtitle: "Perth FM",
-    streamUrls: ["https://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_937.mp3"],
+    streamUrls: [`${API_BASE}/radio/stream?station=nova-929`],
   },
 ];
 
@@ -1729,6 +1728,7 @@ function App() {
     ["☁", "Weather"],
     ["📰", "News"],
     ["🛡", "Security"],
+    ["🌐", "Internet"],
   ];
   const systemStatusItems = buildSystemStatusItems(systemStatus);
 
@@ -2592,6 +2592,7 @@ function App() {
               apiBase={API_BASE}
             />
           )}
+          {activePage === "Internet" && <InternetPage />}
           {activePage === "Weather" && (
             <WeatherPage
               weather={weather}
@@ -4875,6 +4876,8 @@ function EnergyDayChart({ data, isMobile = false, heightOverride = null }) {
         solar_kw: 0,
         house_load_kw: 0,
         ev_kw: 0,
+        hot_water_kw: 0,
+        oven_kw: 0,
         grid_kw: 0,
         battery_soc: 0,
         time: key,
@@ -4888,6 +4891,8 @@ function EnergyDayChart({ data, isMobile = false, heightOverride = null }) {
     g.solar_kw += row.solar_kw || 0;
     g.house_load_kw += row.house_load_kw || 0;
     g.ev_kw += row.ev_kw || 0;
+    g.hot_water_kw += row.hot_water_kw || 0;
+    g.oven_kw += row.oven_kw || 0;
     g.grid_kw += row.grid_kw || 0;
     g.battery_soc += row.battery_soc || 0;
   });
@@ -4897,6 +4902,8 @@ function EnergyDayChart({ data, isMobile = false, heightOverride = null }) {
     solar_kw: g.solar_kw / g.count,
     house_load_kw: g.house_load_kw / g.count,
     ev_kw: g.ev_kw / g.count,
+    hot_water_kw: g.hot_water_kw / g.count,
+    oven_kw: g.oven_kw / g.count,
     grid_kw: g.grid_kw / g.count,
     battery_soc: g.battery_soc / g.count,
   }));
@@ -4910,6 +4917,7 @@ function EnergyDayChart({ data, isMobile = false, heightOverride = null }) {
     { type: "thin", color: "#92400e", label: "Into house/battery", compactLabel: "To home" },
     { type: "bar", color: "#93c5fd", label: "Consumption", compactLabel: "Use" },
     { type: "bar", color: "#ef4444", label: "EV charging", compactLabel: "EV" },
+    { type: "bar", color: "#f97316", label: "HW", compactLabel: "HW" },
     { type: "thin", color: "#2563eb", label: "Covered by PV/battery", compactLabel: "Covered" },
     { type: "line", color: "rgba(100,116,139,0.35)", label: "Battery SoC", compactLabel: "Battery" },
   ];
@@ -5030,6 +5038,7 @@ function EnergyDayChart({ data, isMobile = false, heightOverride = null }) {
         {actualRows.map((row) => {
           const x = xFromDate(row.date);
           const evKw = Math.max(0, row.ev_kw || 0);
+          const hotWaterKw = Math.max(0, row.hot_water_kw || 0);
           const consumption = Math.max(0, row.house_load_net_kw ?? (row.house_load_kw || 0) - evKw);
           const totalMeteredLoad = consumption + evKw;
           const importKw = Math.max(0, row.grid_kw || 0);
@@ -5059,6 +5068,10 @@ function EnergyDayChart({ data, isMobile = false, heightOverride = null }) {
                   fill="#ef4444"
                   opacity={0.78}
                 />
+              )}
+
+              {hotWaterKw > 0 && (
+                <RoundedBar x={x + 5} y={zeroY} width={4} height={barHeight(hotWaterKw)} fill="#f97316" opacity={0.82} />
               )}
 
               {suppliedBySolarOrBattery > 0 && (
@@ -6676,8 +6689,8 @@ function DeviceEnergyFlowCard({ summary, activePeriod, onPeriodChange, zigbeeMet
   const values = summary?.values || {};
   const meterDevices = buildZigbeeDeviceLoads(zigbeeMeters, activePeriod);
   const builtInDevices = [
-    { label: "Hot water", value: Number(values.hot_water || 0), color: "#f59e0b", isConfiguredMeter: true },
-    { label: "Oven", value: Number(values.oven || 0), color: "#8b5cf6", isConfiguredMeter: true },
+    { label: "HW", value: Number(values.hot_water || 0), color: "#f97316", isConfiguredMeter: true },
+    { label: "Oven", value: Number(values.oven || 0), color: "#f97316", isConfiguredMeter: true },
   ];
   const allMeterDevices = [...builtInDevices, ...meterDevices];
   const evValue = Math.max(0, Number(values.ev || 0));
@@ -7023,6 +7036,53 @@ function formatDeviceFlowValue(value, unit, stale = false) {
     value: numericValue.toFixed(numericValue >= 10 ? 1 : 2),
     unit,
   };
+}
+
+function InternetPage() {
+  const [rows, setRows] = useState([]);
+  const [error, setError] = useState(null);
+
+  async function load() {
+    try {
+      const response = await apiFetch(`${API_BASE}/internet-monitor/measurements?limit=500`);
+      if (!response.ok) throw new Error(`Internet monitor returned ${response.status}`);
+      setRows((await response.json()).measurements || []);
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  useEffect(() => {
+    load();
+    const interval = setInterval(load, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const latest = new Map();
+  rows.forEach((row) => {
+    if (!latest.has(row.target)) latest.set(row.target, row);
+  });
+
+  return (
+    <div>
+      <section style={{ marginBottom: "18px" }}>
+        <h1 style={{ margin: 0, fontSize: "32px" }}>Internet</h1>
+        <div className="muted" style={{ marginTop: "8px" }}>Local connection quality and availability</div>
+      </section>
+      {error && <div className="card" style={{ color: "#991b1b" }}>{error}. Install and start the CASE Internet Monitor add-on.</div>}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px" }}>
+        {[...latest.values()].map((row) => (
+          <section className="card" key={row.target}>
+            <div className="muted">{row.target}</div>
+            <h2 style={{ margin: "6px 0" }}>{row.success ? "Online" : "Problem"}</h2>
+            <div className="tiny">{row.latency_ms != null ? `${Math.round(row.latency_ms)} ms` : row.total_ms != null ? `${Math.round(row.total_ms)} ms` : "No response"}</div>
+            <div className="tiny" style={{ marginTop: "8px" }}>{new Date(row.timestamp).toLocaleString()}</div>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function WeatherPage({

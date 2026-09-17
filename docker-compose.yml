@@ -43,6 +43,7 @@ services:
       SHELLY_EM_TIMEOUT: ${SHELLY_EM_TIMEOUT:-3}
       SHELLY_HOT_WATER_CHANNEL: ${SHELLY_HOT_WATER_CHANNEL:-0}
       SHELLY_OVEN_CHANNEL: ${SHELLY_OVEN_CHANNEL:-1}
+      INTERNET_MONITOR_URL: ${INTERNET_MONITOR_URL:-http://internet-monitor:8090}
     volumes:
       - ./api/app/google:/app/app/google
 
@@ -56,6 +57,17 @@ services:
     environment:
       CASE_WEB_API_BASE_URL: ${CASE_WEB_API_BASE_URL:-}
       CASE_WEB_API_TOKEN: ${CASE_WEB_API_TOKEN:-}
+
+  internet-monitor:
+    build: ./case_internet_monitor
+    container_name: case-internet-monitor
+    ports:
+      - "8090:8090"
+    volumes:
+      - internet_monitor_data:/data
+    environment:
+      INTERVAL_SECONDS: ${INTERNET_MONITOR_INTERVAL_SECONDS:-5}
+      TARGETS_JSON: ${INTERNET_MONITOR_TARGETS_JSON:-[]}
 
   worker:
     build: ./api
@@ -112,3 +124,4 @@ services:
 
 volumes:
   case_data:
+  internet_monitor_data:

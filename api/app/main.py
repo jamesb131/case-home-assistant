@@ -3,7 +3,7 @@ from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from app.services.db import get_connection
 from app.services.ollama_client import get_ollama_status
@@ -63,6 +63,8 @@ from app.services.zigbee_meter_service import (
 from app.services.zigbee_mqtt_client import ZigbeeMqttUnavailable
 from app.repositories.gaggimate_repository import get_recent_gaggimate_readings
 from app.repositories.news_repository import get_latest_news
+import requests
+import os
 
 from app.routers.task_templates_router import router as task_templates_router
 
@@ -79,6 +81,53 @@ api_token = os.getenv("CASE_API_TOKEN")
 auth_exempt_paths = {"/", "/health"}
 
 app = FastAPI()
+
+RADIO_STREAMS = {
+    "abc": "https://live-radio01.mediahubaustralia.com/6LRW/mp3/",
+    "triple-j": "https://live-radio01.mediahubaustralia.com/2TJW/mp3/",
+    "nova-929": "https://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_937.mp3",
+}
+
+INTERNET_MONITOR_URL = os.getenv("INTERNET_MONITOR_URL", "http://case-internet-monitor:8090").rstrip("/")
+
+
+@app.get("/internet-monitor/measurements")
+def internet_monitor_measurements(limit: int = 500):
+    try:
+        response = requests.get(
+            f"{INTERNET_MONITOR_URL}/api/measurements",
+            params={"limit": min(max(limit, 1), 5000)},
+            timeout=3,
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as exc:
+        return JSONResponse({"error": f"Internet monitor unavailable: {exc}"}, status_code=503)
+
+
+@app.get("/radio/stream")
+def radio_stream(station: str = "abc"):
+    stream_url = RADIO_STREAMS.get(station)
+    if not stream_url:
+        return JSONResponse({"error": "Unknown radio station."}, status_code=404)
+
+    try:
+        response = requests.get(stream_url, stream=True, timeout=(5, 15), headers={"User-Agent": "CASE/1.0"})
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        return JSONResponse({"error": f"Radio stream unavailable: {exc}"}, status_code=502)
+
+    content_type = response.headers.get("content-type", "audio/mpeg")
+
+    def chunks():
+        try:
+            for chunk in response.iter_content(chunk_size=64 * 1024):
+                if chunk:
+                    yield chunk
+        finally:
+            response.close()
+
+    return StreamingResponse(chunks(), media_type=content_type)
 
 app.include_router(lists_router)
 
@@ -208,6 +257,8 @@ def get_recent_energy(date: date | None = None):
                     AVG(ev_kw) AS ev_kw,
                     AVG(grid_kw) AS grid_kw,
                     AVG(battery_soc) AS battery_soc,
+                    AVG(hot_water_kw) AS hot_water_kw,
+                    AVG(oven_kw) AS oven_kw,
                         MAX(house_load_kw) AS house_load_kw_max
                     FROM energy_readings
                     WHERE captured_at >= %(start_at)s
@@ -225,6 +276,8 @@ def get_recent_energy(date: date | None = None):
                     solar_kw - house_load_net_kw - ev_kw AS net_kw,
                     battery_soc,
                     house_load_kw_max
+                    ,hot_water_kw
+                    ,oven_kw
                 FROM bucketed
                 ORDER BY bucket ASC;
             """, {"start_at": start_at, "end_at": end_at})
@@ -243,6 +296,8 @@ def get_recent_energy(date: date | None = None):
                     "net_kw": float(r[7] or 0),
                     "battery_soc": float(r[8] or 0),
                     "house_load_kw_max": float(r[9] or 0),
+                    "hot_water_kw": float(r[10] or 0),
+                    "oven_kw": float(r[11] or 0),
                 }
                 for r in rows
             ]

@@ -1,5 +1,5 @@
 name: CASE Core
-version: "0.1.61"
+version: "0.1.62"
 slug: case_core
 description: Local-first household assistant API, worker and web UI.
 url: https://github.com/jamesb131/case-home-assistant
@@ -54,6 +54,7 @@ options:
   shelly_em_timeout: 3
   shelly_hot_water_channel: 0
   shelly_oven_channel: 1
+  internet_monitor_url: http://case-internet-monitor:8090
   gaggimate_host: 192.168.0.116
   gaggimate_ws_protocol: ws
   gaggimate_timeout: 3
@@ -116,6 +117,7 @@ schema:
   shelly_em_timeout: int(1,30)
   shelly_hot_water_channel: int(0,2)
   shelly_oven_channel: int(0,2)
+  internet_monitor_url: url
   gaggimate_host: str
   gaggimate_ws_protocol: list(ws|wss)
   gaggimate_timeout: int(1,30)
