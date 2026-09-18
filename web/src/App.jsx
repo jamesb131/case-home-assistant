@@ -5151,17 +5151,17 @@ function EnergyDayChart({ data, isMobile = false, heightOverride = null }) {
           const restH = barHeight(restHouseKw);
           const hotWaterH = barHeight(hotWaterKw);
           const evH = barHeight(evKw);
-          const restY = zeroY - restH;
-          const hotWaterY = restY - hotWaterH;
-          const evY = hotWaterY - evH;
+          const restY = zeroY;
+          const hotWaterY = zeroY + restH;
+          const evY = hotWaterY + hotWaterH;
 
           const innerH = barHeight(suppliedBySolarOrBattery);
-          const innerY = zeroY - innerH;
+          const innerY = zeroY;
 
           return (
             <g key={`consumption-${row.time}`} onMouseEnter={() => setHoveredRowKey(row.time)} onMouseLeave={() => setHoveredRowKey(null)}>
               <rect x={x - 6} y={margin.top} width="12" height={plotHeight} fill="transparent" />
-              <RoundedBar x={x} y={restY} width={8} height={restH} fill="#93c5fd" opacity={0.5} />
+              <RoundedBar x={x} y={restY} width={8} height={restH} fill="#93c5fd" opacity={0.82} />
 
               {evKw > 0 && (
                 <rect
