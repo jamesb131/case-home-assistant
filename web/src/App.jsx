@@ -4903,6 +4903,7 @@ function TinyTempLine({ points, color }) {
 }
 
 function EnergyDayChart({ data, isMobile = false, heightOverride = null }) {
+  const [hoveredRowKey, setHoveredRowKey] = useState(null);
   const width = isMobile ? 1100 : 1240;
   const height = heightOverride || (isMobile ? 210 : 540);
 
@@ -4962,11 +4963,14 @@ function EnergyDayChart({ data, isMobile = false, heightOverride = null }) {
         count: 0,
         solar_kw: 0,
         house_load_kw: 0,
+        house_load_net_kw: 0,
         ev_kw: 0,
         hot_water_kw: 0,
         oven_kw: 0,
         grid_kw: 0,
         battery_soc: 0,
+        solar_peak_kw: 0,
+        consumption_peak_kw: 0,
         time: key,
         date: d,
       });
@@ -4977,32 +4981,44 @@ function EnergyDayChart({ data, isMobile = false, heightOverride = null }) {
     g.count += 1;
     g.solar_kw += row.solar_kw || 0;
     g.house_load_kw += row.house_load_kw || 0;
+    g.house_load_net_kw += row.house_load_net_kw ?? Math.max(0, (row.house_load_kw || 0) - (row.ev_kw || 0));
     g.ev_kw += row.ev_kw || 0;
     g.hot_water_kw += row.hot_water_kw || 0;
     g.oven_kw += row.oven_kw || 0;
     g.grid_kw += row.grid_kw || 0;
     g.battery_soc += row.battery_soc || 0;
+    g.solar_peak_kw = Math.max(g.solar_peak_kw, Number(row.solar_kw || 0));
+    g.consumption_peak_kw = Math.max(g.consumption_peak_kw, Number(row.house_load_net_kw || 0) + Number(row.ev_kw || 0));
   });
 
   const actualRows = Array.from(grouped.values()).map((g) => ({
     ...g,
     solar_kw: g.solar_kw / g.count,
     house_load_kw: g.house_load_kw / g.count,
+    house_load_net_kw: g.house_load_net_kw / g.count,
     ev_kw: g.ev_kw / g.count,
     hot_water_kw: g.hot_water_kw / g.count,
     oven_kw: g.oven_kw / g.count,
     grid_kw: g.grid_kw / g.count,
     battery_soc: g.battery_soc / g.count,
+    solar_peak_kw: g.solar_peak_kw,
+    consumption_peak_kw: g.consumption_peak_kw,
+    rest_house_kw: Math.max(0, g.house_load_net_kw / g.count - g.hot_water_kw / g.count),
   }));
 
   const tickHours = isMobile
     ? [0, 6, 12, 18, 24]
     : Array.from({ length: 13 }, (_, i) => i * 2);
   const nowX = xFromDate(now);
+  const hoveredRow = actualRows.find((row) => row.time === hoveredRowKey);
+  const tooltipWidth = 224;
+  const hoveredX = hoveredRow ? xFromDate(hoveredRow.date) : margin.left;
+  const tooltipX = clamp(hoveredX + 12, margin.left, width - margin.right - tooltipWidth);
+  const intervalKwh = (kw) => `${(Math.max(0, Number(kw) || 0) * 0.25).toFixed(2)} kWh`;
   const legendItems = [
     { type: "bar", color: "#fbbf24", label: "Solar production", compactLabel: "Solar" },
     { type: "thin", color: "#92400e", label: "Into house/battery", compactLabel: "To home" },
-    { type: "bar", color: "#93c5fd", label: "Consumption", compactLabel: "Use" },
+    { type: "bar", color: "#93c5fd", label: "Rest of house", compactLabel: "House" },
     { type: "bar", color: "#ef4444", label: "EV charging", compactLabel: "EV" },
     { type: "bar", color: "#f97316", label: "HW", compactLabel: "HW" },
     { type: "thin", color: "#2563eb", label: "Covered by PV/battery", compactLabel: "Covered" },
@@ -5126,23 +5142,26 @@ function EnergyDayChart({ data, isMobile = false, heightOverride = null }) {
           const x = xFromDate(row.date);
           const evKw = Math.max(0, row.ev_kw || 0);
           const hotWaterKw = Math.max(0, row.hot_water_kw || 0);
-          const consumption = Math.max(0, row.house_load_net_kw ?? (row.house_load_kw || 0) - evKw);
-          const totalMeteredLoad = consumption + evKw;
+          const restHouseKw = Math.max(0, row.rest_house_kw ?? ((row.house_load_net_kw || 0) - hotWaterKw));
+          const totalMeteredLoad = restHouseKw + hotWaterKw + evKw;
           const importKw = Math.max(0, row.grid_kw || 0);
 
           const suppliedBySolarOrBattery = clamp(totalMeteredLoad - importKw, 0, totalMeteredLoad);
 
-          const h = barHeight(consumption);
-          const y = zeroY;
+          const restH = barHeight(restHouseKw);
+          const hotWaterH = barHeight(hotWaterKw);
+          const evH = barHeight(evKw);
+          const restY = zeroY - restH;
+          const hotWaterY = restY - hotWaterH;
+          const evY = hotWaterY - evH;
 
           const innerH = barHeight(suppliedBySolarOrBattery);
-          const innerY = zeroY;
-          const evH = barHeight(evKw);
-          const evY = zeroY + h;
+          const innerY = zeroY - innerH;
 
           return (
-            <g key={`consumption-${row.time}`}>
-              <RoundedBar x={x} y={y} width={8} height={h} fill="#93c5fd" opacity={0.5} />
+            <g key={`consumption-${row.time}`} onMouseEnter={() => setHoveredRowKey(row.time)} onMouseLeave={() => setHoveredRowKey(null)}>
+              <rect x={x - 6} y={margin.top} width="12" height={plotHeight} fill="transparent" />
+              <RoundedBar x={x} y={restY} width={8} height={restH} fill="#93c5fd" opacity={0.5} />
 
               {evKw > 0 && (
                 <rect
@@ -5158,7 +5177,7 @@ function EnergyDayChart({ data, isMobile = false, heightOverride = null }) {
               )}
 
               {hotWaterKw > 0 && (
-                <RoundedBar x={x + 5} y={zeroY} width={4} height={barHeight(hotWaterKw)} fill="#f97316" opacity={0.82} />
+                <RoundedBar x={x} y={hotWaterY} width={8} height={hotWaterH} fill="#f97316" opacity={0.82} />
               )}
 
               {suppliedBySolarOrBattery > 0 && (
@@ -5212,6 +5231,27 @@ function EnergyDayChart({ data, isMobile = false, heightOverride = null }) {
             </text>
           </g>
         )}
+
+        {hoveredRow && (
+          <g pointerEvents="none">
+            <rect x={tooltipX} y={margin.top + 8} width={tooltipWidth} height="142" rx="9" fill="#111827" opacity="0.96" />
+            <text x={tooltipX + 12} y={margin.top + 27} fill="white" fontSize="11" fontWeight="800">
+              {hoveredRow.date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · 15 minutes
+            </text>
+            {[
+              ["Battery SoC", `${Math.round(Number(hoveredRow.battery_soc || 0))}%`],
+              ["EV", intervalKwh(hoveredRow.ev_kw)],
+              ["HW", intervalKwh(hoveredRow.hot_water_kw)],
+              ["Rest of house", intervalKwh(hoveredRow.rest_house_kw)],
+              ["Solar produced", intervalKwh(hoveredRow.solar_kw)],
+              ["Peak solar / load", `${Number(hoveredRow.solar_peak_kw || 0).toFixed(2)} / ${Number(hoveredRow.consumption_peak_kw || 0).toFixed(2)} kW`],
+            ].map(([label, value], index) => (
+              <text key={label} x={tooltipX + 12} y={margin.top + 47 + index * 15} fill={index === 0 ? "#cbd5e1" : "white"} fontSize="10">
+                {label}: {value}
+              </text>
+            ))}
+          </g>
+        )}
       </svg>
 
       <div
@@ -5263,6 +5303,7 @@ function RoundedBar({ x, y, width, height, fill, opacity = 1 }) {
 }
 
 function batterySocPath(rows, margin, plotWidth, plotHeight) {
+  const zeroY = margin.top + plotHeight / 2;
   const points = rows
     .filter((row) => row.battery_soc !== null && row.battery_soc !== undefined)
     .map((row) => {
@@ -5271,7 +5312,7 @@ function batterySocPath(rows, margin, plotWidth, plotHeight) {
       const x = margin.left + (minutes / 1440) * plotWidth;
 
       const soc = Math.max(0, Math.min(100, row.battery_soc));
-      const y = margin.top + plotHeight - (soc / 100) * plotHeight;
+      const y = zeroY - (soc / 100) * (zeroY - margin.top);
 
       return { x, y };
     });
@@ -7286,17 +7327,33 @@ function InternetStatCard({ stat }) {
 }
 
 function InternetHopRow({ hop }) {
-  const color = hop.success ? (Number(hop.latency_ms) >= 200 ? "#f59e0b" : "#22c55e") : "#94a3b8";
-  return <div style={{ display: "grid", gridTemplateColumns: "42px 1fr 72px 72px 58px", gap: "6px", padding: "11px 14px", alignItems: "center", borderTop: "1px solid #eef2f7", fontSize: "13px" }}><strong style={{ fontWeight: 750 }}>{hop.hop_number}</strong><strong style={{ color, minWidth: 0, whiteSpace: "nowrap", fontSize: "13px", fontWeight: 750 }}>{hop.address || "*"} <span className="muted" style={{ fontWeight: 500 }}>{hop.hostname || ""}</span></strong><span>{hop.latency_ms == null ? "--" : `${Number(hop.latency_ms).toFixed(1)} ms`}</span><span>{hop.latency_ms == null ? "--" : `${Number(hop.latency_ms).toFixed(1)} ms`}</span><span>{hop.success ? "0.0%" : "100%"}</span></div>;
+  const average = Number(hop.avg_latency_ms);
+  const color = !Number.isFinite(average) ? "#94a3b8" : average >= 200 ? "#f59e0b" : "#22c55e";
+  return <div style={{ display: "grid", gridTemplateColumns: "42px 1fr 72px 72px 58px", gap: "6px", padding: "11px 14px", alignItems: "center", borderTop: "1px solid #eef2f7", fontSize: "13px" }}><strong style={{ fontWeight: 750 }}>{hop.hop_number}</strong><strong style={{ color, minWidth: 0, whiteSpace: "nowrap", fontSize: "13px", fontWeight: 750 }}>{hop.address || "*"} <span className="muted" style={{ fontWeight: 500 }}>{hop.hostname || ""}</span></strong><span>{Number.isFinite(average) ? `${average.toFixed(1)} ms` : "--"}</span><span>{Number.isFinite(Number(hop.min_latency_ms)) ? `${Number(hop.min_latency_ms).toFixed(1)} ms` : "--"}</span><span>{hop.loss_pct == null ? "--" : `${Number(hop.loss_pct).toFixed(1)}%`}</span></div>;
 }
 
 function InternetLatencyChart({ samples }) {
   const width = 1000;
-  const height = 280;
+  const height = 300;
+  const plotLeft = 48;
+  const plotRight = 12;
+  const plotTop = 16;
+  const plotBottom = 32;
+  const plotWidth = width - plotLeft - plotRight;
+  const plotHeight = height - plotTop - plotBottom;
   const values = samples.map((row) => Number(row.latency_ms)).filter(Number.isFinite);
   const max = Math.max(30, ...values) * 1.15;
-  const points = samples.map((row, index) => `${(index / Math.max(1, samples.length - 1)) * width},${row.success && row.latency_ms != null ? height - (Number(row.latency_ms) / max) * (height - 24) : height}`).join(" ");
-  return <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "300px", display: "block", marginTop: "12px", background: "#e0f2d8" }}><line x1="0" x2={width} y1={height - 1} y2={height - 1} stroke="#94a38d" /><line x1="0" x2={width} y1={height / 2} y2={height / 2} stroke="#b6c5ad" strokeDasharray="6 6" /><polyline points={points} fill="none" stroke="#1f2937" strokeWidth="1.25" strokeLinejoin="round" />{samples.map((row, index) => !row.success ? <circle key={`${row.timestamp}-${index}`} cx={(index / Math.max(1, samples.length - 1)) * width} cy={height - 8} r="3" fill="#ef4444" /> : null)}</svg>;
+  const xFor = (index) => plotLeft + (index / Math.max(1, samples.length - 1)) * plotWidth;
+  const yFor = (latency) => plotTop + plotHeight - (Number(latency) / max) * plotHeight;
+  const points = samples.map((row, index) => `${xFor(index)},${row.success && row.latency_ms != null ? yFor(row.latency_ms) : plotTop + plotHeight}`).join(" ");
+  const yTicks = [0, max / 2, max];
+  const xTicks = samples.length ? [0, Math.floor((samples.length - 1) / 2), samples.length - 1] : [];
+  return <svg viewBox={`0 0 ${width} ${height}`} style={{ width: "100%", height: "300px", display: "block", marginTop: "12px", background: "#e0f2d8" }}>
+    {yTicks.map((tick) => <g key={`y-${tick}`}><line x1={plotLeft} x2={width - plotRight} y1={yFor(tick)} y2={yFor(tick)} stroke={tick === 0 ? "#94a38d" : "#b6c5ad"} strokeDasharray={tick === 0 ? undefined : "6 6"} /><text x={plotLeft - 8} y={yFor(tick) + 4} textAnchor="end" fontSize="11" fill="#667085">{Math.round(tick)} ms</text></g>)}
+    {xTicks.map((index) => <text key={`x-${index}`} x={xFor(index)} y={height - 8} textAnchor={index === 0 ? "start" : index === samples.length - 1 ? "end" : "middle"} fontSize="11" fill="#667085">{new Date(samples[index].timestamp).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</text>)}
+    <polyline points={points} fill="none" stroke="#1f2937" strokeWidth="1.25" strokeLinejoin="round" />
+    {samples.map((row, index) => !row.success ? <circle key={`${row.timestamp}-${index}`} cx={xFor(index)} cy={plotTop + plotHeight - 5} r="3" fill="#ef4444" /> : null)}
+  </svg>;
 }
 
 function WeatherPage({

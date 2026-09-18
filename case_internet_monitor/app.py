@@ -179,7 +179,41 @@ async def traces(request):
         run = connection.execute("SELECT id, timestamp, destination FROM trace_runs ORDER BY id DESC LIMIT 1").fetchone()
         if not run:
             return web.json_response({"run": None, "hops": []})
-        hops = [dict(row) for row in connection.execute("SELECT hop_number, address, hostname, latency_ms, success FROM trace_hops WHERE trace_run_id = ? ORDER BY hop_number", (run["id"],))]
+        hops = [dict(row) for row in connection.execute("""
+            WITH latest_hops AS (
+                SELECT hop_number, address, hostname
+                FROM trace_hops
+                WHERE trace_run_id = ?
+            ), aggregate AS (
+                SELECT
+                    h.hop_number,
+                    AVG(h.latency_ms) AS avg_latency_ms,
+                    MIN(h.latency_ms) AS min_latency_ms,
+                    COUNT(*) AS trace_count,
+                    SUM(h.success) AS successful_traces
+                FROM trace_hops h
+                JOIN trace_runs r ON r.id = h.trace_run_id
+                WHERE r.destination = ?
+                    AND r.timestamp >= datetime('now', '-24 hours')
+                GROUP BY h.hop_number
+            )
+            SELECT
+                latest_hops.hop_number,
+                latest_hops.address,
+                latest_hops.hostname,
+                aggregate.avg_latency_ms,
+                aggregate.min_latency_ms,
+                aggregate.trace_count,
+                aggregate.successful_traces,
+                CASE
+                    WHEN aggregate.trace_count > 0
+                    THEN (aggregate.trace_count - aggregate.successful_traces) * 100.0 / aggregate.trace_count
+                    ELSE 100.0
+                END AS loss_pct
+            FROM latest_hops
+            LEFT JOIN aggregate ON aggregate.hop_number = latest_hops.hop_number
+            ORDER BY latest_hops.hop_number
+        """, (run["id"], run["destination"]))]
     return web.json_response({"run": dict(run), "hops": hops, "hop_count": len(hops)})
 
 
