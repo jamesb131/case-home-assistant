@@ -167,6 +167,13 @@ def get_camera_stream_path(camera):
         socket.close()
 
 
+def get_case_api_prefix():
+    configured = os.getenv("CASE_WEB_API_BASE_URL", "").strip().rstrip("/")
+    if configured.startswith("http://") or configured.startswith("https://"):
+        return urlparse(configured).path.rstrip("/")
+    return configured
+
+
 @app.get("/cameras/{camera_key}/stream")
 def camera_stream(camera_key: str):
     camera = next((item for item in get_camera_entities() if item["key"] == camera_key), None)
@@ -178,7 +185,7 @@ def camera_stream(camera_key: str):
     except (HomeAssistantUnavailable, RuntimeError, OSError, websocket.WebSocketException) as exc:
         return JSONResponse({"error": f"Camera stream unavailable: {exc}"}, status_code=503)
 
-    return {"url": f"/cameras/{camera_key}/hls/{quote(stream_path, safe='/')}"}
+    return {"url": f"{get_case_api_prefix()}/cameras/{camera_key}/hls/{quote(stream_path, safe='/')}"}
 
 
 def proxy_hls_uri(camera_key, uri):
@@ -188,7 +195,7 @@ def proxy_hls_uri(camera_key, uri):
     if prefix not in path:
         return uri
     stream_path = path.split(prefix, 1)[1]
-    proxy_path = f"/cameras/{camera_key}/hls/{quote(stream_path, safe='/')}"
+    proxy_path = f"{get_case_api_prefix()}/cameras/{camera_key}/hls/{quote(stream_path, safe='/')}"
     return proxy_path + (f"?{parsed.query}" if parsed.query else "")
 
 
