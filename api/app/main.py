@@ -71,6 +71,7 @@ from app.repositories.news_repository import get_latest_news
 import requests
 import os
 import re
+import logging
 import websocket
 from urllib.parse import urljoin, urlparse, quote
 
@@ -89,6 +90,7 @@ api_token = os.getenv("CASE_API_TOKEN")
 auth_exempt_paths = {"/", "/health"}
 
 app = FastAPI()
+logger = logging.getLogger(__name__)
 
 RADIO_STREAMS = {
     "abc": "https://live-radio01.mediahubaustralia.com/6LRW/mp3/",
@@ -182,7 +184,8 @@ def camera_stream(camera_key: str):
 
     try:
         stream_path = get_camera_stream_path(camera)
-    except (HomeAssistantUnavailable, RuntimeError, OSError, websocket.WebSocketException) as exc:
+    except Exception as exc:
+        logger.exception("Camera stream setup failed for %s", camera["entity_id"])
         return JSONResponse({"error": f"Camera stream unavailable: {exc}"}, status_code=503)
 
     return {"url": f"{get_case_api_prefix()}/cameras/{camera_key}/hls/{quote(stream_path, safe='/')}"}
@@ -238,7 +241,8 @@ def camera_hls(camera_key: str, stream_path: str, request: Request):
                 response.close()
 
         return StreamingResponse(chunks(), media_type=content_type or "video/mp4", headers={"Cache-Control": "no-store"})
-    except (requests.RequestException, HomeAssistantUnavailable) as exc:
+    except Exception as exc:
+        logger.exception("Camera HLS proxy failed for %s", camera["entity_id"])
         return JSONResponse({"error": f"Camera stream segment unavailable: {exc}"}, status_code=503)
 
 
@@ -253,7 +257,8 @@ def camera_mjpeg(camera_key: str):
     try:
         response = requests.get(source_url, headers=get_home_assistant_headers(), stream=True, timeout=12)
         response.raise_for_status()
-    except (requests.RequestException, HomeAssistantUnavailable) as exc:
+    except Exception as exc:
+        logger.exception("Camera MJPEG proxy failed for %s", camera["entity_id"])
         return JSONResponse({"error": f"Camera MJPEG stream unavailable: {exc}"}, status_code=503)
 
     def chunks():
