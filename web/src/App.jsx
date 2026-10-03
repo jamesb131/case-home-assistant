@@ -401,6 +401,8 @@ function App() {
   const [assistantStatus, setAssistantStatus] = useState(null);
   const [systemStatus, setSystemStatus] = useState(null);
   const [securityStatus, setSecurityStatus] = useState(null);
+  const [cameras, setCameras] = useState([]);
+  const [cameraError, setCameraError] = useState(null);
   const [gaggimateStatus, setGaggimateStatus] = useState(null);
   const [gaggimateProfiles, setGaggimateProfiles] = useState([]);
   const [gaggimateError, setGaggimateError] = useState(null);
@@ -430,6 +432,18 @@ function App() {
       setTasks(json.tasks || []);
     } catch (err) {
       console.error(err);
+    }
+  }
+
+  async function loadCameras() {
+    try {
+      const res = await apiFetch(`${API_BASE}/cameras`);
+      if (!res.ok) throw new Error(`Cameras API returned ${res.status}`);
+      const json = await res.json();
+      setCameras(json.cameras || []);
+      setCameraError(null);
+    } catch (err) {
+      setCameraError(err.message);
     }
   }
 
@@ -1553,6 +1567,7 @@ function App() {
       loadZigbeeMeters(),
       loadZigbeeEnvironment(),
       loadNewsSummary(),
+      loadCameras(),
     ]);
   }
 
@@ -1578,6 +1593,7 @@ function App() {
       loadZigbeeMeters();
       loadZigbeeEnvironment();
       loadNewsSummary();
+      loadCameras();
     }, 0);
 
     const energyInterval = setInterval(() => {
@@ -1604,6 +1620,10 @@ function App() {
     const systemStatusInterval = setInterval(() => {
       loadSystemStatus();
       loadSecurityStatus();
+    }, 60000);
+
+    const cameraInterval = setInterval(() => {
+      if (activePage === "Cameras") loadCameras();
     }, 60000);
 
     const gaggimateInterval = setInterval(() => {
@@ -1634,6 +1654,7 @@ function App() {
       clearInterval(calendarInterval);
       clearInterval(assistantStatusInterval);
       clearInterval(systemStatusInterval);
+      clearInterval(cameraInterval);
       clearInterval(gaggimateInterval);
       clearInterval(roborockInterval);
       clearInterval(airtouchInterval);
@@ -1755,6 +1776,7 @@ function App() {
     ["📰", "News"],
     ["🛡", "Security"],
     ["🌐", "Internet"],
+    ["📹", "Cameras"],
   ];
   const systemStatusItems = buildSystemStatusItems(systemStatus);
 
@@ -2622,6 +2644,7 @@ function App() {
             />
           )}
           {activePage === "Internet" && <InternetPage />}
+          {activePage === "Cameras" && <CamerasPage cameras={cameras} error={cameraError} />}
           {activePage === "Weather" && (
             <WeatherPage
               weather={weather}
@@ -8554,6 +8577,77 @@ function SecurityPage({ securityStatus, assistantStatus, apiBase }) {
         </div>
       </section>
     </div>
+  );
+}
+
+function CamerasPage({ cameras, error }) {
+  return (
+    <div>
+      <section style={{ marginBottom: "18px" }}>
+        <h1 style={{ margin: 0, fontSize: "32px" }}>Cameras</h1>
+        <div className="muted" style={{ marginTop: "8px" }}>
+          Local camera views through Home Assistant
+        </div>
+      </section>
+
+      {error && <div className="card" style={{ color: "#991b1b", marginBottom: "16px" }}>{error}</div>}
+      {!cameras.length && !error && (
+        <section className="card">
+          <h2 style={{ margin: 0, fontSize: "22px" }}>No cameras configured</h2>
+          <p className="muted" style={{ marginBottom: 0 }}>
+            Add the NVR camera to Home Assistant first, then set CASE_CAMERA_ENTITIES to a JSON map such as {`{"Driveway":"camera.driveway"}`}.
+          </p>
+        </section>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "16px" }}>
+        {cameras.map((camera) => <CameraCard key={camera.key} camera={camera} />)}
+      </div>
+    </div>
+  );
+}
+
+function CameraCard({ camera }) {
+  const [src, setSrc] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    let objectUrl = null;
+    const loadSnapshot = async () => {
+      try {
+        const response = await apiFetch(`${API_BASE}/cameras/${camera.key}/snapshot`);
+        if (!response.ok) throw new Error(`Snapshot unavailable (${response.status})`);
+        const blob = await response.blob();
+        if (!active) return;
+        const nextObjectUrl = URL.createObjectURL(blob);
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+        objectUrl = nextObjectUrl;
+        setSrc(objectUrl);
+        setError(null);
+      } catch (err) {
+        if (active) setError(err.message);
+      }
+    };
+    loadSnapshot();
+    const interval = setInterval(loadSnapshot, 10000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [camera.key]);
+
+  return (
+    <section className="card" style={{ padding: 0, overflow: "hidden" }}>
+      <div style={{ aspectRatio: "16 / 9", background: "#0f172a", display: "grid", placeItems: "center" }}>
+        {src ? <img src={src} alt={camera.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ color: "white" }}>{error || "Loading camera…"}</span>}
+      </div>
+      <div style={{ padding: "14px 16px" }}>
+        <h2 style={{ margin: 0, fontSize: "20px" }}>{camera.name}</h2>
+        <div className="muted" style={{ marginTop: "4px" }}>Home Assistant camera</div>
+      </div>
+    </section>
   );
 }
 

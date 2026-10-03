@@ -47,7 +47,11 @@ from app.services.gaggimate_client import (
     list_profiles as list_gaggimate_profiles,
     select_profile as select_gaggimate_profile,
 )
-from app.services.home_assistant_client import HomeAssistantUnavailable
+from app.services.home_assistant_client import (
+    HomeAssistantUnavailable,
+    get_home_assistant_headers,
+    parse_entity_map,
+)
 from app.services.news_client import get_news_overview
 from app.services.roborock_client import get_roborock_status, run_roborock_command
 from app.services.airtouch_client import get_airtouch_status, run_airtouch_command
@@ -89,6 +93,42 @@ RADIO_STREAMS = {
 }
 
 INTERNET_MONITOR_URL = os.getenv("INTERNET_MONITOR_URL", "http://2e435b46-case-internet-monitor:8090").rstrip("/")
+
+
+def get_camera_entities():
+    configured = parse_entity_map(os.getenv("CASE_CAMERA_ENTITIES", ""))
+    return [
+        {"key": str(index), "name": name, "entity_id": entity_id}
+        for index, (name, entity_id) in enumerate(configured.items())
+    ]
+
+
+@app.get("/cameras")
+def cameras():
+    return {"cameras": [{"key": item["key"], "name": item["name"]} for item in get_camera_entities()]}
+
+
+@app.get("/cameras/{camera_key}/snapshot")
+def camera_snapshot(camera_key: str):
+    camera = next((item for item in get_camera_entities() if item["key"] == camera_key), None)
+    if not camera:
+        return JSONResponse({"error": "Camera is not configured."}, status_code=404)
+
+    try:
+        response = requests.get(
+            f"{os.getenv('HOME_ASSISTANT_URL', '').strip().rstrip('/')}/api/camera_proxy/{camera['entity_id']}",
+            headers=get_home_assistant_headers(),
+            timeout=12,
+        )
+        response.raise_for_status()
+    except (requests.RequestException, HomeAssistantUnavailable) as exc:
+        return JSONResponse({"error": f"Camera snapshot unavailable: {exc}"}, status_code=503)
+
+    return StreamingResponse(
+        iter([response.content]),
+        media_type=response.headers.get("content-type", "image/jpeg"),
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.get("/internet-monitor/measurements")

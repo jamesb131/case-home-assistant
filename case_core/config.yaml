@@ -1,5 +1,5 @@
 name: CASE Core
-version: "0.1.75"
+version: "0.1.76"
 slug: case_core
 description: Local-first household assistant API, worker and web UI.
 url: https://github.com/jamesb131/case-home-assistant
@@ -61,6 +61,7 @@ options:
   gaggimate_poll_interval: 60
   home_assistant_url: http://homeassistant.local:8123
   home_assistant_token: ""
+  case_camera_entities: '{}'
   ev_power_entity_id: sensor.sigen_plant_smart_load_1_power
   ev_total_consumption_entity_id: sensor.sigen_plant_smart_load_1_total_consumption
   ev_charging_threshold_kw: 0.3
@@ -124,6 +125,7 @@ schema:
   gaggimate_poll_interval: int(30,)
   home_assistant_url: url
   home_assistant_token: password?
+  case_camera_entities: str
   ev_power_entity_id: str?
   ev_total_consumption_entity_id: str?
   ev_charging_threshold_kw: float(0,)
