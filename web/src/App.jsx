@@ -8614,6 +8614,11 @@ function CameraCard({ camera }) {
   const [mjpegUrl, setMjpegUrl] = useState(null);
   const [error, setError] = useState(null);
   const videoRef = useRef(null);
+  const caseUrl = (url) => {
+    if (url.startsWith("http://") || url.startsWith("https://")) return url;
+    if (url.startsWith(API_BASE)) return url;
+    return `${API_BASE}${url.startsWith("/") ? url : `/${url}`}`;
+  };
 
   useEffect(() => {
     let active = true;
@@ -8623,12 +8628,12 @@ function CameraCard({ camera }) {
         return response.json();
       })
       .then((json) => {
-        if (active) setStreamUrl(json.url);
+        if (active) setStreamUrl(caseUrl(json.url));
       })
       .catch(() => {
         if (active) {
           setStreamUrl(null);
-          setMjpegUrl(`${API_BASE}/cameras/${camera.key}/mjpeg`);
+          setMjpegUrl(caseUrl(`/cameras/${camera.key}/mjpeg`));
         }
       });
     return () => { active = false; };
@@ -8650,7 +8655,7 @@ function CameraCard({ camera }) {
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
           setStreamUrl(null);
-          setMjpegUrl(`${API_BASE}/cameras/${camera.key}/mjpeg`);
+          setMjpegUrl(caseUrl(`/cameras/${camera.key}/mjpeg`));
           setError(`HLS stream failed: ${data.details || "unknown error"}`);
         }
       });
@@ -8659,7 +8664,7 @@ function CameraCard({ camera }) {
       video.play().catch(() => {});
       video.onerror = () => {
         setStreamUrl(null);
-        setMjpegUrl(`${API_BASE}/cameras/${camera.key}/mjpeg`);
+        setMjpegUrl(caseUrl(`/cameras/${camera.key}/mjpeg`));
       };
     }
     return () => {

@@ -188,33 +188,33 @@ def camera_stream(camera_key: str):
     return {"url": f"{get_case_api_prefix()}/cameras/{camera_key}/hls/{quote(stream_path, safe='/')}"}
 
 
-def proxy_hls_uri(camera_key, uri):
+def proxy_hls_uri(camera_key, uri, api_prefix=None):
     parsed = urlparse(uri)
     path = parsed.path
     prefix = "/api/hls/"
     if prefix not in path:
         return uri
     stream_path = path.split(prefix, 1)[1]
-    proxy_path = f"{get_case_api_prefix()}/cameras/{camera_key}/hls/{quote(stream_path, safe='/')}"
+    proxy_path = f"{api_prefix if api_prefix is not None else get_case_api_prefix()}/cameras/{camera_key}/hls/{quote(stream_path, safe='/')}"
     return proxy_path + (f"?{parsed.query}" if parsed.query else "")
 
 
-def rewrite_hls_playlist(camera_key, playlist, source_url):
+def rewrite_hls_playlist(camera_key, playlist, source_url, api_prefix=None):
     def rewrite_attribute(match):
-        return f'{match.group(1)}="{proxy_hls_uri(camera_key, urljoin(source_url, match.group(2)))}"'
+        return f'{match.group(1)}="{proxy_hls_uri(camera_key, urljoin(source_url, match.group(2)), api_prefix)}"'
 
     lines = []
     for line in playlist.splitlines():
         if line.startswith("#"):
             line = re.sub(r'(URI)="([^"]+)"', rewrite_attribute, line)
         elif line.strip():
-            line = proxy_hls_uri(camera_key, urljoin(source_url, line.strip()))
+            line = proxy_hls_uri(camera_key, urljoin(source_url, line.strip()), api_prefix)
         lines.append(line)
     return "\n".join(lines) + "\n"
 
 
 @app.get("/cameras/{camera_key}/hls/{stream_path:path}")
-def camera_hls(camera_key: str, stream_path: str):
+def camera_hls(camera_key: str, stream_path: str, request: Request):
     camera = next((item for item in get_camera_entities() if item["key"] == camera_key), None)
     if not camera or ".." in stream_path:
         return JSONResponse({"error": "Camera stream is not configured."}, status_code=404)
@@ -226,7 +226,8 @@ def camera_hls(camera_key: str, stream_path: str):
         response.raise_for_status()
         content_type = response.headers.get("content-type", "")
         if "mpegurl" in content_type or stream_path.endswith(".m3u8"):
-            body = rewrite_hls_playlist(camera_key, response.text, source_url)
+            api_prefix = request.url.path.split("/cameras/", 1)[0]
+            body = rewrite_hls_playlist(camera_key, response.text, source_url, api_prefix)
             response.close()
             return StreamingResponse(iter([body.encode()]), media_type="application/vnd.apple.mpegurl", headers={"Cache-Control": "no-store"})
 
