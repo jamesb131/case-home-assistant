@@ -368,8 +368,10 @@ async def require_api_token(request: Request, call_next):
         else None
     )
     header_token = request.headers.get("x-case-token")
+    query_token = request.query_params.get("token")
+    camera_query_token = request.url.path.startswith("/cameras/") and query_token == api_token
 
-    if bearer_token != api_token and header_token != api_token:
+    if bearer_token != api_token and header_token != api_token and not camera_query_token:
         return JSONResponse(
             status_code=401,
             content={"detail": "CASE API token required"},

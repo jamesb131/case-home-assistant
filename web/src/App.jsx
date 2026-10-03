@@ -8627,6 +8627,11 @@ function CameraCard({ camera }) {
     if (url.startsWith(API_BASE)) return url;
     return `${API_BASE}${url.startsWith("/") ? url : `/${url}`}`;
   };
+  const cameraUrl = (url) => {
+    const resolved = new URL(caseUrl(url), window.location.origin);
+    if (API_TOKEN) resolved.searchParams.set("token", API_TOKEN);
+    return resolved.toString();
+  };
 
   useEffect(() => {
     let active = true;
@@ -8641,7 +8646,7 @@ function CameraCard({ camera }) {
       .catch(() => {
         if (active) {
           setStreamUrl(null);
-          setMjpegUrl(caseUrl(`/cameras/${camera.key}/mjpeg`));
+          setMjpegUrl(cameraUrl(`/cameras/${camera.key}/mjpeg`));
         }
       });
     return () => { active = false; };
@@ -8663,7 +8668,7 @@ function CameraCard({ camera }) {
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
           setStreamUrl(null);
-          setMjpegUrl(caseUrl(`/cameras/${camera.key}/mjpeg`));
+          setMjpegUrl(cameraUrl(`/cameras/${camera.key}/mjpeg`));
           setError(`HLS stream failed: ${data.details || "unknown error"}`);
         }
       });
@@ -8672,7 +8677,7 @@ function CameraCard({ camera }) {
       video.play().catch(() => {});
       video.onerror = () => {
         setStreamUrl(null);
-        setMjpegUrl(caseUrl(`/cameras/${camera.key}/mjpeg`));
+        setMjpegUrl(cameraUrl(`/cameras/${camera.key}/mjpeg`));
       };
     }
     return () => {
