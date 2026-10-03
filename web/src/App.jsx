@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import Hls from "hls.js";
 
-import { API_BASE, apiFetch } from "./config";
+import { API_BASE, API_TOKEN, apiFetch } from "./config";
 
 const PERSON_THEMES = {
   James: {
@@ -8609,7 +8610,50 @@ function CamerasPage({ cameras, error }) {
 
 function CameraCard({ camera }) {
   const [src, setSrc] = useState(null);
+  const [streamUrl, setStreamUrl] = useState(null);
   const [error, setError] = useState(null);
+  const videoRef = useRef(null);
+
+  useEffect(() => {
+    let active = true;
+    apiFetch(`${API_BASE}/cameras/${camera.key}/stream`)
+      .then((response) => {
+        if (!response.ok) throw new Error(`Live stream unavailable (${response.status})`);
+        return response.json();
+      })
+      .then((json) => {
+        if (active) setStreamUrl(`${API_BASE}${json.url}`);
+      })
+      .catch(() => {
+        if (active) setStreamUrl(null);
+      });
+    return () => { active = false; };
+  }, [camera.key]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !streamUrl) return undefined;
+    let hls;
+    if (Hls.isSupported()) {
+      hls = new Hls({
+        xhrSetup: (xhr) => {
+          if (API_TOKEN) xhr.setRequestHeader("Authorization", `Bearer ${API_TOKEN}`);
+        },
+      });
+      hls.loadSource(streamUrl);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      video.src = streamUrl;
+      video.play().catch(() => {});
+    }
+    return () => {
+      if (hls) hls.destroy();
+      video.pause();
+      video.removeAttribute("src");
+      video.load();
+    };
+  }, [streamUrl]);
 
   useEffect(() => {
     let active = true;
@@ -8625,15 +8669,13 @@ function CameraCard({ camera }) {
         objectUrl = nextObjectUrl;
         setSrc(objectUrl);
         setError(null);
-      } catch (err) {
+    } catch (err) {
         if (active) setError(err.message);
       }
     };
     loadSnapshot();
-    const interval = setInterval(loadSnapshot, 10000);
     return () => {
       active = false;
-      clearInterval(interval);
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
   }, [camera.key]);
@@ -8641,7 +8683,7 @@ function CameraCard({ camera }) {
   return (
     <section className="card" style={{ padding: 0, overflow: "hidden" }}>
       <div style={{ aspectRatio: "16 / 9", background: "#0f172a", display: "grid", placeItems: "center" }}>
-        {src ? <img src={src} alt={camera.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ color: "white" }}>{error || "Loading camera…"}</span>}
+        {streamUrl ? <video ref={videoRef} muted autoPlay playsInline controls={false} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : src ? <img src={src} alt={camera.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ color: "white" }}>{error || "Loading camera…"}</span>}
       </div>
       <div style={{ padding: "14px 16px" }}>
         <h2 style={{ margin: 0, fontSize: "20px" }}>{camera.name}</h2>

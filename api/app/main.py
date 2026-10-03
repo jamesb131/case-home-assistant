@@ -49,6 +49,7 @@ from app.services.gaggimate_client import (
 )
 from app.services.home_assistant_client import (
     HomeAssistantUnavailable,
+    get_home_assistant_config,
     get_home_assistant_headers,
     parse_entity_map,
 )
@@ -69,6 +70,9 @@ from app.repositories.gaggimate_repository import get_recent_gaggimate_readings
 from app.repositories.news_repository import get_latest_news
 import requests
 import os
+import re
+import websocket
+from urllib.parse import urljoin, urlparse, quote
 
 from app.routers.task_templates_router import router as task_templates_router
 
@@ -129,6 +133,105 @@ def camera_snapshot(camera_key: str):
         media_type=response.headers.get("content-type", "image/jpeg"),
         headers={"Cache-Control": "no-store"},
     )
+
+
+def get_camera_stream_path(camera):
+    config = get_home_assistant_config()
+    base_url = config["url"]
+    websocket_url = base_url.replace("https://", "wss://", 1).replace("http://", "ws://", 1)
+    socket = websocket.create_connection(f"{websocket_url}/api/websocket", timeout=12)
+    try:
+        auth_required = json.loads(socket.recv())
+        if auth_required.get("type") != "auth_required":
+            raise RuntimeError("Home Assistant websocket did not request authentication")
+        socket.send(json.dumps({"type": "auth", "access_token": config["token"]}))
+        auth_result = json.loads(socket.recv())
+        if auth_result.get("type") != "auth_ok":
+            raise RuntimeError("Home Assistant websocket authentication failed")
+        socket.send(json.dumps({
+            "id": 1,
+            "type": "camera/stream",
+            "entity_id": camera["entity_id"],
+            "format": "hls",
+        }))
+        result = json.loads(socket.recv())
+        if not result.get("success") or not result.get("result", {}).get("url"):
+            raise RuntimeError(result.get("error", {}).get("message", "Home Assistant did not return a stream"))
+        source_url = urljoin(base_url, result["result"]["url"])
+        parsed = urlparse(source_url)
+        prefix = "/api/hls/"
+        if prefix not in parsed.path:
+            raise RuntimeError("Home Assistant returned an unsupported stream URL")
+        return parsed.path.split(prefix, 1)[1]
+    finally:
+        socket.close()
+
+
+@app.get("/cameras/{camera_key}/stream")
+def camera_stream(camera_key: str):
+    camera = next((item for item in get_camera_entities() if item["key"] == camera_key), None)
+    if not camera:
+        return JSONResponse({"error": "Camera is not configured."}, status_code=404)
+
+    try:
+        stream_path = get_camera_stream_path(camera)
+    except (HomeAssistantUnavailable, RuntimeError, OSError, websocket.WebSocketException) as exc:
+        return JSONResponse({"error": f"Camera stream unavailable: {exc}"}, status_code=503)
+
+    return {"url": f"/cameras/{camera_key}/hls/{quote(stream_path, safe='/')}"}
+
+
+def proxy_hls_uri(camera_key, uri):
+    parsed = urlparse(uri)
+    path = parsed.path
+    prefix = "/api/hls/"
+    if prefix not in path:
+        return uri
+    stream_path = path.split(prefix, 1)[1]
+    proxy_path = f"/cameras/{camera_key}/hls/{quote(stream_path, safe='/')}"
+    return proxy_path + (f"?{parsed.query}" if parsed.query else "")
+
+
+def rewrite_hls_playlist(camera_key, playlist, source_url):
+    def rewrite_attribute(match):
+        return f'{match.group(1)}="{proxy_hls_uri(camera_key, urljoin(source_url, match.group(2)))}"'
+
+    lines = []
+    for line in playlist.splitlines():
+        if line.startswith("#"):
+            line = re.sub(r'(URI)="([^"]+)"', rewrite_attribute, line)
+        elif line.strip():
+            line = proxy_hls_uri(camera_key, urljoin(source_url, line.strip()))
+        lines.append(line)
+    return "\n".join(lines) + "\n"
+
+
+@app.get("/cameras/{camera_key}/hls/{stream_path:path}")
+def camera_hls(camera_key: str, stream_path: str):
+    camera = next((item for item in get_camera_entities() if item["key"] == camera_key), None)
+    if not camera or ".." in stream_path:
+        return JSONResponse({"error": "Camera stream is not configured."}, status_code=404)
+
+    config = get_home_assistant_config()
+    source_url = f"{config['url']}/api/hls/{stream_path}"
+    try:
+        response = requests.get(source_url, headers=get_home_assistant_headers(), stream=True, timeout=12)
+        response.raise_for_status()
+        content_type = response.headers.get("content-type", "")
+        if "mpegurl" in content_type or stream_path.endswith(".m3u8"):
+            body = rewrite_hls_playlist(camera_key, response.text, source_url)
+            response.close()
+            return StreamingResponse(iter([body.encode()]), media_type="application/vnd.apple.mpegurl", headers={"Cache-Control": "no-store"})
+
+        def chunks():
+            try:
+                yield from response.iter_content(chunk_size=64 * 1024)
+            finally:
+                response.close()
+
+        return StreamingResponse(chunks(), media_type=content_type or "video/mp4", headers={"Cache-Control": "no-store"})
+    except (requests.RequestException, HomeAssistantUnavailable) as exc:
+        return JSONResponse({"error": f"Camera stream segment unavailable: {exc}"}, status_code=503)
 
 
 @app.get("/internet-monitor/measurements")
