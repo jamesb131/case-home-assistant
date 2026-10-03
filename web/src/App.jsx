@@ -8622,7 +8622,7 @@ function CameraCard({ camera }) {
         return response.json();
       })
       .then((json) => {
-        if (active) setStreamUrl(`${API_BASE}${json.url}`);
+        if (active) setStreamUrl(json.url);
       })
       .catch(() => {
         if (active) setStreamUrl(null);
