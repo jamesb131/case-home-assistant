@@ -39,6 +39,7 @@ OPTION_ENV_MAP = {
     "gaggimate_poll_interval": "GAGGIMATE_POLL_INTERVAL",
     "home_assistant_url": "HOME_ASSISTANT_URL",
     "home_assistant_token": "HOME_ASSISTANT_TOKEN",
+    "case_camera_entities": "CASE_CAMERA_ENTITIES",
     "ev_power_entity_id": "EV_POWER_ENTITY_ID",
     "ev_total_consumption_entity_id": "EV_TOTAL_CONSUMPTION_ENTITY_ID",
     "ev_charging_threshold_kw": "EV_CHARGING_THRESHOLD_KW",
