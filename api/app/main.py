@@ -241,6 +241,33 @@ def camera_hls(camera_key: str, stream_path: str):
         return JSONResponse({"error": f"Camera stream segment unavailable: {exc}"}, status_code=503)
 
 
+@app.get("/cameras/{camera_key}/mjpeg")
+def camera_mjpeg(camera_key: str):
+    camera = next((item for item in get_camera_entities() if item["key"] == camera_key), None)
+    if not camera:
+        return JSONResponse({"error": "Camera is not configured."}, status_code=404)
+
+    config = get_home_assistant_config()
+    source_url = f"{config['url']}/api/camera_proxy_stream/{camera['entity_id']}?interval=1"
+    try:
+        response = requests.get(source_url, headers=get_home_assistant_headers(), stream=True, timeout=12)
+        response.raise_for_status()
+    except (requests.RequestException, HomeAssistantUnavailable) as exc:
+        return JSONResponse({"error": f"Camera MJPEG stream unavailable: {exc}"}, status_code=503)
+
+    def chunks():
+        try:
+            yield from response.iter_content(chunk_size=64 * 1024)
+        finally:
+            response.close()
+
+    return StreamingResponse(
+        chunks(),
+        media_type=response.headers.get("content-type", "multipart/x-mixed-replace"),
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 @app.get("/internet-monitor/measurements")
 def internet_monitor_measurements(limit: int = 500):
     try:

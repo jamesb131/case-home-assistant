@@ -8611,6 +8611,7 @@ function CamerasPage({ cameras, error }) {
 function CameraCard({ camera }) {
   const [src, setSrc] = useState(null);
   const [streamUrl, setStreamUrl] = useState(null);
+  const [mjpegUrl, setMjpegUrl] = useState(null);
   const [error, setError] = useState(null);
   const videoRef = useRef(null);
 
@@ -8625,7 +8626,10 @@ function CameraCard({ camera }) {
         if (active) setStreamUrl(json.url);
       })
       .catch(() => {
-        if (active) setStreamUrl(null);
+        if (active) {
+          setStreamUrl(null);
+          setMjpegUrl(`${API_BASE}/cameras/${camera.key}/mjpeg`);
+        }
       });
     return () => { active = false; };
   }, [camera.key]);
@@ -8643,9 +8647,20 @@ function CameraCard({ camera }) {
       hls.loadSource(streamUrl);
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => video.play().catch(() => {}));
+      hls.on(Hls.Events.ERROR, (_event, data) => {
+        if (data.fatal) {
+          setStreamUrl(null);
+          setMjpegUrl(`${API_BASE}/cameras/${camera.key}/mjpeg`);
+          setError(`HLS stream failed: ${data.details || "unknown error"}`);
+        }
+      });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = streamUrl;
       video.play().catch(() => {});
+      video.onerror = () => {
+        setStreamUrl(null);
+        setMjpegUrl(`${API_BASE}/cameras/${camera.key}/mjpeg`);
+      };
     }
     return () => {
       if (hls) hls.destroy();
@@ -8683,7 +8698,7 @@ function CameraCard({ camera }) {
   return (
     <section className="card" style={{ padding: 0, overflow: "hidden" }}>
       <div style={{ aspectRatio: "16 / 9", background: "#0f172a", display: "grid", placeItems: "center" }}>
-        {streamUrl ? <video ref={videoRef} muted autoPlay playsInline controls={false} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : src ? <img src={src} alt={camera.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ color: "white" }}>{error || "Loading camera…"}</span>}
+        {streamUrl ? <video ref={videoRef} muted autoPlay playsInline controls={false} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : mjpegUrl ? <img src={mjpegUrl} alt={camera.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : src ? <img src={src} alt={camera.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : <span style={{ color: "white" }}>{error || "Loading camera…"}</span>}
       </div>
       <div style={{ padding: "14px 16px" }}>
         <h2 style={{ margin: 0, fontSize: "20px" }}>{camera.name}</h2>
