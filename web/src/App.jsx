@@ -8616,6 +8616,14 @@ function CameraCard({ camera }) {
   const videoRef = useRef(null);
   const caseUrl = (url) => {
     if (url.startsWith("http://") || url.startsWith("https://")) return url;
+    if (API_BASE.startsWith("http://") || API_BASE.startsWith("https://")) {
+      const base = new URL(API_BASE);
+      const basePath = base.pathname.replace(/\/$/, "");
+      const path = url.startsWith(basePath || "/")
+        ? url
+        : `${basePath}${url.startsWith("/") ? url : `/${url}`}`;
+      return new URL(path || "/", base.origin).toString();
+    }
     if (url.startsWith(API_BASE)) return url;
     return `${API_BASE}${url.startsWith("/") ? url : `/${url}`}`;
   };
