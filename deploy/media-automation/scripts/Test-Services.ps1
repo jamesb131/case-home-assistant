@@ -46,7 +46,7 @@ function Test-HttpEndpoint {
             Write-Host "FAIL  $Name returned HTTP $status at $Url"
         }
         else {
-            Write-Host "ERROR $Name could not be reached at $Url: $($_.Exception.Message)"
+            Write-Host "ERROR $Name could not be reached at ${Url}: $($_.Exception.Message)"
         }
         return $false
     }
