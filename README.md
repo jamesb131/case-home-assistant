@@ -39,6 +39,9 @@ For the Home Assistant Green path, start with `docs/green-trial-runbook.md`.
 The separately isolated Windows VPN download environment is documented in
 `deploy/desktop-downloads/README.md`. It does not join the CASE application
 network and remains offline until valid WireGuard credentials are supplied.
+The trusted Plex library and request services are a separate deployment in
+`deploy/media-automation/README.md`; they use qBittorrent's authenticated LAN
+API but never join the VPN container network.
 The Green is currently treated as a Home Assistant OS appliance. Raw Docker
 Compose on the Green remains a future generic-Linux-host path, not the first
 trial path.

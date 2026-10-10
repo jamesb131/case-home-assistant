@@ -1,0 +1,152 @@
+name: case-media-automation
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-linuxserver-environment: &linuxserver-environment
+  PUID: ${PUID:-1000}
+  PGID: ${PGID:-1000}
+  TZ: ${TZ:-Australia/Perth}
+  UMASK: "027"
+
+x-common-service: &common-service
+  restart: unless-stopped
+  security_opt:
+    - no-new-privileges:true
+  networks:
+    - media-automation
+  logging: *default-logging
+
+services:
+  radarr:
+    <<: *common-service
+    image: ${RADARR_IMAGE:-lscr.io/linuxserver/radarr:latest}
+    container_name: case-media-radarr
+    environment: *linuxserver-environment
+    ports:
+      - "${LAN_BIND_IP:?Set LAN_BIND_IP in .env}:${RADARR_PORT:-7878}:7878/tcp"
+    volumes:
+      - radarr-config:/config
+      - type: bind
+        source: ${DOWNLOAD_ROOT:?Set DOWNLOAD_ROOT in .env}/Completed
+        target: /downloads/completed
+      - type: bind
+        source: ${PLEX_MEDIA_ROOT:?Set PLEX_MEDIA_ROOT in .env}/Movies
+        target: /media/movies
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS --max-time 3 http://127.0.0.1:7878/ping >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
+  radarr-4k:
+    <<: *common-service
+    image: ${RADARR_IMAGE:-lscr.io/linuxserver/radarr:latest}
+    container_name: case-media-radarr-4k
+    environment: *linuxserver-environment
+    ports:
+      - "${LAN_BIND_IP:?Set LAN_BIND_IP in .env}:${RADARR_4K_PORT:-7879}:7878/tcp"
+    volumes:
+      - radarr-4k-config:/config
+      - type: bind
+        source: ${DOWNLOAD_ROOT:?Set DOWNLOAD_ROOT in .env}/Completed
+        target: /downloads/completed
+      - type: bind
+        source: ${PLEX_MEDIA_ROOT:?Set PLEX_MEDIA_ROOT in .env}/Movies 4K
+        target: /media/movies-4k
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS --max-time 3 http://127.0.0.1:7878/ping >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
+  sonarr:
+    <<: *common-service
+    image: ${SONARR_IMAGE:-lscr.io/linuxserver/sonarr:latest}
+    container_name: case-media-sonarr
+    environment: *linuxserver-environment
+    ports:
+      - "${LAN_BIND_IP:?Set LAN_BIND_IP in .env}:${SONARR_PORT:-8989}:8989/tcp"
+    volumes:
+      - sonarr-config:/config
+      - type: bind
+        source: ${DOWNLOAD_ROOT:?Set DOWNLOAD_ROOT in .env}/Completed
+        target: /downloads/completed
+      - type: bind
+        source: ${PLEX_MEDIA_ROOT:?Set PLEX_MEDIA_ROOT in .env}/TV Shows
+        target: /media/tv
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS --max-time 3 http://127.0.0.1:8989/ping >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
+  bazarr:
+    <<: *common-service
+    image: ${BAZARR_IMAGE:-lscr.io/linuxserver/bazarr:latest}
+    container_name: case-media-bazarr
+    environment: *linuxserver-environment
+    ports:
+      - "${LAN_BIND_IP:?Set LAN_BIND_IP in .env}:${BAZARR_PORT:-6767}:6767/tcp"
+    volumes:
+      - bazarr-config:/config
+      - type: bind
+        source: ${PLEX_MEDIA_ROOT:?Set PLEX_MEDIA_ROOT in .env}/Movies
+        target: /media/movies
+      - type: bind
+        source: ${PLEX_MEDIA_ROOT:?Set PLEX_MEDIA_ROOT in .env}/Movies 4K
+        target: /media/movies-4k
+      - type: bind
+        source: ${PLEX_MEDIA_ROOT:?Set PLEX_MEDIA_ROOT in .env}/TV Shows
+        target: /media/tv
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS --max-time 3 http://127.0.0.1:6767/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
+  seerr:
+    <<: *common-service
+    image: ${SEERR_IMAGE:-ghcr.io/seerr-team/seerr:latest}
+    container_name: case-media-seerr
+    init: true
+    environment:
+      TZ: ${TZ:-Australia/Perth}
+      PORT: 5055
+      LOG_LEVEL: ${SEERR_LOG_LEVEL:-info}
+    ports:
+      - "${LAN_BIND_IP:?Set LAN_BIND_IP in .env}:${SEERR_PORT:-5055}:5055/tcp"
+    volumes:
+      - seerr-config:/app/config
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:5055/api/v1/settings/public || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
+networks:
+  media-automation:
+    name: case-media-automation
+    driver: bridge
+
+volumes:
+  radarr-config:
+    name: case-media-radarr-config
+  radarr-4k-config:
+    name: case-media-radarr-4k-config
+  sonarr-config:
+    name: case-media-sonarr-config
+  bazarr-config:
+    name: case-media-bazarr-config
+  seerr-config:
+    name: case-media-seerr-config
