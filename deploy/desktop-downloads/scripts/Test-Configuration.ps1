@@ -42,6 +42,7 @@ $required = @(
     "DOWNLOAD_ROOT",
     "FIREFOX_USERNAME",
     "FIREFOX_PASSWORD",
+    "QBITTORRENT_PEER_PORT",
     "AIRVPN_SERVER_COUNTRIES",
     "WIREGUARD_PRIVATE_KEY",
     "WIREGUARD_PRESHARED_KEY",
@@ -56,6 +57,16 @@ foreach ($name in $required) {
     if (-not $AllowPlaceholders -and $envValues[$name] -match "^(replace_|change[_-]?me)") {
         throw "$name still contains a placeholder value."
     }
+}
+
+$peerPort = 0
+if (-not [int]::TryParse($envValues["QBITTORRENT_PEER_PORT"], [ref]$peerPort) -or $peerPort -lt 1 -or $peerPort -gt 65535) {
+    throw "QBITTORRENT_PEER_PORT must be a valid TCP/UDP port number."
+}
+
+$wireGuardMtu = 0
+if (-not [int]::TryParse($envValues["WIREGUARD_MTU"], [ref]$wireGuardMtu) -or $wireGuardMtu -lt 576 -or $wireGuardMtu -gt 9000) {
+    throw "WIREGUARD_MTU must be a valid MTU between 576 and 9000."
 }
 
 $retiredCustomProviderValues = @(
@@ -107,11 +118,27 @@ foreach ($name in @("Incomplete", "Completed", "Processing")) {
 }
 
 $composeSource = Get-Content -LiteralPath $ComposeFile -Raw
+$composeLines = Get-Content -LiteralPath $ComposeFile
 if ($composeSource -notmatch "VPN_SERVICE_PROVIDER:\s+airvpn") {
     throw "The Compose file must use Gluetun's native AirVPN provider."
 }
 if ($composeSource -match "WIREGUARD_PUBLIC_KEY|WIREGUARD_ENDPOINT_IP|WIREGUARD_ENDPOINT_PORT") {
     throw "The Compose file still contains retired custom-provider WireGuard settings."
+}
+if ($composeSource -notmatch 'FIREWALL_VPN_INPUT_PORTS:\s+"\$\{QBITTORRENT_PEER_PORT:-40564\}"') {
+    throw "The Compose file must allow QBITTORRENT_PEER_PORT through Gluetun's VPN-side firewall."
+}
+if ($composeSource -notmatch 'FIREWALL_INPUT_PORTS:\s+"\$\{QBITTORRENT_WEBUI_PORT:-8080\},\$\{FIREFOX_HTTPS_PORT:-3001\}"') {
+    throw "The Compose file must retain the two LAN management firewall ports."
+}
+if ($composeSource -notmatch 'VPN_PORT_FORWARDING:\s+"off"') {
+    throw "Gluetun's dynamic port forwarding must remain off for the static AirVPN reservation."
+}
+if ($composeSource -notmatch 'TORRENTING_PORT:\s+\$\{QBITTORRENT_PEER_PORT:-40564\}') {
+    throw "qBittorrent must listen on QBITTORRENT_PEER_PORT."
+}
+if ($composeLines | Where-Object { $_ -match '^\s+-\s+.*QBITTORRENT_PEER_PORT' }) {
+    throw "QBITTORRENT_PEER_PORT must not be published on the Windows host."
 }
 if ($composeSource -match "FIREWALL_OUTBOUND_SUBNETS") {
     throw "FIREWALL_OUTBOUND_SUBNETS must stay unset so containers cannot initiate LAN connections."

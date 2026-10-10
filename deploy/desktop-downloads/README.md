@@ -12,7 +12,8 @@ used to start it.
 ## Security boundaries
 
 - Only `192.168.0.141:8080` and `192.168.0.141:3001` are published.
-- No BitTorrent peer port is published on the LAN or WAN.
+- No BitTorrent peer port is published on the Windows host or forwarded by the
+  home router. AirVPN forwards reserved port `40564` to the VPN tunnel only.
 - No router configuration or public port forwarding is required.
 - `FIREWALL_OUTBOUND_SUBNETS` is deliberately absent. Gluetun therefore does
   not permit Firefox or qBittorrent to initiate connections to the home LAN.
@@ -53,8 +54,19 @@ to `.env` as follows:
 Do not copy the IPv6 address from the AirVPN configuration. IPv6 is deliberately
 disabled to prevent leaks, and validation accepts one IPv4 CIDR only. Keep
 `AIRVPN_SERVER_COUNTRIES=Singapore`; Gluetun selects and maintains the native
-AirVPN endpoint. AirVPN port forwarding is not configured in Phase 1 and
-`VPN_PORT_FORWARDING` remains off.
+AirVPN endpoint.
+
+### AirVPN port forwarding
+
+AirVPN reserved port `40564` is used as qBittorrent's incoming TCP/UDP port.
+`QBITTORRENT_PEER_PORT=40564` sets qBittorrent's listening port, and the same
+value reaches Gluetun as `FIREWALL_VPN_INPUT_PORTS`, allowing inbound traffic
+from the VPN side. It is deliberately absent from Compose `ports`, so it is not
+published on the Windows host or exposed through the home router.
+
+`VPN_PORT_FORWARDING=off` is intentional. Gluetun's dynamic port-allocation
+feature does not manage AirVPN reservations; the already-reserved static port
+is admitted through `FIREWALL_VPN_INPUT_PORTS` instead.
 
 ### Migrating the existing deployment
 
@@ -65,6 +77,7 @@ Do not replace the existing `.env` file. Edit it in place:
 2. Add `AIRVPN_SERVER_COUNTRIES=Singapore`.
 3. Replace the existing WireGuard values with the AirVPN private key,
    preshared key and IPv4 address/CIDR.
+4. Set `WIREGUARD_MTU=1420` and `QBITTORRENT_PEER_PORT=40564`.
 
 The validator reports retired settings by name but never prints credential
 values. After editing `.env`, validate and recreate the deployment:
@@ -125,6 +138,8 @@ Bypass authentication for clients on localhost: disabled
 Bypass authentication for clients in whitelisted IP subnets: disabled
 CSRF protection: enabled
 Host header validation: enabled
+Incoming connections port: 40564
+Use UPnP / NAT-PMP port forwarding from my router: disabled
 ```
 
 Keep the Web API enabled for future automation. The automation service will
@@ -146,10 +161,16 @@ Run the normal checks after both applications are healthy:
 
 This verifies that:
 
+- all three deployment containers report healthy;
 - qBittorrent and Firefox report the same public IP;
 - that address differs from the Windows host's public IP;
 - both containers fail to reach the router, CASE and Plex LAN probes;
 - both management interfaces reject unauthenticated requests.
+
+Each probe reports its target, purpose and one of `PASS`, `FAIL`, `ERROR` or
+`SKIP`. Expected connection timeouts count as `PASS` only for tests whose
+purpose is to prove that access is blocked. A command failure or unexpected
+curl exit code is `ERROR`, never evidence of isolation.
 
 Run the disruptive kill-switch test while no downloads are active:
 
@@ -157,9 +178,16 @@ Run the disruptive kill-switch test while no downloads are active:
 .\scripts\Test-Connectivity.ps1 -TestKillSwitch
 ```
 
-The script briefly blocks all output through the VPN interface, confirms neither
-application falls back to the ordinary host connection, removes the temporary
-rule, and waits for Gluetun to be healthy again.
+The script briefly rejects output through `tun0`, confirms both applications
+lose external connectivity, removes the temporary rule in a `finally` cleanup,
+and confirms both applications recover on the same non-host public IP. If rule
+removal fails, it restarts Gluetun before waiting for the stack. Until this
+command completes with no `FAIL` or `ERROR` result, the kill switch must be
+treated as unverified.
+
+AirVPN's checker has confirmed the reserved IPv4 TCP port is open. UDP should
+still be verified with a UDP-capable listener or an active torrent that has UDP
+peers; an IPv6 timeout is expected because this deployment is IPv4-only.
 
 Also visit an IP/DNS leak test in the containerised Firefox session. It should
 show only the VPN address and VPN-provided or encrypted DNS resolvers.
