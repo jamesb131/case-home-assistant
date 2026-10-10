@@ -45,6 +45,7 @@ $required = @(
     "RADARR_4K_PORT",
     "SONARR_PORT",
     "BAZARR_PORT",
+    "PROWLARR_PORT",
     "SEERR_PORT"
 )
 
@@ -61,7 +62,7 @@ if ($envValues["LAN_BIND_IP"] -ne "192.168.0.141") {
     throw "LAN_BIND_IP must remain 192.168.0.141 unless the PC address changes deliberately."
 }
 
-$portNames = @("RADARR_PORT", "RADARR_4K_PORT", "SONARR_PORT", "BAZARR_PORT", "SEERR_PORT")
+$portNames = @("RADARR_PORT", "RADARR_4K_PORT", "SONARR_PORT", "BAZARR_PORT", "PROWLARR_PORT", "SEERR_PORT")
 $ports = @{}
 foreach ($name in $portNames) {
     $port = 0
@@ -87,6 +88,7 @@ if (-not $AllowPlaceholders) {
     $mediaRoot = $envValues["PLEX_MEDIA_ROOT"].Replace("/", "\")
     $requiredPaths = @(
         (Join-Path $downloadRoot "Completed"),
+        (Join-Path $downloadRoot "Radarr-Test"),
         (Join-Path $mediaRoot "Movies"),
         (Join-Path $mediaRoot "Movies 4K"),
         (Join-Path $mediaRoot "TV Shows")
@@ -121,7 +123,7 @@ if ($composeSource -notmatch 'source:\s+\$\{DOWNLOAD_ROOT:\?Set DOWNLOAD_ROOT in
 if ($composeSource -notmatch 'source:\s+\$\{PLEX_MEDIA_ROOT:\?Set PLEX_MEDIA_ROOT in \.env\}/Movies 4K') {
     throw "The dedicated 4K movie root is missing from Compose."
 }
-if ([regex]::Matches($composeSource, '"\$\{LAN_BIND_IP:\?Set LAN_BIND_IP in \.env\}:').Count -ne 5) {
+if ([regex]::Matches($composeSource, '"\$\{LAN_BIND_IP:\?Set LAN_BIND_IP in \.env\}:').Count -ne 6) {
     throw "Every management port must be bound explicitly to LAN_BIND_IP."
 }
 if ($composeSource -match '(?m)^\s*-\s+"?\d+:\d+' -or $composeSource -match '(?m)^\s*-\s+"?0\.0\.0\.0:') {
@@ -133,6 +135,35 @@ try {
     docker compose --env-file $EnvFile -f $ComposeFile config --quiet
     if ($LASTEXITCODE -ne 0) {
         throw "Docker Compose configuration validation failed."
+    }
+
+    $renderedComposeJson = docker compose --env-file $EnvFile -f $ComposeFile config --format json
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not inspect the rendered Docker Compose configuration."
+    }
+    $renderedCompose = ($renderedComposeJson -join [Environment]::NewLine) | ConvertFrom-Json
+
+    $prowlarr = $renderedCompose.services.prowlarr
+    if (-not $prowlarr) {
+        throw "Rendered Compose configuration does not contain Prowlarr."
+    }
+    if (@($prowlarr.volumes).Count -ne 1 -or $prowlarr.volumes[0].target -ne "/config" -or $prowlarr.volumes[0].type -ne "volume") {
+        throw "Prowlarr must mount only its named /config volume."
+    }
+    if ($prowlarr.ports[0].host_ip -ne $envValues["LAN_BIND_IP"] -or [int]$prowlarr.ports[0].published -ne [int]$envValues["PROWLARR_PORT"]) {
+        throw "Prowlarr must publish only PROWLARR_PORT on LAN_BIND_IP."
+    }
+    if (-not $prowlarr.networks.PSObject.Properties["media-automation"]) {
+        throw "Prowlarr must connect to the media-automation network."
+    }
+
+    foreach ($serviceName in @("radarr", "radarr-4k", "sonarr", "bazarr")) {
+        $service = $renderedCompose.services.PSObject.Properties[$serviceName].Value
+        foreach ($mount in @($service.volumes | Where-Object { $_.source -like "$($envValues['PLEX_MEDIA_ROOT'])*" })) {
+            if (-not $mount.read_only) {
+                throw "Plex media mount $($mount.target) on $serviceName must remain read-only."
+            }
+        }
     }
 }
 finally {

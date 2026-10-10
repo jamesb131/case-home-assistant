@@ -38,7 +38,7 @@ services:
         target: /media/movies
         read_only: true
       - type: bind
-        source: D:\Downloads\Radarr-Test
+        source: ${DOWNLOAD_ROOT:?Set DOWNLOAD_ROOT in .env}/Radarr-Test
         target: /media/test
         read_only: false
     healthcheck:
@@ -106,14 +106,33 @@ services:
       - type: bind
         source: ${PLEX_MEDIA_ROOT:?Set PLEX_MEDIA_ROOT in .env}/Movies
         target: /media/movies
+        read_only: true
       - type: bind
         source: ${PLEX_MEDIA_ROOT:?Set PLEX_MEDIA_ROOT in .env}/Movies 4K
         target: /media/movies-4k
+        read_only: true
       - type: bind
         source: ${PLEX_MEDIA_ROOT:?Set PLEX_MEDIA_ROOT in .env}/TV Shows
         target: /media/tv
+        read_only: true
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS --max-time 3 http://127.0.0.1:6767/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+
+  prowlarr:
+    <<: *common-service
+    image: ${PROWLARR_IMAGE:-lscr.io/linuxserver/prowlarr:latest}
+    container_name: case-media-prowlarr
+    environment: *linuxserver-environment
+    ports:
+      - "${LAN_BIND_IP:?Set LAN_BIND_IP in .env}:${PROWLARR_PORT:-9696}:9696/tcp"
+    volumes:
+      - prowlarr-config:/config
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS --max-time 3 http://127.0.0.1:9696/ping >/dev/null || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -155,5 +174,7 @@ volumes:
     name: case-media-sonarr-config
   bazarr-config:
     name: case-media-bazarr-config
+  prowlarr-config:
+    name: case-media-prowlarr-config
   seerr-config:
     name: case-media-seerr-config

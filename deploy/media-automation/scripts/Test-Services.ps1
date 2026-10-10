@@ -63,6 +63,7 @@ $checks = @(
     @{ Name = "Radarr 4K"; Port = $envValues["RADARR_4K_PORT"]; Path = "/ping" },
     @{ Name = "Sonarr"; Port = $envValues["SONARR_PORT"]; Path = "/ping" },
     @{ Name = "Bazarr"; Port = $envValues["BAZARR_PORT"]; Path = "/" },
+    @{ Name = "Prowlarr"; Port = $envValues["PROWLARR_PORT"]; Path = "/ping" },
     @{ Name = "Seerr"; Port = $envValues["SEERR_PORT"]; Path = "/api/v1/settings/public" }
 )
 $allPassed = $true
@@ -72,7 +73,7 @@ try {
     $services = docker compose --env-file $EnvFile -f $ComposeFile ps --services --filter status=running
     if ($LASTEXITCODE -ne 0) { throw "Could not inspect Compose services." }
     $running = @($services)
-    $expected = @("radarr", "radarr-4k", "sonarr", "bazarr", "seerr")
+    $expected = @("radarr", "radarr-4k", "sonarr", "bazarr", "prowlarr", "seerr")
     foreach ($service in $expected) {
         if ($running -notcontains $service) {
             Write-Host "FAIL  Compose service $service is not running."
