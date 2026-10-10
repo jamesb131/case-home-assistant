@@ -42,11 +42,11 @@ $required = @(
     "DOWNLOAD_ROOT",
     "FIREFOX_USERNAME",
     "FIREFOX_PASSWORD",
+    "AIRVPN_SERVER_COUNTRIES",
     "WIREGUARD_PRIVATE_KEY",
+    "WIREGUARD_PRESHARED_KEY",
     "WIREGUARD_ADDRESSES",
-    "WIREGUARD_PUBLIC_KEY",
-    "WIREGUARD_ENDPOINT_IP",
-    "WIREGUARD_ENDPOINT_PORT"
+    "WIREGUARD_MTU"
 )
 
 foreach ($name in $required) {
@@ -55,6 +55,34 @@ foreach ($name in $required) {
     }
     if (-not $AllowPlaceholders -and $envValues[$name] -match "^(replace_|change[_-]?me)") {
         throw "$name still contains a placeholder value."
+    }
+}
+
+$retiredCustomProviderValues = @(
+    "VPN_SERVICE_PROVIDER",
+    "WIREGUARD_PUBLIC_KEY",
+    "WIREGUARD_ENDPOINT_IP",
+    "WIREGUARD_ENDPOINT_PORT"
+)
+foreach ($name in $retiredCustomProviderValues) {
+    if ($envValues.ContainsKey($name)) {
+        throw "$name is a retired custom-provider setting. Remove it from $EnvFile; this deployment uses Gluetun's native AirVPN provider."
+    }
+}
+
+if (-not $AllowPlaceholders) {
+    $wireGuardAddressParts = $envValues["WIREGUARD_ADDRESSES"].Split("/")
+    $parsedWireGuardAddress = $null
+    $wireGuardPrefix = 0
+    if (
+        $wireGuardAddressParts.Count -ne 2 -or
+        -not [System.Net.IPAddress]::TryParse($wireGuardAddressParts[0], [ref]$parsedWireGuardAddress) -or
+        $parsedWireGuardAddress.AddressFamily -ne [System.Net.Sockets.AddressFamily]::InterNetwork -or
+        -not [int]::TryParse($wireGuardAddressParts[1], [ref]$wireGuardPrefix) -or
+        $wireGuardPrefix -lt 0 -or
+        $wireGuardPrefix -gt 32
+    ) {
+        throw "WIREGUARD_ADDRESSES must contain one IPv4 address in CIDR form. Do not include the AirVPN IPv6 address."
     }
 }
 
@@ -79,6 +107,12 @@ foreach ($name in @("Incomplete", "Completed", "Processing")) {
 }
 
 $composeSource = Get-Content -LiteralPath $ComposeFile -Raw
+if ($composeSource -notmatch "VPN_SERVICE_PROVIDER:\s+airvpn") {
+    throw "The Compose file must use Gluetun's native AirVPN provider."
+}
+if ($composeSource -match "WIREGUARD_PUBLIC_KEY|WIREGUARD_ENDPOINT_IP|WIREGUARD_ENDPOINT_PORT") {
+    throw "The Compose file still contains retired custom-provider WireGuard settings."
+}
 if ($composeSource -match "FIREWALL_OUTBOUND_SUBNETS") {
     throw "FIREWALL_OUTBOUND_SUBNETS must stay unset so containers cannot initiate LAN connections."
 }

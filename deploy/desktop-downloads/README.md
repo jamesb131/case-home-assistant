@@ -4,8 +4,10 @@ This deployment runs separately from CASE and the desktop LLM bridge. Firefox
 and qBittorrent share Gluetun's network namespace, so neither application has an
 independent route to the internet. Gluetun's firewall remains the kill switch.
 
-The deployment is intentionally unusable until a VPN provider supplies a
-WireGuard configuration. Placeholder credentials must never be used to start it.
+The deployment uses Gluetun's native AirVPN WireGuard provider and selects an
+AirVPN server in Singapore. It is intentionally unusable until the generated
+AirVPN credentials are entered locally. Placeholder credentials must never be
+used to start it.
 
 ## Security boundaries
 
@@ -38,21 +40,41 @@ Set-ExecutionPolicy -Scope Process Bypass
 Copy-Item .env.example .env
 ```
 
-Choose a VPN provider that permits the intended traffic and supplies WireGuard.
-Enter its values in `.env`. Keep `.env` local; it is ignored by Git.
+Generate an AirVPN WireGuard configuration for Singapore and enter the required
+values in `.env`. Keep `.env` local; it is ignored by Git.
 
-Use a long, unique `FIREFOX_PASSWORD`. The custom-provider WireGuard values map
-to the `[Interface]` and `[Peer]` values normally found in `wg0.conf`:
+Use a long, unique `FIREFOX_PASSWORD`. Map the generated AirVPN configuration
+to `.env` as follows:
 
 - `PrivateKey` -> `WIREGUARD_PRIVATE_KEY`
-- interface `Address` -> `WIREGUARD_ADDRESSES`
-- peer `PublicKey` -> `WIREGUARD_PUBLIC_KEY`
-- peer `PresharedKey`, when present -> `WIREGUARD_PRESHARED_KEY`
-- peer `Endpoint` IP and port -> `WIREGUARD_ENDPOINT_IP` and
-  `WIREGUARD_ENDPOINT_PORT`
+- `PresharedKey` -> `WIREGUARD_PRESHARED_KEY`
+- the IPv4 entry from interface `Address` -> `WIREGUARD_ADDRESSES`
 
-The endpoint must currently be an IP address. Resolve a provider hostname before
-placing it in `.env`, and re-check it when changing VPN servers.
+Do not copy the IPv6 address from the AirVPN configuration. IPv6 is deliberately
+disabled to prevent leaks, and validation accepts one IPv4 CIDR only. Keep
+`AIRVPN_SERVER_COUNTRIES=Singapore`; Gluetun selects and maintains the native
+AirVPN endpoint. AirVPN port forwarding is not configured in Phase 1 and
+`VPN_PORT_FORWARDING` remains off.
+
+### Migrating the existing deployment
+
+Do not replace the existing `.env` file. Edit it in place:
+
+1. Remove `VPN_SERVICE_PROVIDER`, `WIREGUARD_PUBLIC_KEY`,
+   `WIREGUARD_ENDPOINT_IP` and `WIREGUARD_ENDPOINT_PORT`.
+2. Add `AIRVPN_SERVER_COUNTRIES=Singapore`.
+3. Replace the existing WireGuard values with the AirVPN private key,
+   preshared key and IPv4 address/CIDR.
+
+The validator reports retired settings by name but never prints credential
+values. After editing `.env`, validate and recreate the deployment:
+
+```powershell
+.\scripts\Test-Configuration.ps1
+docker compose pull
+docker compose up -d --wait
+.\scripts\Test-Connectivity.ps1
+```
 
 Validate before startup:
 
@@ -186,8 +208,9 @@ tag in `.env` and run `docker compose up -d --wait` again.
 
 If Gluetun is unhealthy, Firefox and qBittorrent will not be started by Compose.
 Inspect `docker compose logs gluetun` first. Common causes are incorrect or
-expired keys, a changed endpoint IP, a blocked endpoint port, or an MTU that is
-too high. Try the provider's recommended MTU before changing firewall behavior.
+expired AirVPN keys, an incorrect WireGuard address, no server matching the
+country filter, blocked VPN traffic, or an MTU that is too high. Try AirVPN's
+recommended MTU before changing firewall behavior.
 
 If a management page is unavailable:
 
