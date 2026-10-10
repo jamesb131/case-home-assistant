@@ -1,0 +1,148 @@
+name: case-downloads
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  gluetun:
+    image: ${GLUETUN_IMAGE:-qmcgaw/gluetun:v3.41.3}
+    container_name: case-downloads-vpn
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "${LAN_BIND_IP:?Set LAN_BIND_IP in .env}:${QBITTORRENT_WEBUI_PORT:-8080}:${QBITTORRENT_WEBUI_PORT:-8080}/tcp"
+      - "${LAN_BIND_IP:?Set LAN_BIND_IP in .env}:${FIREFOX_HTTPS_PORT:-3001}:${FIREFOX_HTTPS_PORT:-3001}/tcp"
+    environment:
+      TZ: ${TZ:-Australia/Perth}
+      VPN_SERVICE_PROVIDER: ${VPN_SERVICE_PROVIDER:-custom}
+      VPN_TYPE: wireguard
+      VPN_INTERFACE: tun0
+      WIREGUARD_PRIVATE_KEY: ${WIREGUARD_PRIVATE_KEY:?Set WIREGUARD_PRIVATE_KEY in .env}
+      WIREGUARD_ADDRESSES: ${WIREGUARD_ADDRESSES:?Set WIREGUARD_ADDRESSES in .env}
+      WIREGUARD_PUBLIC_KEY: ${WIREGUARD_PUBLIC_KEY:?Set WIREGUARD_PUBLIC_KEY in .env}
+      WIREGUARD_PRESHARED_KEY: ${WIREGUARD_PRESHARED_KEY:-}
+      WIREGUARD_ENDPOINT_IP: ${WIREGUARD_ENDPOINT_IP:?Set WIREGUARD_ENDPOINT_IP in .env}
+      WIREGUARD_ENDPOINT_PORT: ${WIREGUARD_ENDPOINT_PORT:?Set WIREGUARD_ENDPOINT_PORT in .env}
+      WIREGUARD_ALLOWED_IPS: 0.0.0.0/0
+      WIREGUARD_MTU: ${WIREGUARD_MTU:-1320}
+      FIREWALL: "on"
+      FIREWALL_INPUT_PORTS: "${QBITTORRENT_WEBUI_PORT:-8080},${FIREFOX_HTTPS_PORT:-3001}"
+      VPN_PORT_FORWARDING: "off"
+      DNS_SERVER: "on"
+      DNS_UPSTREAM_IPV6: "off"
+      BLOCK_MALICIOUS: "on"
+      BLOCK_SURVEILLANCE: "on"
+      BLOCK_ADS: "off"
+      HEALTH_TARGET_ADDRESSES: cloudflare.com:443,github.com:443
+      HEALTH_RESTART_VPN: "on"
+      UPDATER_PERIOD: 24h
+      PUBLICIP_ENABLED: "on"
+    sysctls:
+      net.ipv6.conf.all.disable_ipv6: "1"
+      net.ipv6.conf.default.disable_ipv6: "1"
+    volumes:
+      - gluetun-state:/gluetun
+    networks:
+      - vpn-edge
+    healthcheck:
+      test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    logging: *default-logging
+
+  qbittorrent:
+    image: ${QBITTORRENT_IMAGE:-lscr.io/linuxserver/qbittorrent:5.2.4_v2.0.15-ls479}
+    container_name: case-downloads-qbittorrent
+    restart: unless-stopped
+    network_mode: service:gluetun
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Australia/Perth}
+      WEBUI_PORT: ${QBITTORRENT_WEBUI_PORT:-8080}
+      TORRENTING_PORT: ${QBITTORRENT_PEER_PORT:-6881}
+      UMASK: "027"
+    volumes:
+      - qbittorrent-config:/config
+      - type: bind
+        source: ${DOWNLOAD_ROOT:?Set DOWNLOAD_ROOT in .env}/Incomplete
+        target: /downloads/incomplete
+      - type: bind
+        source: ${DOWNLOAD_ROOT:?Set DOWNLOAD_ROOT in .env}/Completed
+        target: /downloads/completed
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS --max-time 3 http://127.0.0.1:${QBITTORRENT_WEBUI_PORT:-8080}/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 45s
+    logging: *default-logging
+
+  firefox:
+    image: ${FIREFOX_IMAGE:-lscr.io/linuxserver/firefox:1157.0build1-1xtradeb1.2404.1-ls126}
+    container_name: case-downloads-firefox
+    restart: unless-stopped
+    network_mode: service:gluetun
+    depends_on:
+      gluetun:
+        condition: service_healthy
+    environment:
+      PUID: ${PUID:-1000}
+      PGID: ${PGID:-1000}
+      TZ: ${TZ:-Australia/Perth}
+      CUSTOM_HTTPS_PORT: ${FIREFOX_HTTPS_PORT:-3001}
+      CUSTOM_USER: ${FIREFOX_USERNAME:?Set FIREFOX_USERNAME in .env}
+      PASSWORD: ${FIREFOX_PASSWORD:?Set FIREFOX_PASSWORD in .env}
+      HARDEN_DESKTOP: "true"
+      HARDEN_OPENBOX: "true"
+      NO_WEBCAM: "true"
+      NO_GAMEPAD: "true"
+      SELKIES_ENABLE_SHARING: "false|locked"
+      SELKIES_ENABLE_COLLAB: "false|locked"
+      SELKIES_ENABLE_SHARED: "false|locked"
+      SELKIES_AUDIO_ENABLED: "false|locked"
+    volumes:
+      - firefox-config:/config
+      - type: bind
+        source: ${DOWNLOAD_ROOT:?Set DOWNLOAD_ROOT in .env}/Incomplete
+        target: /downloads/incomplete
+      - type: bind
+        source: ${DOWNLOAD_ROOT:?Set DOWNLOAD_ROOT in .env}/Completed
+        target: /downloads/completed
+    shm_size: 1gb
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "curl -kfsS -u \"$$CUSTOM_USER:$$PASSWORD\" --max-time 3 https://127.0.0.1:${FIREFOX_HTTPS_PORT:-3001}/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    logging: *default-logging
+
+networks:
+  vpn-edge:
+    name: case-downloads-vpn-edge
+    driver: bridge
+
+volumes:
+  gluetun-state:
+    name: case-downloads-gluetun-state
+  qbittorrent-config:
+    name: case-downloads-qbittorrent-config
+  firefox-config:
+    name: case-downloads-firefox-config
