@@ -36,6 +36,11 @@ services:
       - type: bind
         source: ${PLEX_MEDIA_ROOT:?Set PLEX_MEDIA_ROOT in .env}/Movies
         target: /media/movies
+        read_only: true
+      - type: bind
+        source: D:\Downloads\Radarr-Test
+        target: /media/test
+        read_only: false
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS --max-time 3 http://127.0.0.1:7878/ping >/dev/null || exit 1"]
       interval: 30s
@@ -58,6 +63,7 @@ services:
       - type: bind
         source: ${PLEX_MEDIA_ROOT:?Set PLEX_MEDIA_ROOT in .env}/Movies 4K
         target: /media/movies-4k
+        read_only: true
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS --max-time 3 http://127.0.0.1:7878/ping >/dev/null || exit 1"]
       interval: 30s
@@ -80,6 +86,7 @@ services:
       - type: bind
         source: ${PLEX_MEDIA_ROOT:?Set PLEX_MEDIA_ROOT in .env}/TV Shows
         target: /media/tv
+        read_only: true
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS --max-time 3 http://127.0.0.1:8989/ping >/dev/null || exit 1"]
       interval: 30s
