@@ -1,0 +1,4 @@
+inventory.config.json
+output/
+inventory-*/
+migration-plan-*/

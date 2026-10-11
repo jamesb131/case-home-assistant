@@ -1,0 +1,51 @@
+{
+  "roots": [
+    {
+      "name": "Existing standard movies",
+      "path": "D:\\replace_with_current_standard_movie_root",
+      "classificationHint": "1080p"
+    },
+    {
+      "name": "Existing 4K movies",
+      "path": "D:\\replace_with_current_4k_movie_root",
+      "classificationHint": "2160p"
+    },
+    {
+      "name": "Existing 3D movies",
+      "path": "D:\\replace_with_confirmed_3d_movie_root",
+      "classificationHint": "3D"
+    }
+  ],
+  "outputDirectory": "D:\\Downloads\\Media-Inventory",
+  "target": {
+    "moviesRoot": "D:\\Media Centre\\Movies",
+    "qualityFolders": {
+      "1080p": "1080p",
+      "2160p": "2160p",
+      "3D": "3D"
+    }
+  },
+  "videoExtensions": [
+    ".mkv",
+    ".mp4",
+    ".m4v",
+    ".avi",
+    ".mov",
+    ".wmv",
+    ".mpg",
+    ".mpeg",
+    ".ts",
+    ".m2ts",
+    ".iso"
+  ],
+  "subtitleExtensions": [
+    ".srt",
+    ".ass",
+    ".ssa",
+    ".vtt",
+    ".smi",
+    ".sub",
+    ".idx"
+  ],
+  "hashDuplicateCandidates": false
+}
