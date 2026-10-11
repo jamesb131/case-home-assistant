@@ -9,7 +9,8 @@ The deployment contains:
 - **Radarr** for the existing `Movies` root;
 - **Radarr 4K** for the existing `Movies 4K` root;
 - **Sonarr** for `TV Shows`;
-- **Bazarr** for subtitle inventory and acquisition; and
+- **Bazarr** for subtitle inventory;
+- **Prowlarr** for central Radarr/Sonarr source management; and
 - **Seerr** as the household request interface and future CASE API boundary.
 
 Launching these containers does not scan, rename or download anything by
@@ -22,10 +23,11 @@ library has been reviewed.
   does not join `case-downloads-vpn-edge` or any CASE network.
 - qBittorrent remains behind Gluetun. Radarr and Sonarr submit jobs through its
   authenticated LAN API; torrent traffic still leaves through AirVPN.
-- Only `D:\Downloads\Completed` is visible from the download area. `Incomplete`,
-  `Processing` and `D:\Bit Torrent` are not mounted.
-- Each manager can write only its own Plex root. Bazarr can write subtitle files
-  in all three media roots. Seerr has no filesystem access.
+- `D:\Downloads\Completed` is visible to the download managers, and the general
+  Radarr instance has the writable `D:\Downloads\Radarr-Test` safety root.
+  `Incomplete`, `Processing` and `D:\Bit Torrent` are not mounted.
+- Existing Plex roots under `D:\Media Centre` are read-only in Radarr, Radarr 4K,
+  Sonarr and Bazarr. Prowlarr and Seerr have no media or download mounts.
 - Management pages bind to the PC's fixed LAN address, not every host interface.
   They must not be exposed through the Omada router or a public tunnel.
 - The apps use normal host internet access for metadata and APIs. They do not
@@ -43,6 +45,7 @@ The existing Plex parent directory must contain these exact child names:
 
 D:\Downloads\
   Completed\
+  Radarr-Test\     writable test root mounted only in general Radarr
   Incomplete\       not mounted here
   Processing\       not mounted here
 ```
@@ -51,10 +54,10 @@ Set `PLEX_MEDIA_ROOT` to that parent directory. The repository does not know or
 guess its location, and the validation script will not create media folders.
 
 The managers and qBittorrent see completed jobs at the same container path,
-`/downloads/completed`. This avoids remote path mappings. Docker Desktop may
-still copy rather than hardlink between distinct bind mounts; that is expected
-and safer than exposing the whole `D:` drive. Keep enough free space for one
-temporary extra copy while a torrent is seeding.
+`/downloads/completed`. This avoids remote path mappings. New imports remain in
+the general Radarr test root at `/media/test` until a separate review explicitly
+changes the production-library policy. Existing Plex files cannot be renamed,
+deleted or supplemented through these read-only mounts.
 
 ## Install
 
@@ -80,6 +83,24 @@ docker compose ps
 .\scripts\Test-Services.ps1
 ```
 
+For an existing five-container deployment, add these defaults to local `.env`:
+
+```dotenv
+PROWLARR_PORT=9696
+PROWLARR_IMAGE=lscr.io/linuxserver/prowlarr:latest
+```
+
+Then validate the whole Compose model but deploy only the new service. This does
+not recreate the five healthy containers:
+
+```powershell
+.\scripts\Test-Configuration.ps1
+docker compose pull prowlarr
+docker compose up -d --wait prowlarr
+docker compose ps prowlarr
+.\scripts\Test-Services.ps1
+```
+
 Static Compose validation can be run against the template without host-path
 checks:
 
@@ -95,6 +116,7 @@ The LAN pages are:
 | Radarr 4K | `http://192.168.0.141:7879` | 4K movie copies |
 | Sonarr | `http://192.168.0.141:8989` | TV series |
 | Bazarr | `http://192.168.0.141:6767` | Subtitles |
+| Prowlarr | `http://192.168.0.141:9696` | Source management |
 | Seerr | `http://192.168.0.141:5055` | Requests |
 
 ## Windows Firewall
@@ -103,7 +125,7 @@ Create inbound allow rules restricted to the trusted LAN. Review these commands
 and run them in an elevated PowerShell window:
 
 ```powershell
-$ports = 7878,7879,8989,6767,5055
+$ports = 7878,7879,8989,6767,9696,5055
 foreach ($port in $ports) {
     New-NetFirewallRule -DisplayName "CASE Media $port" -Direction Inbound -Action Allow -Protocol TCP -LocalAddress 192.168.0.141 -LocalPort $port -RemoteAddress 192.168.0.0/24
 }
@@ -111,7 +133,7 @@ foreach ($port in $ports) {
 
 Do not add router port forwards. If remote requesting is wanted later, put Seerr
 behind an authenticated reverse proxy after a separate security review; do not
-expose Radarr, Sonarr or Bazarr.
+expose Radarr, Sonarr, Bazarr or Prowlarr.
 
 ## First-start security
 
@@ -120,8 +142,8 @@ Configure authentication before adding integrations or sharing the URLs:
 1. In both Radarr instances and Sonarr, open **Settings > General > Security**,
    select Forms authentication, require authentication, and set unique admin
    credentials. Leave certificate validation enabled.
-2. In Bazarr, open **Settings > General > Security**, enable authentication and
-   set unique credentials.
+2. In Bazarr and Prowlarr, open **Settings > General > Security**, enable
+   authentication, and set unique credentials.
 3. Complete Seerr's setup with the Plex administrator account. Create ordinary
    requester accounts for household use rather than sharing administrator access.
 4. Confirm a private/incognito request to protected application API endpoints is
@@ -148,10 +170,11 @@ In Radarr 4K, repeat with `/media/movies-4k`. In Sonarr, use
 `/media/tv`, import existing series as unmonitored, leave episode renaming off,
 and do not search. Resolve unmatched and incorrectly matched folders manually.
 
-Back up the configuration volumes and Plex database after matching looks right,
-then enable renaming and monitoring in small batches. A library import catalogues
-existing media; it does not automatically make every folder conform to best
-practice safely.
+Back up the configuration volumes and Plex database after matching looks right.
+A library import catalogues existing media; it does not automatically make every
+folder conform to best practice safely. The production roots remain read-only,
+so renaming or changing existing files requires a later, explicit mount-policy
+change. Continue using `/media/test` for safe import testing.
 
 ### 2. Duplicated movie versions
 
@@ -184,10 +207,29 @@ Sonarr:    http://sonarr:8989
 
 Create a subtitle language profile with English required. Scan embedded and
 external subtitles first, then review the missing list before enabling automatic
-searches. Add forced English as a separate preference where useful. The initial
-deployment deliberately does not strip audio tracks or remux files; retain
-English, Italian, French and other existing tracks until a later, tested media
-processing phase.
+searches. Add forced English as a separate preference where useful. Bazarr cannot
+write subtitles into the existing read-only Plex roots in this phase. The initial
+deployment deliberately does not strip audio tracks or remux files; retain English,
+Italian, French and other existing tracks until a later, tested media processing
+phase.
+
+## Prowlarr setup
+
+Do not add indexers or enable automatic searches during initial deployment.
+First enable Prowlarr authentication, then add the three manager applications
+under **Settings > Apps** using their API keys:
+
+```text
+Radarr:    http://radarr:7878
+Radarr 4K: http://radarr-4k:7878
+Sonarr:    http://sonarr:8989
+```
+
+Use each application's existing API key and click **Test** before saving. Leave
+Prowlarr's download-client settings empty; Radarr and Sonarr already own the
+qBittorrent integration. With no indexers configured, adding these applications
+does not enable searching or downloading. Indexers and sync behavior will be
+configured interactively in a later phase using only lawful, authorised sources.
 
 ## qBittorrent integration
 
@@ -219,8 +261,8 @@ disabled, submit one disposable test item per manager, and verify that:
 
 1. the job receives the correct category;
 2. qBittorrent downloads through Gluetun;
-3. the manager imports into only its assigned media root;
-4. Plex sees the imported item; and
+3. the general Radarr test imports into `/media/test`;
+4. Radarr records the imported item at the test root; and
 5. the completed source is retained while qBittorrent is still seeding.
 
 ## Seerr and Plex
@@ -255,11 +297,12 @@ case-media-radarr-config
 case-media-radarr-4k-config
 case-media-sonarr-config
 case-media-bazarr-config
+case-media-prowlarr-config
 case-media-seerr-config
 ```
 
 Media remains in the host directories. Never run `docker compose down -v`
-unless all five application configurations are intentionally being discarded.
+unless all six application configurations are intentionally being discarded.
 
 ## Backup and upgrades
 
@@ -299,5 +342,6 @@ must never be combined with a bulk library rename.
 - [Radarr container documentation](https://docs.linuxserver.io/images/docker-radarr/)
 - [Sonarr container documentation](https://docs.linuxserver.io/images/docker-sonarr/)
 - [Bazarr container documentation](https://docs.linuxserver.io/images/docker-bazarr/)
+- [Prowlarr container documentation](https://docs.linuxserver.io/images/docker-prowlarr/)
 - [Seerr Docker documentation](https://docs.seerr.dev/getting-started/docker/)
 - [Plex multiple-version movies](https://support.plex.tv/articles/200381043-multi-version-movies/)
