@@ -239,7 +239,7 @@ if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) {
 $resolvedConfigPath = (Resolve-Path -LiteralPath $ConfigPath).Path
 $config = Get-Content -LiteralPath $resolvedConfigPath -Raw | ConvertFrom-Json
 $roots = @(Get-ObjectProperty -Object $config -Name "roots" -Default @())
-if ($roots.Count -lt 1) { throw "Configuration must contain at least one explicit media root." }
+if (@($roots).Count -lt 1) { throw "Configuration must contain at least one explicit media root." }
 
 $requiredHints = @("1080p", "2160p", "3D")
 $rootDetails = @()
@@ -260,8 +260,8 @@ foreach ($requiredHint in $requiredHints) {
     }
 }
 
-for ($left = 0; $left -lt $rootDetails.Count; $left++) {
-    for ($right = $left + 1; $right -lt $rootDetails.Count; $right++) {
+for ($left = 0; $left -lt @($rootDetails).Count; $left++) {
+    for ($right = $left + 1; $right -lt @($rootDetails).Count; $right++) {
         if ((Test-PathWithin -Candidate $rootDetails[$left].Path -Parent $rootDetails[$right].Path) -or (Test-PathWithin -Candidate $rootDetails[$right].Path -Parent $rootDetails[$left].Path)) {
             throw "Media roots overlap: '$($rootDetails[$left].Path)' and '$($rootDetails[$right].Path)'. Specify non-overlapping collection roots."
         }
@@ -334,7 +334,7 @@ foreach ($root in $rootDetails) {
         $videoStreams = @($streams | Where-Object { (Get-ObjectProperty -Object $_ -Name "codec_type") -eq "video" })
         $audioStreams = @($streams | Where-Object { (Get-ObjectProperty -Object $_ -Name "codec_type") -eq "audio" })
         $subtitleStreams = @($streams | Where-Object { (Get-ObjectProperty -Object $_ -Name "codec_type") -eq "subtitle" })
-        $primaryVideo = if ($videoStreams.Count -gt 0) { $videoStreams[0] } else { $null }
+        $primaryVideo = if (@($videoStreams).Count -gt 0) { $videoStreams[0] } else { $null }
         $width = Get-ObjectProperty -Object $primaryVideo -Name "width"
         $height = Get-ObjectProperty -Object $primaryVideo -Name "height"
         $resolutionClass = Get-ResolutionClass -Width $width -Height $height -Fallback $root.ClassificationHint
@@ -434,7 +434,7 @@ foreach ($root in $rootDetails) {
         $directoryVideos = if ($videosByDirectory.ContainsKey($subtitle.DirectoryName)) { @($videosByDirectory[$subtitle.DirectoryName]) } else { @() }
         $subtitleStem = [System.IO.Path]::GetFileNameWithoutExtension($subtitle.Name)
         foreach ($video in $directoryVideos) {
-            if ($directoryVideos.Count -eq 1 -or $subtitleStem.StartsWith("$($video.BaseName).", [System.StringComparison]::OrdinalIgnoreCase) -or $subtitleStem.Equals($video.BaseName, [System.StringComparison]::OrdinalIgnoreCase)) {
+            if (@($directoryVideos).Count -eq 1 -or $subtitleStem.StartsWith("$($video.BaseName).", [System.StringComparison]::OrdinalIgnoreCase) -or $subtitleStem.Equals($video.BaseName, [System.StringComparison]::OrdinalIgnoreCase)) {
                 $associated = $true
                 break
             }
@@ -488,8 +488,8 @@ $inventoryDocument = [ordered]@{
     FfprobePath = $ffprobePath
     DuplicateCandidateHashing = $hashCandidates
     Roots = $rootDetails
-    ItemCount = $records.Count
-    UnassociatedSubtitleCount = $unassociatedSubtitles.Count
+    ItemCount = @($records).Count
+    UnassociatedSubtitleCount = @($unassociatedSubtitles).Count
     UnassociatedSubtitles = $unassociatedSubtitles
     Items = $records
 }
@@ -531,21 +531,21 @@ $csvRows = @($records | ForEach-Object {
     }
 })
 $csvHeader = '"Id","Collection","FullPath","RelativePath","FileName","SizeBytes","SizeGiB","Title","Year","Edition","Resolution","Dimensions","VideoCodec","HdrFormat","ThreeDFormat","VersionGroup","VersionLabel","Audio","EmbeddedSubtitles","ExternalSubtitles","SuspectedDuplicateGroup","ConfirmedDuplicateGroup","Sha256","ReviewReasons"'
-if ($csvRows.Count -gt 0) {
+if (@($csvRows).Count -gt 0) {
     $csvRows | Export-Csv -LiteralPath $csvPath -NoTypeInformation -Encoding UTF8
 }
 else {
     $csvHeader | Set-Content -LiteralPath $csvPath -Encoding UTF8
 }
 
-$reviewItems = @($records | Where-Object { $_.ReviewReasons.Count -gt 0 })
+$reviewItems = @($records | Where-Object { @($_.ReviewReasons).Count -gt 0 })
 $reviewRows = @($reviewItems | ForEach-Object {
     [pscustomobject]@{ Id = $_.Id; Collection = $_.Collection; FullPath = $_.FullPath; Reasons = ($_.ReviewReasons -join "; ") }
 })
 $reviewRows += @($unassociatedSubtitles | ForEach-Object {
     [pscustomobject]@{ Id = $_.Id; Collection = $_.Collection; FullPath = $_.Path; Reasons = $_.ReviewReason }
 })
-if ($reviewRows.Count -gt 0) {
+if (@($reviewRows).Count -gt 0) {
     $reviewRows | Export-Csv -LiteralPath $reviewCsvPath -NoTypeInformation -Encoding UTF8
 }
 else {
@@ -565,13 +565,13 @@ $summary.Add("This report was produced by a read-only source scan. No media file
 $summary.Add("")
 $summary.Add("## Totals")
 $summary.Add("")
-$summary.Add("- Video files: $($records.Count)")
+$summary.Add("- Video files: $(@($records).Count)")
 $summary.Add("- Total size: $([math]::Round($totalBytes / 1TB, 3)) TiB")
-$summary.Add("- Video items requiring review: $($reviewItems.Count)")
-$summary.Add("- Unassociated subtitle files: $($unassociatedSubtitles.Count)")
-$summary.Add("- Cross-root title/year groups: $($matchGroups.Count)")
-$summary.Add("- Suspected same-size duplicate groups: $($suspectedGroups.Count)")
-$summary.Add("- Confirmed SHA-256 duplicate groups: $($confirmedGroups.Count)")
+$summary.Add("- Video items requiring review: $(@($reviewItems).Count)")
+$summary.Add("- Unassociated subtitle files: $(@($unassociatedSubtitles).Count)")
+$summary.Add("- Cross-root title/year groups: $(@($matchGroups).Count)")
+$summary.Add("- Suspected same-size duplicate groups: $(@($suspectedGroups).Count)")
+$summary.Add("- Confirmed SHA-256 duplicate groups: $(@($confirmedGroups).Count)")
 $summary.Add("- ffprobe available: $([bool]$ffprobePath)")
 $summary.Add("")
 $summary.Add("## Collections")
@@ -582,13 +582,13 @@ foreach ($root in $rootDetails) {
     $items = @($records | Where-Object Collection -eq $root.Name)
     $bytes = ($items | Measure-Object SizeBytes -Sum).Sum
     if ($null -eq $bytes) { $bytes = 0 }
-    $reviewCount = @($items | Where-Object { $_.ReviewReasons.Count -gt 0 }).Count
-    $summary.Add("| $(Escape-Markdown $root.Name) | $($root.ClassificationHint) | $($items.Count) | $([math]::Round($bytes / 1TB, 3)) | $reviewCount |")
+    $reviewCount = @($items | Where-Object { @($_.ReviewReasons).Count -gt 0 }).Count
+    $summary.Add("| $(Escape-Markdown $root.Name) | $($root.ClassificationHint) | $(@($items).Count) | $([math]::Round($bytes / 1TB, 3)) | $reviewCount |")
 }
 $summary.Add("")
 $summary.Add("## Version groups")
 $summary.Add("")
-if ($matchGroups.Count -eq 0) {
+if (@($matchGroups).Count -eq 0) {
     $summary.Add("No repeated title/year groups were detected.")
 }
 else {
@@ -606,7 +606,7 @@ $reviewMarkdown.Add("# Manual review queue")
 $reviewMarkdown.Add("")
 $reviewMarkdown.Add("Generated: $generatedAt")
 $reviewMarkdown.Add("")
-if ($reviewRows.Count -eq 0) {
+if (@($reviewRows).Count -eq 0) {
     $reviewMarkdown.Add("No automatically detected review items.")
 }
 else {
@@ -631,5 +631,5 @@ Write-Host "No source files were modified."
     SummaryMarkdown = $summaryPath
     ManualReviewCsv = $reviewCsvPath
     ManualReviewMarkdown = $reviewMarkdownPath
-    ItemCount = $records.Count
+    ItemCount = @($records).Count
 }

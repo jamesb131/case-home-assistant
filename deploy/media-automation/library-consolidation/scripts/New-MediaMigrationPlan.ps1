@@ -112,7 +112,7 @@ foreach ($item in @(Get-ObjectProperty -Object $inventory -Name "Items" -Default
         if ($language) { $suffix += $language } else { $reasons += "Subtitle language requires review: $($subtitle.FileName)" }
         if ([bool](Get-ObjectProperty -Object $subtitle -Name "Forced" -Default $false)) { $suffix += "forced" }
         elseif ([bool](Get-ObjectProperty -Object $subtitle -Name "SDH" -Default $false)) { $suffix += "sdh" }
-        $suffixText = if ($suffix.Count -gt 0) { "." + ($suffix -join ".") } else { "" }
+        $suffixText = if (@($suffix).Count -gt 0) { "." + ($suffix -join ".") } else { "" }
         $subtitlePlans += [pscustomobject]@{
             SourcePath = $subtitle.Path
             DestinationPath = if ($destinationFolder) { Join-Path $destinationFolder "$baseName$suffixText$($subtitle.Extension)" } else { $null }
@@ -142,8 +142,8 @@ foreach ($item in @(Get-ObjectProperty -Object $inventory -Name "Items" -Default
         SuspectedDuplicateGroup = $item.SuspectedDuplicateGroup
         ConfirmedDuplicateGroup = $item.ConfirmedDuplicateGroup
         DestinationCollision = $false
-        Confidence = if ($reasons.Count -eq 0) { "High" } else { "Review" }
-        ManualReview = [bool]($reasons.Count -gt 0)
+        Confidence = if (@($reasons).Count -eq 0) { "High" } else { "Review" }
+        ManualReview = [bool](@($reasons).Count -gt 0)
         ReviewReasons = @($reasons | Select-Object -Unique)
         ProposedAction = "Move"
     }
@@ -168,8 +168,8 @@ $document = [ordered]@{
     PlanningOnly = $true
     SourceInventory = (Resolve-Path -LiteralPath $InventoryPath).Path
     TargetMoviesRoot = $moviesRoot
-    ItemCount = $planItems.Count
-    CollisionCount = $collisionGroups.Count
+    ItemCount = @($planItems).Count
+    CollisionCount = @($collisionGroups).Count
     Items = $planItems
 }
 
@@ -191,15 +191,15 @@ $rows = @($planItems | ForEach-Object {
         ProposedAction = $_.ProposedAction
         Confidence = $_.Confidence
         DestinationCollision = $_.DestinationCollision
-        SubtitleCount = $_.SubtitlePlans.Count
+        SubtitleCount = @($_.SubtitlePlans).Count
         ReviewReasons = ($_.ReviewReasons -join "; ")
     }
 })
-if ($rows.Count -gt 0) { $rows | Export-Csv -LiteralPath $csvPath -NoTypeInformation -Encoding UTF8 }
+if (@($rows).Count -gt 0) { $rows | Export-Csv -LiteralPath $csvPath -NoTypeInformation -Encoding UTF8 }
 else { '"Id","SourcePath","DestinationVideoPath","Classification","Title","Year","Edition","ProposedAction","Confidence","DestinationCollision","SubtitleCount","ReviewReasons"' | Set-Content -LiteralPath $csvPath -Encoding UTF8 }
 
 $reviewRows = @($rows | Where-Object { $_.Confidence -eq "Review" })
-if ($reviewRows.Count -gt 0) { $reviewRows | Export-Csv -LiteralPath $reviewPath -NoTypeInformation -Encoding UTF8 }
+if (@($reviewRows).Count -gt 0) { $reviewRows | Export-Csv -LiteralPath $reviewPath -NoTypeInformation -Encoding UTF8 }
 else { '"Id","SourcePath","DestinationVideoPath","Classification","Title","Year","Edition","ProposedAction","Confidence","DestinationCollision","SubtitleCount","ReviewReasons"' | Set-Content -LiteralPath $reviewPath -Encoding UTF8 }
 
 $markdown = [System.Collections.Generic.List[string]]::new()
@@ -209,10 +209,10 @@ $markdown.Add("Generated: $generatedAt")
 $markdown.Add("")
 $markdown.Add("Planning only. This script did not move, rename, copy or delete any media.")
 $markdown.Add("")
-$markdown.Add("- Planned items: $($planItems.Count)")
+$markdown.Add("- Planned items: $(@($planItems).Count)")
 $markdown.Add("- High-confidence proposals: $(@($planItems | Where-Object Confidence -eq 'High').Count)")
-$markdown.Add("- Manual-review proposals: $($reviewRows.Count)")
-$markdown.Add("- Destination collision groups: $($collisionGroups.Count)")
+$markdown.Add("- Manual-review proposals: $(@($reviewRows).Count)")
+$markdown.Add("- Destination collision groups: $(@($collisionGroups).Count)")
 $markdown.Add("")
 $markdown.Add("| Source | Proposed destination | Class | Action | Confidence | Notes |")
 $markdown.Add("| --- | --- | --- | --- | --- | --- |")
@@ -230,5 +230,5 @@ Write-Host "No source files were modified. No migration was executed."
     PlanCsv = $csvPath
     SummaryMarkdown = $summaryPath
     ManualReviewCsv = $reviewPath
-    ItemCount = $planItems.Count
+    ItemCount = @($planItems).Count
 }
