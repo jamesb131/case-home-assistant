@@ -64,6 +64,68 @@ The run creates a timestamped directory containing:
 
 By default, duplicate candidates are identified by normalized title/year and exact size, but are **not** declared true duplicates. Set `hashDuplicateCandidates` to `true`, or pass `-HashDuplicateCandidates`, to SHA-256 only those narrow candidates. A matching hash confirms identical bytes; a different hash confirms they are distinct files.
 
+## Phase 1b: read-only TMDB enrichment
+
+The metadata enrichment script reads an existing `media-inventory.json`; it does not rescan, probe or open the movie files. It searches TMDB, assigns confirmed IDs only when conservative matching rules pass, and writes a new timestamped report directory outside the media collection.
+
+Create a TMDB account, request API access in the account settings, and obtain the **API Read Access Token**. TMDB documents the application process and Bearer-token authentication in its [getting started](https://developer.themoviedb.org/docs/getting-started) and [authentication](https://developer.themoviedb.org/docs/authentication-application) guides. Keep the token in the current process environment only; do not add it to a repository file.
+
+Run the offline safety tests first:
+
+```powershell
+cd D:\path\to\case-home-assistant\deploy\media-automation\library-consolidation
+.\scripts\Test-MediaPlanning.ps1
+.\scripts\Test-MetadataEnrichment.ps1
+```
+
+Then enrich the newest real inventory:
+
+```powershell
+$secureTmdbToken = Read-Host "TMDB API read token" -AsSecureString
+$tmdbCredential = New-Object System.Management.Automation.PSCredential("tmdb", $secureTmdbToken)
+$env:TMDB_READ_TOKEN = $tmdbCredential.GetNetworkCredential().Password
+Remove-Variable secureTmdbToken, tmdbCredential
+
+$inventory = Get-ChildItem D:\Downloads\Media-Inventory\inventory-*\media-inventory.json |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1
+
+.\scripts\New-EnrichedMediaInventory.ps1 `
+  -InventoryPath $inventory.FullName `
+  -OutputDirectory D:\Downloads\Media-Inventory `
+  -CacheDirectory D:\Downloads\Media-Inventory\tmdb-cache
+```
+
+The token is never written to the reports or cache. Search and detail responses are cached by request so reruns do not repeatedly call TMDB. Requests are rate-limited and retried; exhausted network failures are recorded as `ApiError` review items instead of aborting the rest of the inventory.
+
+Each run creates `metadata-enrichment-<timestamp>` with:
+
+- `enriched-media-inventory.json` and `.csv`: original paths/titles plus status, canonical metadata, scores and alternatives.
+- `metadata-matching-summary.md`: run counts and matching policy.
+- `metadata-manual-review.csv` and `.md`: ambiguous, unmatched, API-error and uncertain-3D items.
+- `cross-version-groups.csv`: confirmed TMDB groups and their 1080p, 2160p, 3D and edition attributes.
+- `metadata-overrides.template.csv`: editable decisions for the review queue.
+
+`HighConfidence` means the title/year evidence and candidate margin met the conservative auto-confirmation threshold. `Ambiguous` never receives a confirmed TMDB ID, even when one result ranks first. Conflicting years are strongly penalized. Cross-version grouping uses only confirmed IDs; it preserves existing cut/edition labels and never calls two files identical unless the earlier inventory contains hash evidence.
+
+To resolve review items, copy the generated template to a stable untracked file, then edit `Decision` to `Confirm`, `Unmatched` or `Ignore`. A `Confirm` row requires the chosen numeric TMDB movie ID; title and year may be left blank and will be loaded from TMDB.
+
+```powershell
+Copy-Item `
+  D:\Downloads\Media-Inventory\metadata-enrichment-<timestamp>\metadata-overrides.template.csv `
+  D:\Downloads\Media-Inventory\metadata-overrides.csv
+
+.\scripts\New-EnrichedMediaInventory.ps1 `
+  -InventoryPath $inventory.FullName `
+  -OutputDirectory D:\Downloads\Media-Inventory `
+  -CacheDirectory D:\Downloads\Media-Inventory\tmdb-cache `
+  -OverridesPath D:\Downloads\Media-Inventory\metadata-overrides.csv
+```
+
+After the enrichment and any override reruns are complete, remove the token from the current process with `Remove-Item Env:TMDB_READ_TOKEN`.
+
+Review all `Ambiguous`, `Unmatched`, `ApiError` and uncertain-3D rows before using the enriched inventory for later planning. The script does not invent 3D layouts or Plex edition labels. This phase does not rename, move, delete, download or repair media and does not modify Plex, Radarr, Bazarr or any other service.
+
 ## Phase 2: proposed migration plan
 
 After reviewing the inventory, generate a proposal:
@@ -175,6 +237,7 @@ The fixture test creates a disposable library beneath the operating system temp 
 
 ```powershell
 .\scripts\Test-MediaPlanning.ps1
+.\scripts\Test-MetadataEnrichment.ps1
 ```
 
-It cleans up only its own uniquely named temporary fixture.
+Each test cleans up only its own uniquely named temporary fixture. The metadata suite uses an offline TMDB fixture and does not require credentials or network access.

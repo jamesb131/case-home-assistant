@@ -2,3 +2,6 @@ inventory.config.json
 output/
 inventory-*/
 migration-plan-*/
+metadata-enrichment-*/
+tmdb-cache/
+metadata-overrides.csv
