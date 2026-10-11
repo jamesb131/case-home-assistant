@@ -148,6 +148,87 @@ try {
     $multiplePlan = Get-Content -LiteralPath $multiplePlanResult.PlanJson -Raw | ConvertFrom-Json
     Assert-True -Condition ($multiplePlan.ItemCount -eq 2) -Message "multiple-item migration plan completes under StrictMode"
 
+    if ($env:OS -eq "Windows_NT") {
+        $probeRoot = Join-Path $fixtureRoot "probe-behavior"
+        $probeStandard = Join-Path $probeRoot "standard"
+        $probeUhd = Join-Path $probeRoot "uhd"
+        $probeThreeD = Join-Path $probeRoot "3d"
+        $probeOutput = Join-Path $probeRoot "reports"
+        foreach ($path in @($probeStandard, $probeUhd, $probeThreeD, $probeOutput)) {
+            New-Item -ItemType Directory -Path $path -Force | Out-Null
+        }
+        $malformedFolder = Join-Path $probeStandard "Malformed Movie (2002)"
+        $timeoutFolder = Join-Path $probeStandard "Timeout Movie (2003)"
+        New-Item -ItemType Directory -Path $malformedFolder, $timeoutFolder -Force | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path $malformedFolder "Malformed Movie (2002).mp4"), "malformed")
+        [System.IO.File]::WriteAllText((Join-Path $timeoutFolder "Timeout Movie (2003).mp4"), "timeout")
+
+        $mockProbePath = Join-Path $probeRoot "mock-ffprobe.exe"
+        $mockProbeSource = @'
+using System;
+using System.IO;
+using System.Linq;
+using System.Threading;
+
+public static class MockFfprobe
+{
+    public static int Main(string[] args)
+    {
+        string mediaPath = args.Length == 0 ? string.Empty : args[args.Length - 1];
+        if (mediaPath.IndexOf("Timeout Movie", StringComparison.OrdinalIgnoreCase) >= 0)
+        {
+            Thread.Sleep(5000);
+        }
+        else
+        {
+            for (int index = 1; index <= 200; index++)
+            {
+                Console.Error.WriteLine("[h264] Invalid NAL unit size " + index);
+            }
+        }
+
+        Console.Out.WriteLine("{\"streams\":[{\"codec_type\":\"video\",\"width\":1920,\"height\":1080,\"codec_name\":\"h264\"}],\"format\":{\"format_name\":\"mov,mp4\",\"duration\":\"1\"}}");
+        return 0;
+    }
+}
+'@
+        Add-Type -TypeDefinition $mockProbeSource -Language CSharp -OutputAssembly $mockProbePath -OutputType ConsoleApplication
+
+        $probeConfigPath = Join-Path $probeRoot "inventory.config.json"
+        $probeConfig = [ordered]@{
+            roots = @(
+                [ordered]@{ name = "Standard"; path = $probeStandard; classificationHint = "1080p" },
+                [ordered]@{ name = "UHD"; path = $probeUhd; classificationHint = "2160p" },
+                [ordered]@{ name = "3D"; path = $probeThreeD; classificationHint = "3D" }
+            )
+            outputDirectory = $probeOutput
+            target = [ordered]@{
+                moviesRoot = (Join-Path $probeRoot "target")
+                qualityFolders = [ordered]@{ "1080p" = "1080p"; "2160p" = "2160p"; "3D" = "3D" }
+            }
+            videoExtensions = @(".mp4")
+            subtitleExtensions = @(".srt")
+            hashDuplicateCandidates = $false
+            ffprobeTimeoutSeconds = 1
+            ffprobeProbeSizeBytes = 1048576
+            ffprobeAnalyzeDurationMicroseconds = 1000000
+            ffprobeErrorSummaryLines = 3
+        }
+        $probeConfig | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $probeConfigPath -Encoding UTF8
+
+        $probeResult = & $inventoryScript -ConfigPath $probeConfigPath -FfprobeExecutable $mockProbePath
+        $probeInventory = Get-Content -LiteralPath $probeResult.InventoryJson -Raw | ConvertFrom-Json
+        Assert-True -Condition ($probeInventory.ItemCount -eq 2) -Message "inventory continues after malformed and timed-out probes"
+        $malformedItem = $probeInventory.Items | Where-Object FileName -eq "Malformed Movie (2002).mp4"
+        $timeoutItem = $probeInventory.Items | Where-Object FileName -eq "Timeout Movie (2003).mp4"
+        Assert-True -Condition ($malformedItem.ProbeStatus -eq "CompletedWithStreamErrors") -Message "successful probe with malformed H.264 stderr is flagged"
+        Assert-True -Condition ($malformedItem.ProbeStderrLineCount -eq 200) -Message "repeated stderr is counted without being emitted"
+        Assert-True -Condition ($malformedItem.ProbeStderrSummary.Length -lt 2000) -Message "stderr report is bounded"
+        Assert-True -Condition (@($malformedItem.ReviewReasons | Where-Object { $_ -match "malformed media stream" }).Count -eq 1) -Message "malformed stream enters manual review"
+        Assert-True -Condition ($timeoutItem.ProbeStatus -eq "TimedOut") -Message "hung probe is terminated by the configured timeout"
+        Assert-True -Condition (@($timeoutItem.ReviewReasons | Where-Object { $_ -match "timed out" }).Count -eq 1) -Message "probe timeout enters manual review"
+    }
+
     Write-Host "Media planning fixture checks passed."
 }
 finally {

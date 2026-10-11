@@ -47,5 +47,9 @@
     ".sub",
     ".idx"
   ],
-  "hashDuplicateCandidates": false
+  "hashDuplicateCandidates": false,
+  "ffprobeTimeoutSeconds": 60,
+  "ffprobeProbeSizeBytes": 104857600,
+  "ffprobeAnalyzeDurationMicroseconds": 30000000,
+  "ffprobeErrorSummaryLines": 8
 }

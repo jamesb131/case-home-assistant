@@ -7,7 +7,9 @@ param(
 
     [switch]$HashDuplicateCandidates,
 
-    [switch]$SkipFfprobe
+    [switch]$SkipFfprobe,
+
+    [string]$FfprobeExecutable
 )
 
 $ErrorActionPreference = "Stop"
@@ -121,13 +123,17 @@ function Get-MovieIdentity {
 function Invoke-Ffprobe {
     param(
         [string]$Executable,
-        [string]$MediaPath
+        [string]$MediaPath,
+        [int]$TimeoutSeconds,
+        [int64]$ProbeSizeBytes,
+        [int64]$AnalyzeDurationMicroseconds,
+        [int]$ErrorSummaryLines
     )
 
     $escapedPath = $MediaPath.Replace('"', '\"')
     $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
     $startInfo.FileName = $Executable
-    $startInfo.Arguments = "-v error -show_format -show_streams -print_format json `"$escapedPath`""
+    $startInfo.Arguments = "-v warning -probesize $ProbeSizeBytes -analyzeduration $AnalyzeDurationMicroseconds -show_error -show_format -show_streams -print_format json `"$escapedPath`""
     $startInfo.UseShellExecute = $false
     $startInfo.RedirectStandardOutput = $true
     $startInfo.RedirectStandardError = $true
@@ -135,28 +141,97 @@ function Invoke-Ffprobe {
 
     $process = [System.Diagnostics.Process]::new()
     $process.StartInfo = $startInfo
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    $didTimeOut = $false
     try {
         if (-not $process.Start()) {
-            return [pscustomobject]@{ Success = $false; Data = $null; Error = "ffprobe did not start" }
+            return [pscustomobject]@{ Success = $false; Data = $null; Error = "ffprobe did not start"; TimedOut = $false; DurationSeconds = 0; StderrSummary = $null; StderrLineCount = 0; HasMalformedStreamErrors = $false }
         }
-        $stdout = $process.StandardOutput.ReadToEnd()
-        $stderr = $process.StandardError.ReadToEnd()
-        $process.WaitForExit()
+
+        # Drain both pipes concurrently. Reading one to completion first can deadlock
+        # when malformed media produces enough stderr to fill the OS pipe buffer.
+        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+        $stderrTask = $process.StandardError.ReadToEndAsync()
+        $completed = $process.WaitForExit($TimeoutSeconds * 1000)
+        if (-not $completed) {
+            $didTimeOut = $true
+            try { $process.Kill() } catch { }
+            try { $process.WaitForExit() } catch { }
+        }
+        $stdout = $stdoutTask.Result
+        $stderr = $stderrTask.Result
+        $stopwatch.Stop()
+
+        $stderrLines = @($stderr -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        $uniqueStderrLines = @($stderrLines | Select-Object -Unique)
+        $summaryLines = @($uniqueStderrLines | Select-Object -First $ErrorSummaryLines)
+        $stderrSummary = $summaryLines -join " | "
+        if (@($uniqueStderrLines).Count -gt $ErrorSummaryLines) {
+            $stderrSummary += " | ... $(@($uniqueStderrLines).Count - $ErrorSummaryLines) more unique line(s)"
+        }
+        if ($stderrSummary.Length -gt 2000) { $stderrSummary = $stderrSummary.Substring(0, 2000) + "..." }
+        $malformedPattern = '(?i)invalid nal unit size|missing picture in access unit|error splitting the input into nal units|invalid data found|corrupt(?:ed)? input packet|error while decoding|decode_slice_header error|truncat(?:ed|ing)|damaged|concealing \d+ dc'
+        $hasMalformedStreamErrors = [bool]($stderr -match $malformedPattern)
+
+        if (-not $completed) {
+            return [pscustomobject]@{
+                Success = $false
+                Data = $null
+                Error = "ffprobe timed out after $TimeoutSeconds seconds"
+                TimedOut = $true
+                DurationSeconds = [math]::Round($stopwatch.Elapsed.TotalSeconds, 2)
+                StderrSummary = $stderrSummary
+                StderrLineCount = @($stderrLines).Count
+                HasMalformedStreamErrors = $hasMalformedStreamErrors
+            }
+        }
         if ($process.ExitCode -ne 0) {
-            return [pscustomobject]@{ Success = $false; Data = $null; Error = "ffprobe exited $($process.ExitCode): $($stderr.Trim())" }
+            $errorText = "ffprobe exited $($process.ExitCode)"
+            if ($stderrSummary) { $errorText += ": $stderrSummary" }
+            return [pscustomobject]@{
+                Success = $false
+                Data = $null
+                Error = $errorText
+                TimedOut = $false
+                DurationSeconds = [math]::Round($stopwatch.Elapsed.TotalSeconds, 2)
+                StderrSummary = $stderrSummary
+                StderrLineCount = @($stderrLines).Count
+                HasMalformedStreamErrors = $hasMalformedStreamErrors
+            }
         }
         try {
             $data = $stdout | ConvertFrom-Json
-            return [pscustomobject]@{ Success = $true; Data = $data; Error = $null }
+            return [pscustomobject]@{
+                Success = $true
+                Data = $data
+                Error = $null
+                TimedOut = $false
+                DurationSeconds = [math]::Round($stopwatch.Elapsed.TotalSeconds, 2)
+                StderrSummary = $stderrSummary
+                StderrLineCount = @($stderrLines).Count
+                HasMalformedStreamErrors = $hasMalformedStreamErrors
+            }
         }
         catch {
-            return [pscustomobject]@{ Success = $false; Data = $null; Error = "ffprobe returned invalid JSON: $($_.Exception.Message)" }
+            return [pscustomobject]@{
+                Success = $false
+                Data = $null
+                Error = "ffprobe returned invalid JSON: $($_.Exception.Message)"
+                TimedOut = $false
+                DurationSeconds = [math]::Round($stopwatch.Elapsed.TotalSeconds, 2)
+                StderrSummary = $stderrSummary
+                StderrLineCount = @($stderrLines).Count
+                HasMalformedStreamErrors = $hasMalformedStreamErrors
+            }
         }
     }
     catch {
-        return [pscustomobject]@{ Success = $false; Data = $null; Error = $_.Exception.Message }
+        $stopwatch.Stop()
+        $errorText = if ($didTimeOut) { "ffprobe timed out after $TimeoutSeconds seconds" } else { $_.Exception.Message }
+        return [pscustomobject]@{ Success = $false; Data = $null; Error = $errorText; TimedOut = $didTimeOut; DurationSeconds = [math]::Round($stopwatch.Elapsed.TotalSeconds, 2); StderrSummary = $null; StderrLineCount = 0; HasMalformedStreamErrors = $false }
     }
     finally {
+        if ($stopwatch.IsRunning) { $stopwatch.Stop() }
         $process.Dispose()
     }
 }
@@ -283,20 +358,40 @@ $videoExtensions = @((Get-ObjectProperty -Object $config -Name "videoExtensions"
 $subtitleExtensions = @((Get-ObjectProperty -Object $config -Name "subtitleExtensions" -Default @(".srt", ".ass", ".ssa", ".vtt")) | ForEach-Object { "$($_)".ToLowerInvariant() })
 $configHashSetting = [bool](Get-ObjectProperty -Object $config -Name "hashDuplicateCandidates" -Default $false)
 $hashCandidates = $HashDuplicateCandidates.IsPresent -or $configHashSetting
+$ffprobeTimeoutSeconds = [int](Get-ObjectProperty -Object $config -Name "ffprobeTimeoutSeconds" -Default 60)
+$ffprobeProbeSizeBytes = [int64](Get-ObjectProperty -Object $config -Name "ffprobeProbeSizeBytes" -Default 104857600)
+$ffprobeAnalyzeDurationMicroseconds = [int64](Get-ObjectProperty -Object $config -Name "ffprobeAnalyzeDurationMicroseconds" -Default 30000000)
+$ffprobeErrorSummaryLines = [int](Get-ObjectProperty -Object $config -Name "ffprobeErrorSummaryLines" -Default 8)
+if ($ffprobeTimeoutSeconds -lt 1 -or $ffprobeTimeoutSeconds -gt 3600) { throw "ffprobeTimeoutSeconds must be between 1 and 3600." }
+if ($ffprobeProbeSizeBytes -lt 32768) { throw "ffprobeProbeSizeBytes must be at least 32768." }
+if ($ffprobeAnalyzeDurationMicroseconds -lt 0) { throw "ffprobeAnalyzeDurationMicroseconds cannot be negative." }
+if ($ffprobeErrorSummaryLines -lt 1 -or $ffprobeErrorSummaryLines -gt 100) { throw "ffprobeErrorSummaryLines must be between 1 and 100." }
 
 $ffprobeCommand = $null
 if (-not $SkipFfprobe) {
-    $ffprobeCommand = Get-Command ffprobe -ErrorAction SilentlyContinue
+    $ffprobeCommandName = if ($FfprobeExecutable) { $FfprobeExecutable } else { "ffprobe" }
+    $ffprobeCommand = Get-Command $ffprobeCommandName -ErrorAction SilentlyContinue
 }
 $ffprobePath = if ($ffprobeCommand) { $ffprobeCommand.Source } else { $null }
 
 $records = @()
 $unassociatedSubtitles = @()
+$rootScans = @()
 foreach ($root in $rootDetails) {
-    Write-Host "Scanning $($root.Name): $($root.Path)"
     $allFiles = @(Get-ChildItem -LiteralPath $root.Path -File -Recurse -Force -ErrorAction Stop)
     $videoFiles = @($allFiles | Where-Object { $videoExtensions -contains $_.Extension.ToLowerInvariant() })
     $subtitleFiles = @($allFiles | Where-Object { $subtitleExtensions -contains $_.Extension.ToLowerInvariant() })
+    $rootScans += [pscustomobject]@{ Root = $root; VideoFiles = $videoFiles; SubtitleFiles = $subtitleFiles }
+}
+$totalVideoCount = ($rootScans | ForEach-Object { @($_.VideoFiles).Count } | Measure-Object -Sum).Sum
+if ($null -eq $totalVideoCount) { $totalVideoCount = 0 }
+$currentVideoIndex = 0
+
+foreach ($rootScan in $rootScans) {
+    $root = $rootScan.Root
+    $videoFiles = @($rootScan.VideoFiles)
+    $subtitleFiles = @($rootScan.SubtitleFiles)
+    Write-Host "Scanning $($root.Name): $($root.Path) ($(@($videoFiles).Count) video file(s))"
 
     $subtitlesByDirectory = @{}
     foreach ($subtitle in $subtitleFiles) {
@@ -310,6 +405,10 @@ foreach ($root in $rootDetails) {
     }
 
     foreach ($file in $videoFiles) {
+        $currentVideoIndex++
+        $progressPercent = if ($totalVideoCount -gt 0) { [math]::Min(100, [math]::Round(($currentVideoIndex / $totalVideoCount) * 100)) } else { 100 }
+        Write-Progress -Activity "CASE media inventory" -Status "[$currentVideoIndex/$totalVideoCount] $($file.Name)" -PercentComplete $progressPercent
+        Write-Host "[$currentVideoIndex/$totalVideoCount] $($file.FullName)"
         $identity = Get-MovieIdentity -File $file -RootPath $root.Path
         $reviewReasons = @()
         $pathSeparators = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
@@ -322,9 +421,13 @@ foreach ($root in $rootDetails) {
         if ($folderDepth -gt 1) { $reviewReasons += "Video uses a nested folder layout" }
 
         $probe = $null
+        $probeResult = $null
         if ($ffprobePath) {
-            $probeResult = Invoke-Ffprobe -Executable $ffprobePath -MediaPath $file.FullName
+            $probeResult = Invoke-Ffprobe -Executable $ffprobePath -MediaPath $file.FullName -TimeoutSeconds $ffprobeTimeoutSeconds -ProbeSizeBytes $ffprobeProbeSizeBytes -AnalyzeDurationMicroseconds $ffprobeAnalyzeDurationMicroseconds -ErrorSummaryLines $ffprobeErrorSummaryLines
             if ($probeResult.Success) { $probe = $probeResult.Data } else { $reviewReasons += "ffprobe failed: $($probeResult.Error)" }
+            if ($probeResult.HasMalformedStreamErrors) {
+                $reviewReasons += "ffprobe reported malformed media stream data: $($probeResult.StderrSummary)"
+            }
         }
         elseif (-not $SkipFfprobe) {
             $reviewReasons += "ffprobe is not installed"
@@ -414,6 +517,11 @@ foreach ($root in $rootDetails) {
             Container = Get-ObjectProperty -Object $format -Name "format_name"
             DurationSeconds = Get-ObjectProperty -Object $format -Name "duration"
             OverallBitRate = Get-ObjectProperty -Object $format -Name "bit_rate"
+            ProbeStatus = if ($SkipFfprobe) { "Skipped" } elseif (-not $ffprobePath) { "Unavailable" } elseif ($probeResult.TimedOut) { "TimedOut" } elseif ($probeResult.Success -and $probeResult.HasMalformedStreamErrors) { "CompletedWithStreamErrors" } elseif ($probeResult.Success) { "Completed" } else { "Failed" }
+            ProbeDurationSeconds = if ($probeResult) { $probeResult.DurationSeconds } else { $null }
+            ProbeTimedOut = if ($probeResult) { [bool]$probeResult.TimedOut } else { $false }
+            ProbeStderrLineCount = if ($probeResult) { $probeResult.StderrLineCount } else { 0 }
+            ProbeStderrSummary = if ($probeResult) { $probeResult.StderrSummary } else { $null }
             HdrFormat = $hdrClass
             ThreeDFormat = $threeDFormat
             VersionGroup = $null
@@ -455,6 +563,7 @@ foreach ($root in $rootDetails) {
         }
     }
 }
+Write-Progress -Activity "CASE media inventory" -Completed
 
 $matchGroups = @($records | Where-Object { $_.MatchKey } | Group-Object MatchKey | Where-Object Count -gt 1)
 foreach ($matchGroup in $matchGroups) {
@@ -486,6 +595,10 @@ $inventoryDocument = [ordered]@{
     ReadOnlySourceScan = $true
     FfprobeAvailable = [bool]$ffprobePath
     FfprobePath = $ffprobePath
+    FfprobeTimeoutSeconds = $ffprobeTimeoutSeconds
+    FfprobeProbeSizeBytes = $ffprobeProbeSizeBytes
+    FfprobeAnalyzeDurationMicroseconds = $ffprobeAnalyzeDurationMicroseconds
+    FfprobeErrorSummaryLines = $ffprobeErrorSummaryLines
     DuplicateCandidateHashing = $hashCandidates
     Roots = $rootDetails
     ItemCount = @($records).Count
@@ -517,6 +630,11 @@ $csvRows = @($records | ForEach-Object {
         Resolution = $_.ResolutionClass
         Dimensions = if ($_.Width -and $_.Height) { "$($_.Width)x$($_.Height)" } else { $null }
         VideoCodec = $_.VideoCodec
+        ProbeStatus = $_.ProbeStatus
+        ProbeDurationSeconds = $_.ProbeDurationSeconds
+        ProbeTimedOut = $_.ProbeTimedOut
+        ProbeStderrLineCount = $_.ProbeStderrLineCount
+        ProbeStderrSummary = $_.ProbeStderrSummary
         HdrFormat = $_.HdrFormat
         ThreeDFormat = $_.ThreeDFormat
         VersionGroup = $_.VersionGroup
@@ -530,7 +648,7 @@ $csvRows = @($records | ForEach-Object {
         ReviewReasons = ($_.ReviewReasons -join "; ")
     }
 })
-$csvHeader = '"Id","Collection","FullPath","RelativePath","FileName","SizeBytes","SizeGiB","Title","Year","Edition","Resolution","Dimensions","VideoCodec","HdrFormat","ThreeDFormat","VersionGroup","VersionLabel","Audio","EmbeddedSubtitles","ExternalSubtitles","SuspectedDuplicateGroup","ConfirmedDuplicateGroup","Sha256","ReviewReasons"'
+$csvHeader = '"Id","Collection","FullPath","RelativePath","FileName","SizeBytes","SizeGiB","Title","Year","Edition","Resolution","Dimensions","VideoCodec","ProbeStatus","ProbeDurationSeconds","ProbeTimedOut","ProbeStderrLineCount","ProbeStderrSummary","HdrFormat","ThreeDFormat","VersionGroup","VersionLabel","Audio","EmbeddedSubtitles","ExternalSubtitles","SuspectedDuplicateGroup","ConfirmedDuplicateGroup","Sha256","ReviewReasons"'
 if (@($csvRows).Count -gt 0) {
     $csvRows | Export-Csv -LiteralPath $csvPath -NoTypeInformation -Encoding UTF8
 }
@@ -556,6 +674,9 @@ $totalBytes = ($records | Measure-Object SizeBytes -Sum).Sum
 if ($null -eq $totalBytes) { $totalBytes = 0 }
 $suspectedGroups = @($records | ForEach-Object { $_.SuspectedDuplicateGroup } | Where-Object { $_ } | Select-Object -Unique)
 $confirmedGroups = @($records | ForEach-Object { $_.ConfirmedDuplicateGroup } | Where-Object { $_ } | Select-Object -Unique)
+$timedOutProbeItems = @($records | Where-Object { $_.ProbeStatus -eq "TimedOut" })
+$malformedProbeItems = @($records | Where-Object { $_.ProbeStatus -eq "CompletedWithStreamErrors" })
+$failedProbeItems = @($records | Where-Object { $_.ProbeStatus -eq "Failed" })
 $summary = [System.Collections.Generic.List[string]]::new()
 $summary.Add("# Media inventory summary")
 $summary.Add("")
@@ -572,6 +693,9 @@ $summary.Add("- Unassociated subtitle files: $(@($unassociatedSubtitles).Count)"
 $summary.Add("- Cross-root title/year groups: $(@($matchGroups).Count)")
 $summary.Add("- Suspected same-size duplicate groups: $(@($suspectedGroups).Count)")
 $summary.Add("- Confirmed SHA-256 duplicate groups: $(@($confirmedGroups).Count)")
+$summary.Add("- ffprobe timeouts: $(@($timedOutProbeItems).Count)")
+$summary.Add("- ffprobe malformed-stream warnings: $(@($malformedProbeItems).Count)")
+$summary.Add("- Other ffprobe failures: $(@($failedProbeItems).Count)")
 $summary.Add("- ffprobe available: $([bool]$ffprobePath)")
 $summary.Add("")
 $summary.Add("## Collections")

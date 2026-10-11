@@ -46,6 +46,15 @@ cd D:\path\to\case-home-assistant\deploy\media-automation\library-consolidation
 
 Use `-SkipFfprobe` only for script testing. It falls back to collection hints and therefore creates less reliable classifications.
 
+The example configuration bounds every probe so one malformed movie cannot stop the inventory:
+
+- `ffprobeTimeoutSeconds`: hard wall-clock limit per file; defaults to 60 seconds.
+- `ffprobeProbeSizeBytes`: maximum data considered while probing streams; defaults to 100 MiB.
+- `ffprobeAnalyzeDurationMicroseconds`: bounded stream analysis duration; defaults to 30 seconds.
+- `ffprobeErrorSummaryLines`: unique stderr lines retained in reports; defaults to 8 and never writes the complete noisy stderr stream.
+
+Both stdout and stderr are drained concurrently to prevent a corrupt file from filling an error pipe and deadlocking the scan. Timeouts, failed probes and malformed stream signatures are placed in manual review, including a compact stderr summary. The original media is never opened for writing or repaired. Scanning prints `[current/total]` and the current filename so a slow item is visible.
+
 The run creates a timestamped directory containing:
 
 - `media-inventory.json`: complete machine-readable inventory, stream metadata and sidecars.
