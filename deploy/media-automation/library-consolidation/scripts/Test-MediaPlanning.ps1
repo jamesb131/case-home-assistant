@@ -123,6 +123,9 @@ try {
     $zeroResult = & $inventoryScript -ConfigPath $cardinalityConfigPath -OutputDirectory (Join-Path $cardinalityRoot "reports-zero") -SkipFfprobe
     $zeroInventory = Get-Content -LiteralPath $zeroResult.InventoryJson -Raw | ConvertFrom-Json
     Assert-True -Condition ($zeroInventory.ItemCount -eq 0) -Message "zero-item inventory completes under StrictMode"
+    Assert-True -Condition (Test-Path -LiteralPath $zeroResult.SummaryMarkdown) -Message "zero-item inventory writes its summary"
+    $zeroSummary = Get-Content -LiteralPath $zeroResult.SummaryMarkdown -Raw
+    Assert-True -Condition ($zeroSummary -match "Video files: 0") -Message "zero-item aggregate is reported as zero"
     $zeroPlanResult = & $planScript -InventoryPath $zeroResult.InventoryJson -ConfigPath $cardinalityConfigPath
     $zeroPlan = Get-Content -LiteralPath $zeroPlanResult.PlanJson -Raw | ConvertFrom-Json
     Assert-True -Condition ($zeroPlan.ItemCount -eq 0) -Message "zero-item migration plan completes under StrictMode"

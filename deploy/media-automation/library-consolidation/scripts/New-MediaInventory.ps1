@@ -28,6 +28,14 @@ function Get-ObjectProperty {
     return $property.Value
 }
 
+function Get-MeasureSum {
+    param([AllowNull()][object]$MeasureResult)
+
+    $sum = Get-ObjectProperty -Object $MeasureResult -Name "Sum" -Default 0
+    if ($null -eq $sum) { return 0 }
+    return $sum
+}
+
 function Get-NormalizedPath {
     param([string]$Path)
     $separators = [char[]]@([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
@@ -383,8 +391,8 @@ foreach ($root in $rootDetails) {
     $subtitleFiles = @($allFiles | Where-Object { $subtitleExtensions -contains $_.Extension.ToLowerInvariant() })
     $rootScans += [pscustomobject]@{ Root = $root; VideoFiles = $videoFiles; SubtitleFiles = $subtitleFiles }
 }
-$totalVideoCount = ($rootScans | ForEach-Object { @($_.VideoFiles).Count } | Measure-Object -Sum).Sum
-if ($null -eq $totalVideoCount) { $totalVideoCount = 0 }
+$totalVideoMeasure = $rootScans | ForEach-Object { @($_.VideoFiles).Count } | Measure-Object -Sum
+$totalVideoCount = [int](Get-MeasureSum -MeasureResult $totalVideoMeasure)
 $currentVideoIndex = 0
 
 foreach ($rootScan in $rootScans) {
@@ -670,8 +678,8 @@ else {
     '"Id","Collection","FullPath","Reasons"' | Set-Content -LiteralPath $reviewCsvPath -Encoding UTF8
 }
 
-$totalBytes = ($records | Measure-Object SizeBytes -Sum).Sum
-if ($null -eq $totalBytes) { $totalBytes = 0 }
+$totalBytesMeasure = $records | Measure-Object SizeBytes -Sum
+$totalBytes = [int64](Get-MeasureSum -MeasureResult $totalBytesMeasure)
 $suspectedGroups = @($records | ForEach-Object { $_.SuspectedDuplicateGroup } | Where-Object { $_ } | Select-Object -Unique)
 $confirmedGroups = @($records | ForEach-Object { $_.ConfirmedDuplicateGroup } | Where-Object { $_ } | Select-Object -Unique)
 $timedOutProbeItems = @($records | Where-Object { $_.ProbeStatus -eq "TimedOut" })
@@ -704,8 +712,8 @@ $summary.Add("| Collection | Hint | Files | Size TiB | Review |")
 $summary.Add("| --- | --- | ---: | ---: | ---: |")
 foreach ($root in $rootDetails) {
     $items = @($records | Where-Object Collection -eq $root.Name)
-    $bytes = ($items | Measure-Object SizeBytes -Sum).Sum
-    if ($null -eq $bytes) { $bytes = 0 }
+    $bytesMeasure = $items | Measure-Object SizeBytes -Sum
+    $bytes = [int64](Get-MeasureSum -MeasureResult $bytesMeasure)
     $reviewCount = @($items | Where-Object { @($_.ReviewReasons).Count -gt 0 }).Count
     $summary.Add("| $(Escape-Markdown $root.Name) | $($root.ClassificationHint) | $(@($items).Count) | $([math]::Round($bytes / 1TB, 3)) | $reviewCount |")
 }
