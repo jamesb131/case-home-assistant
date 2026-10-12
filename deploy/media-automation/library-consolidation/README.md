@@ -126,6 +126,74 @@ After the enrichment and any override reruns are complete, remove the token from
 
 Review all `Ambiguous`, `Unmatched`, `ApiError` and uncertain-3D rows before using the enriched inventory for later planning. The script does not invent 3D layouts or Plex edition labels. This phase does not rename, move, delete, download or repair media and does not modify Plex, Radarr, Bazarr or any other service.
 
+## Phase 1c: read-only Plex reconciliation
+
+Plex reconciliation treats an existing Plex movie match as the preferred identity only when a Plex media part maps uniquely to an inventory file by normalized absolute path. Titles never establish identity. This lets a path-linked Plex TMDB ID resolve an item that filename enrichment marked ambiguous while keeping duplicate mappings and genuine conflicts visible. Plex explains how to retrieve a local server token in [Finding an authentication token](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/).
+
+The script uses only Plex `GET` requests. It discovers movie sections, reads their contents in pages with `includeGuids=1`, and requests individual item metadata when the section response lacks external IDs or media parts. Plex documents token headers, paths and container pagination in the [Plex Media Server API](https://developer.plex.tv/pms/). IMDb-only Plex matches are resolved with TMDB's read-only [`/find` workflow](https://developer.themoviedb.org/docs/finding-data), using the same cache directory as Phase 1b.
+
+1. Copy the example configuration to the ignored local filename:
+
+```powershell
+Copy-Item .\plex-reconciliation.config.example.json .\plex-reconciliation.config.json
+```
+
+2. Set `plexBaseUrl` to the local Plex server URL and confirm the output/cache locations remain outside every media root.
+3. Configure `pathMappings`. `plexPrefix` is the prefix Plex reports; `inventoryPrefix` is the equivalent Windows inventory prefix. Native Windows Plex paths can use an identity mapping. A containerized Plex example would be:
+
+```json
+{
+  "plexPrefix": "/movies",
+  "inventoryPrefix": "D:\\Media Centre\\Movies"
+}
+```
+
+4. Run the offline fixture test:
+
+```powershell
+.\scripts\Test-PlexMetadataReconciliation.ps1
+```
+
+5. Put the Plex token and TMDB API Read Access Token into the current PowerShell process without echoing them:
+
+```powershell
+$securePlexToken = Read-Host "Plex token" -AsSecureString
+$plexCredential = New-Object System.Management.Automation.PSCredential("plex", $securePlexToken)
+$env:PLEX_TOKEN = $plexCredential.GetNetworkCredential().Password
+Remove-Variable securePlexToken, plexCredential
+
+$secureTmdbToken = Read-Host "TMDB API read token" -AsSecureString
+$tmdbCredential = New-Object System.Management.Automation.PSCredential("tmdb", $secureTmdbToken)
+$env:TMDB_READ_TOKEN = $tmdbCredential.GetNetworkCredential().Password
+Remove-Variable secureTmdbToken, tmdbCredential
+```
+
+6. Reconcile the newest enriched inventory:
+
+```powershell
+$enrichedInventory = Get-ChildItem D:\Downloads\Media-Inventory\metadata-enrichment-*\enriched-media-inventory.json |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1
+
+.\scripts\New-PlexReconciledInventory.ps1 `
+  -EnrichedInventoryPath $enrichedInventory.FullName `
+  -ConfigPath .\plex-reconciliation.config.json
+
+Remove-Item Env:PLEX_TOKEN
+Remove-Item Env:TMDB_READ_TOKEN
+```
+
+Each run creates `plex-reconciliation-<timestamp>` containing:
+
+- `plex-reconciled-inventory.json` and `.csv`: reconciled TMDB identity, source, Plex identifiers, library, rating key and both original paths.
+- `plex-reconciliation-summary.md`: counts resolved through Plex TMDB, Plex IMDb, prior enrichment and unresolved items.
+- `plex-reconciliation-review.csv`: exceptions only, including conflicts, duplicate path mappings, missing IDs, unresolved inventory and Plex parts absent from the inventory.
+- `plex-cross-version-groups.csv`: groups based on reconciled TMDB IDs while preserving 1080p, 2160p and 3D classifications.
+
+Identification sources are `PlexTMDB`, `PlexIMDb`, `TMDBEnrichment` and `Unresolved`. A unique path-linked Plex identity is authoritative even when it conflicts with the prior filename result, but the conflict remains in the exception report. Multiple Plex rating keys for one file are never allowed to override the previous identity. A 3D item remains a 3D variant; reconciliation does not infer that it is a separate Plex edition or cut.
+
+The Plex and TMDB tokens are sent only as request headers and are never written to output or cache files. Do not place a token in `plexBaseUrl`. This phase performs no media operations, Plex metadata edits, scans, downloads or changes to Radarr, Sonarr, Bazarr, Docker or any other service.
+
 ## Phase 2: proposed migration plan
 
 After reviewing the inventory, generate a proposal:
@@ -238,6 +306,7 @@ The fixture test creates a disposable library beneath the operating system temp 
 ```powershell
 .\scripts\Test-MediaPlanning.ps1
 .\scripts\Test-MetadataEnrichment.ps1
+.\scripts\Test-PlexMetadataReconciliation.ps1
 ```
 
-Each test cleans up only its own uniquely named temporary fixture. The metadata suite uses an offline TMDB fixture and does not require credentials or network access.
+Each test cleans up only its own uniquely named temporary fixture. The metadata and Plex reconciliation suites use offline fixtures and do not require credentials or network access.

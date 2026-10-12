@@ -5,3 +5,5 @@ migration-plan-*/
 metadata-enrichment-*/
 tmdb-cache/
 metadata-overrides.csv
+plex-reconciliation.config.json
+plex-reconciliation-*/

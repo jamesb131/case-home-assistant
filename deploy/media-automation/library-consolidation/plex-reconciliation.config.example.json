@@ -1,0 +1,12 @@
+{
+  "plexBaseUrl": "http://127.0.0.1:32400",
+  "pageSize": 200,
+  "outputDirectory": "D:\\Downloads\\Media-Inventory",
+  "cacheDirectory": "D:\\Downloads\\Media-Inventory\\tmdb-cache",
+  "pathMappings": [
+    {
+      "plexPrefix": "D:\\Media Centre",
+      "inventoryPrefix": "D:\\Media Centre"
+    }
+  ]
+}
