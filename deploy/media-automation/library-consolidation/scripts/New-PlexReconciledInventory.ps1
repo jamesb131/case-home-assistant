@@ -27,9 +27,33 @@ $script:LastTmdbRequestUtc = [datetime]::MinValue
 function Get-ObjectProperty {
     param([AllowNull()][object]$Object, [string]$Name, [AllowNull()][object]$Default = $null)
     if ($null -eq $Object) { return $Default }
+    if ($Object -is [System.Collections.IDictionary]) {
+        foreach ($key in @($Object.Keys)) {
+            if ([string]::Equals("$key", $Name, [System.StringComparison]::Ordinal)) {
+                $value = $Object[$key]
+                if ($null -eq $value) { return $Default }
+                return $value
+            }
+        }
+        return $Default
+    }
     $property = $Object.PSObject.Properties[$Name]
     if ($null -eq $property -or $null -eq $property.Value) { return $Default }
     return $property.Value
+}
+
+function ConvertFrom-CaseSensitiveJson {
+    param([Parameter(Mandatory = $true)][string]$Json)
+    $convertCommand = Get-Command ConvertFrom-Json -ErrorAction Stop
+    if ($convertCommand.Parameters.ContainsKey('AsHashtable')) {
+        return ($Json | ConvertFrom-Json -AsHashtable)
+    }
+
+    Add-Type -AssemblyName System.Web.Extensions -ErrorAction Stop
+    $serializer = New-Object System.Web.Script.Serialization.JavaScriptSerializer
+    $serializer.MaxJsonLength = [int]::MaxValue
+    $serializer.RecursionLimit = 256
+    return $serializer.DeserializeObject($Json)
 }
 
 function Get-PlexCollection {
@@ -139,7 +163,12 @@ function Test-OutputOutsideMediaRoots {
 function Invoke-JsonGet {
     param([string]$Uri, [hashtable]$Headers, [int]$Retries)
     for ($attempt = 1; $attempt -le $Retries; $attempt++) {
-        try { return Invoke-RestMethod -Method Get -Uri $Uri -Headers $Headers -TimeoutSec 30 }
+        try {
+            $webResponse = Invoke-WebRequest -UseBasicParsing -Method Get -Uri $Uri -Headers $Headers -TimeoutSec 30
+            $contentType = "$(Get-ObjectProperty $webResponse.Headers 'Content-Type' '')"
+            $data = ConvertFrom-CaseSensitiveJson -Json "$($webResponse.Content)"
+            return [pscustomobject]@{ Data = $data; StatusCode = [int]$webResponse.StatusCode; ContentType = $contentType }
+        }
         catch {
             if ($attempt -ge $Retries) { throw }
             Start-Sleep -Seconds ([math]::Min(8, [math]::Pow(2, $attempt - 1)))
@@ -185,8 +214,8 @@ function Get-PlexContainer {
         }
     }
     $response = Invoke-JsonGet -Uri "$($BaseUrl.TrimEnd('/'))$requestPath" -Headers $headers -Retries $Retries
-    $container = Get-ObjectProperty $response 'MediaContainer' $response
-    return [pscustomobject]@{ Container = $container; HttpStatus = 200 }
+    $container = Get-ObjectProperty $response.Data 'MediaContainer' $response.Data
+    return [pscustomobject]@{ Container = $container; HttpStatus = $response.StatusCode; ContentType = $response.ContentType }
 }
 
 function Get-PlexExternalIds {
@@ -296,7 +325,7 @@ if (-not $PlexEnumerationOnly) {
 }
 
 $plexFixture = $null
-if ($PlexFixturePath) { $plexFixture = Get-Content -LiteralPath $PlexFixturePath -Raw | ConvertFrom-Json }
+if ($PlexFixturePath) { $plexFixture = ConvertFrom-CaseSensitiveJson -Json (Get-Content -LiteralPath $PlexFixturePath -Raw) }
 $tmdbFixture = $null
 if ($TmdbFixturePath) { $tmdbFixture = Get-Content -LiteralPath $TmdbFixturePath -Raw | ConvertFrom-Json }
 $plexToken = [Environment]::GetEnvironmentVariable($PlexTokenEnvironmentVariable)

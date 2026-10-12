@@ -41,6 +41,8 @@ try {
     $configPath = Join-Path $fixtureRoot "plex-reconciliation.config.json"
     $plexFixturePath = Join-Path $fixtureRoot "plex-fixture.json"
     $incompletePlexFixturePath = Join-Path $fixtureRoot "plex-fixture-incomplete.json"
+    $largePlexFixturePath = Join-Path $fixtureRoot "plex-fixture-large.json"
+    $largeConfigPath = Join-Path $fixtureRoot "plex-reconciliation-large.config.json"
     $tmdbFixturePath = Join-Path $fixtureRoot "tmdb-fixture.json"
     $outputRoot = Join-Path $fixtureRoot "reports"
     $cacheRoot = Join-Path $fixtureRoot "tmdb-cache"
@@ -97,10 +99,33 @@ try {
         scalarSingleItemResponses = $true
         details = [ordered]@{ "2" = $imdbDetail }
     }
-    $plexFixture | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $plexFixturePath -Encoding UTF8
+    $plexFixtureJson = $plexFixture | ConvertTo-Json -Depth 30
+    $guidProperty = [regex]'"Guid"\s*:'
+    $plexFixtureJson = $guidProperty.Replace($plexFixtureJson, '"guid": "plex://movie/legacy-lowercase", "Guid":', 1)
+    $plexFixtureJson | Set-Content -LiteralPath $plexFixturePath -Encoding UTF8
     $incompleteFixture = $plexFixture | ConvertTo-Json -Depth 30 | ConvertFrom-Json
     $incompleteFixture | Add-Member -NotePropertyName sectionReportedTotals -NotePropertyValue ([pscustomobject]@{ "7" = 7; "8" = 1; "9" = 1 })
     $incompleteFixture | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $incompletePlexFixturePath -Encoding UTF8
+
+    $largeMovies = @()
+    foreach ($number in 1..205) {
+        $largeMovies += New-PlexMovie "large-$number" "Large Fixture $number" 2000 @("tmdb://$($number + 10000)") @("/plex/movies/Large Fixture $number.mkv")
+    }
+    $largeFixture = [ordered]@{
+        sections = @([ordered]@{ key = "7"; type = "movie"; title = "Large Movies" })
+        sectionItems = [ordered]@{ "7" = $largeMovies }
+        details = [ordered]@{}
+    }
+    $largeFixtureJson = $largeFixture | ConvertTo-Json -Depth 30
+    $largeFixtureJson = $guidProperty.Replace($largeFixtureJson, '"guid": "plex://movie/large-legacy", "Guid":', 1)
+    $largeFixtureJson | Set-Content -LiteralPath $largePlexFixturePath -Encoding UTF8
+    [ordered]@{
+        plexBaseUrl = "http://127.0.0.1:32400"
+        pageSize = 200
+        outputDirectory = (Join-Path $fixtureRoot 'large-reports')
+        cacheDirectory = (Join-Path $fixtureRoot 'large-cache')
+        pathMappings = @([ordered]@{ plexPrefix = "/plex/movies"; inventoryPrefix = "D:\Media Centre\Movies" })
+    } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $largeConfigPath -Encoding UTF8
     [ordered]@{
         find = [ordered]@{
             "tt0000202" = [ordered]@{ movie_results = @([ordered]@{ id = 202; title = "IMDb Resolved"; release_date = "2002-02-02" }) }
@@ -121,6 +146,8 @@ try {
     $enumeration = & $scriptPath -ConfigPath $configPath -PlexTokenEnvironmentVariable "CASE_TEST_PLEX_TOKEN" -PlexFixturePath $plexFixturePath -PlexEnumerationOnly
     Assert-True -Condition ($enumeration.Mode -eq 'PlexEnumerationOnly' -and $enumeration.MovieLibraryCount -eq 3 -and $enumeration.PlexMovieRecordCount -eq 8) -Message "enumeration-only mode needs no inventory and returns every movie record"
     Assert-True -Condition (-not (Test-Path -LiteralPath $outputRoot)) -Message "enumeration-only mode produces no reconciliation reports"
+    $largeEnumeration = & $scriptPath -ConfigPath $largeConfigPath -PlexTokenEnvironmentVariable "CASE_TEST_PLEX_TOKEN" -PlexFixturePath $largePlexFixturePath -PlexEnumerationOnly
+    Assert-True -Condition ($largeEnumeration.PlexMovieRecordCount -eq 205) -Message "case-sensitive parser handles a large multi-page Plex response"
     $result = & $scriptPath -EnrichedInventoryPath $inventoryPath -ConfigPath $configPath -PlexTokenEnvironmentVariable "CASE_TEST_PLEX_TOKEN" -PlexFixturePath $plexFixturePath -TmdbFixturePath $tmdbFixturePath
     foreach ($path in @($result.ReconciledJson, $result.ReconciledCsv, $result.SummaryMarkdown, $result.ReviewCsv, $result.CrossVersionGroupsCsv)) {
         Assert-True -Condition (Test-Path -LiteralPath $path) -Message "required output exists: $([System.IO.Path]::GetFileName($path))"
@@ -149,6 +176,7 @@ try {
     $threeD = $document.Items | Where-Object InventoryId -eq "plex-3d"
 
     Assert-True -Condition ($plexTmdb.IdentificationSource -eq 'PlexTMDB' -and $plexTmdb.ReconciledTmdbMovieId -eq 101) -Message "path-linked Plex TMDB ID replaces an ambiguous filename match"
+    Assert-True -Condition ($plexTmdb.PlexGuidValues -contains 'plex://movie/legacy-lowercase' -and $plexTmdb.PlexGuidValues -contains 'tmdb://101') -Message "case-sensitive parser preserves distinct guid and Guid properties"
     Assert-True -Condition ($plexTmdb.PlexOriginalFilePath -eq '/plex/movies/temporary/../Ambiguous.mkv') -Message "container-to-Windows mapping normalizes identity while preserving the original Plex path"
     Assert-True -Condition ($plexImdb.IdentificationSource -eq 'PlexIMDb' -and $plexImdb.ReconciledTmdbMovieId -eq 202) -Message "item detail lookup and IMDb-to-TMDB resolution work"
     Assert-True -Condition ($fallback.IdentificationSource -eq 'TMDBEnrichment' -and $fallback.ReconciledTmdbMovieId -eq 303) -Message "existing TMDB enrichment remains the fallback"
