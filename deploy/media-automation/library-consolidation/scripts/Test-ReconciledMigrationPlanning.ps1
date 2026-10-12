@@ -1,0 +1,135 @@
+[CmdletBinding()]
+param()
+
+$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+
+function Assert-True {
+    param([bool]$Condition, [string]$Message)
+    if (-not $Condition) { throw "Assertion failed: $Message" }
+    Write-Host "PASS  $Message"
+}
+
+function New-PlanFixtureItem {
+    param(
+        [string]$Id, [string]$Path, [AllowNull()][object]$TmdbId, [string]$Title, [AllowNull()][object]$Year,
+        [string]$CollectionHint, [string]$Resolution, [string]$PlexLibrary, [string]$RatingKey,
+        [string[]]$Issues = @(), [string]$Edition = '', [object[]]$Subtitles = @(), [string[]]$InventoryReasons = @()
+    )
+    $file = Get-Item -LiteralPath $Path
+    return [pscustomobject]@{
+        InventoryId = $Id; OriginalPath = $file.FullName; OriginalTitle = $file.BaseName; OriginalYear = $null; Collection = "$CollectionHint source"
+        CollectionHint = $CollectionHint; ResolutionClass = $Resolution; ThreeDFormat = if ($CollectionHint -eq '3D') { 'Unknown 3D' } else { $null }
+        OriginalEdition = $Edition; IdentificationSource = if ($null -eq $TmdbId) { 'Unresolved' } else { 'PlexTMDB' }; ReconciledTmdbMovieId = $TmdbId
+        CanonicalTitle = $Title; CanonicalReleaseYear = $Year; PlexRatingKey = $RatingKey; PlexLibrary = $PlexLibrary; PlexOriginalFilePath = $file.FullName
+        ReviewIssues = $Issues
+        OriginalEnrichedItem = [pscustomobject]@{
+            OriginalInventoryItem = [pscustomobject]@{
+                Extension = $file.Extension; SizeBytes = [int64]$file.Length; Sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
+                Width = if ($Resolution -eq '2160p') { 3840 } else { 1920 }; Height = if ($Resolution -eq '2160p') { 2160 } else { 1080 }
+                HdrFormat = $null; ExternalSubtitles = $Subtitles; ReviewReasons = $InventoryReasons
+            }
+        }
+    }
+}
+
+$scriptPath = Join-Path $PSScriptRoot 'New-ReconciledMigrationPlan.ps1'
+$fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) ("case-reconciled-plan-{0}" -f [guid]::NewGuid().ToString('N'))
+try {
+    $sourceRoot = Join-Path $fixtureRoot 'sources'
+    $targetRoot = Join-Path $fixtureRoot 'target/Movies'
+    $outputRoot = Join-Path $fixtureRoot 'reports'
+    New-Item -ItemType Directory -Path $sourceRoot, $targetRoot -Force | Out-Null
+
+    function New-FixtureFile {
+        param([string]$RelativePath, [string]$Content = 'fixture-media')
+        $path = Join-Path $sourceRoot $RelativePath
+        New-Item -ItemType Directory -Path (Split-Path -Parent $path) -Force | Out-Null
+        Set-Content -LiteralPath $path -Value $Content -Encoding UTF8
+        return (Get-Item -LiteralPath $path).FullName
+    }
+
+    $toy3dPath = New-FixtureFile '3D/Toy Story 3D.mkv'
+    $toy3Path = New-FixtureFile '1080p/Toy Story 3.mkv'
+    $matrix1080Path = New-FixtureFile '1080p/The Matrix.mkv'
+    $matrix2160Path = New-FixtureFile '2160p/The Matrix 4K.mkv'
+    $subtitlePath = New-FixtureFile '1080p/The Matrix.en.forced.srt' 'subtitle'
+    $blackadderPath = New-FixtureFile "1080p/Blackadder$([char]0x2019)s Christmas Carol.mkv"
+    $collisionOnePath = New-FixtureFile '1080p-a/Collision.mkv' 'collision-one'
+    $collisionTwoPath = New-FixtureFile '1080p-b/Collision.mkv' 'collision-two'
+    $unresolvedPath = New-FixtureFile '1080p/Unknown.mkv'
+    $wrongQualityPath = New-FixtureFile '1080p/Actually 4K.mkv'
+    $directorPath = New-FixtureFile '1080p/Film Director.mkv'
+    $theatricalPath = New-FixtureFile '1080p/Film Theatrical.mkv'
+    $conflictPath = New-FixtureFile '1080p/Conflicted.mkv'
+
+    $matrixSubtitle = [pscustomobject]@{ Path = $subtitlePath; Extension = '.srt'; Language = 'en'; Forced = $true; SDH = $false }
+    $items = @(
+        (New-PlanFixtureItem 'toy-3d' $toy3dPath 862 'Toy Story 3' 2010 '3D' '1080p' 'Movies 3D' '1' @() '3D'),
+        (New-PlanFixtureItem 'toy-3' $toy3Path 10193 'Toy Story 3' 2010 '1080p' '1080p' 'Movies' '2'),
+        (New-PlanFixtureItem 'matrix-1080' $matrix1080Path 603 'The Matrix' 1999 '1080p' '1080p' 'Movies' '3' @() '' @($matrixSubtitle)),
+        (New-PlanFixtureItem 'matrix-2160' $matrix2160Path 603 'The Matrix' 1999 '2160p' '2160p' 'Movies 4K' '4'),
+        (New-PlanFixtureItem 'blackadder' $blackadderPath 214484 'Blackadder''s Christmas Carol' 1988 '1080p' '1080p' 'Movies' '5'),
+        (New-PlanFixtureItem 'collision-1' $collisionOnePath 700 'Collision Film' 2000 '1080p' '1080p' 'Movies' '6'),
+        (New-PlanFixtureItem 'collision-2' $collisionTwoPath 700 'Collision Film' 2000 '1080p' '1080p' 'Movies' '7'),
+        (New-PlanFixtureItem 'unresolved' $unresolvedPath $null '' $null '1080p' '1080p' '' '' @('Unresolved')),
+        (New-PlanFixtureItem 'wrong-quality' $wrongQualityPath 800 'Actually 4K' 2020 '1080p' '2160p' 'Movies' '8'),
+        (New-PlanFixtureItem 'director' $directorPath 900 'Two Cuts' 2001 '1080p' '1080p' 'Movies' '9' @() 'Director''s Cut'),
+        (New-PlanFixtureItem 'theatrical' $theatricalPath 900 'Two Cuts' 2001 '1080p' '1080p' 'Movies' '10' @() 'Theatrical Cut'),
+        (New-PlanFixtureItem 'conflict' $conflictPath 1000 'Conflicted' 2002 '1080p' '1080p' 'Movies' '11' @('PlexTmdbConflict'))
+    )
+    ($items | Where-Object InventoryId -eq 'blackadder').PlexOriginalFilePath = ''
+
+    $inventoryPath = Join-Path $fixtureRoot 'plex-reconciled-inventory.json'
+    [ordered]@{ SchemaVersion = 1; ItemCount = @($items).Count; Items = $items } | ConvertTo-Json -Depth 40 | Set-Content -LiteralPath $inventoryPath -Encoding UTF8
+    $configPath = Join-Path $fixtureRoot 'reconciled-migration.config.json'
+    [ordered]@{
+        targetMoviesRoot = $targetRoot
+        qualityFolders = [ordered]@{ '1080p' = '1080p'; '2160p' = '2160p'; '3D' = '3D' }
+        threeDAssumption = 'Fixture user-reported SBS assumption; technically unverified.'
+        outputDirectory = $outputRoot
+    } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $configPath -Encoding UTF8
+    $overridePath = Join-Path $fixtureRoot 'migration-overrides.csv'
+    @([pscustomobject]@{ SourcePath = $toy3dPath; TmdbMovieId = 862; CanonicalTitle = 'Toy Story'; CanonicalReleaseYear = 1995; Reason = 'Explicit 3D source-path correction' }) |
+        Export-Csv -LiteralPath $overridePath -NoTypeInformation -Encoding UTF8
+    $plexReviewPath = Join-Path $fixtureRoot 'plex-reconciliation-review.csv'
+    @([pscustomobject]@{ InventoryId = ''; PlexOriginalFilePath = (Join-Path (Split-Path -Parent $blackadderPath) "Blackadder's Christmas Carol.mkv"); Issues = 'PlexPartNotInInventory' }) |
+        Export-Csv -LiteralPath $plexReviewPath -NoTypeInformation -Encoding UTF8
+
+    $sourceHashes = @{}
+    Get-ChildItem -LiteralPath $sourceRoot -File -Recurse | ForEach-Object { $sourceHashes[$_.FullName] = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
+    $result = & $scriptPath -ReconciledInventoryPath $inventoryPath -ConfigPath $configPath -OverridesPath $overridePath -PlexReviewPath $plexReviewPath
+
+    foreach ($path in @($result.ManifestJson, $result.ManifestCsv, $result.SummaryMarkdown, $result.ExceptionCsv, $result.ExceptionMarkdown, $result.CrossVersionGroupsCsv, $result.PathAnalysisCsv, $result.PreflightJson, $result.PreflightMarkdown, $result.RollbackJson, $result.RollbackCsv, $result.PlexTransitionMarkdown)) {
+        Assert-True -Condition (Test-Path -LiteralPath $path -PathType Leaf) -Message "required planning output exists: $([IO.Path]::GetFileName($path))"
+    }
+    $manifest = Get-Content -LiteralPath $result.ManifestJson -Raw -Encoding UTF8 | ConvertFrom-Json
+    Assert-True -Condition ($manifest.PlanningOnly -and $manifest.ItemCount -eq 12) -Message 'planner includes every reconciled video and remains planning-only'
+    $toy3d = $manifest.Items | Where-Object InventoryId -eq 'toy-3d'
+    $toy3 = $manifest.Items | Where-Object InventoryId -eq 'toy-3'
+    Assert-True -Condition ($toy3d.OverrideApplied -and $toy3d.TmdbMovieId -eq 862 -and $toy3d.CanonicalTitle -eq 'Toy Story' -and $toy3d.CanonicalReleaseYear -eq 1995) -Message 'exact source-path override corrects only the 3D Toy Story file'
+    Assert-True -Condition ($toy3.TmdbMovieId -eq 10193 -and -not $toy3.OverrideApplied) -Message 'standard Toy Story 3 identification is unchanged'
+    Assert-True -Condition ($toy3d.Classification -eq '3D' -and $toy3d.Assumptions -contains 'Fixture user-reported SBS assumption; technically unverified.') -Message '3D SBS is recorded as an assumption rather than verified metadata'
+    Assert-True -Condition ($toy3d.DestinationVideoPath -notmatch '\{edition-3D') -Message 'unverified 3D layout marker is not promoted to a Plex edition label'
+    $matrix1080 = $manifest.Items | Where-Object InventoryId -eq 'matrix-1080'
+    $matrix2160 = $manifest.Items | Where-Object InventoryId -eq 'matrix-2160'
+    Assert-True -Condition ($matrix1080.CrossVersionGroupId -eq 'tmdb-603' -and $matrix2160.CrossVersionGroupId -eq 'tmdb-603') -Message '1080p and 2160p variants share a TMDB cross-version group'
+    Assert-True -Condition ($matrix1080.SubtitlePlans.Count -eq 1 -and $matrix1080.SubtitlePlans[0].DestinationPath -match '\.en\.forced\.srt$') -Message 'associated subtitle language and forced status are preserved'
+    Assert-True -Condition (@($manifest.Items | Where-Object { $_.InventoryId -like 'collision-*' -and $_.Status -eq 'Blocked' -and $_.DestinationCollision }).Count -eq 2) -Message 'case-insensitive destination collisions block every participant'
+    Assert-True -Condition (($manifest.Items | Where-Object InventoryId -eq 'unresolved').Status -eq 'Blocked') -Message 'unresolved identity remains blocked'
+    Assert-True -Condition (($manifest.Items | Where-Object InventoryId -eq 'wrong-quality').Status -eq 'Review') -Message 'possible 4K content in the standard collection is flagged for review'
+    Assert-True -Condition (@($manifest.Items | Where-Object { $_.InventoryId -in @('director', 'theatrical') -and $_.MultipleCut -and $_.Status -eq 'Review' }).Count -eq 2) -Message 'multiple cuts remain separate and require review'
+    Assert-True -Condition (($manifest.Items | Where-Object InventoryId -eq 'conflict').Status -eq 'Review') -Message 'Plex/TMDB conflict is not silently accepted as ready'
+    $pathRows = @(Import-Csv -LiteralPath $result.PathAnalysisCsv)
+    $blackadder = $pathRows | Where-Object InventoryId -eq 'blackadder'
+    Assert-True -Condition ($blackadder.CandidateUnmatchedPlexPaths -match "Blackadder's Christmas Carol") -Message 'Unicode punctuation and UTF-8 Plex path mismatch is surfaced'
+    $rollback = Get-Content -LiteralPath $result.RollbackJson -Raw -Encoding UTF8 | ConvertFrom-Json
+    Assert-True -Condition ($rollback.PlanningOnly -and @($rollback.Items).Count -eq 12) -Message 'rollback manifest covers every planned source'
+    foreach ($path in $sourceHashes.Keys) {
+        Assert-True -Condition ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -eq $sourceHashes[$path]) -Message "source remains unchanged: $([IO.Path]::GetFileName($path))"
+    }
+    Write-Host 'Reconciled migration planning fixture checks passed.'
+}
+finally {
+    if (Test-Path -LiteralPath $fixtureRoot) { Remove-Item -LiteralPath $fixtureRoot -Recurse -Force }
+}

@@ -16,13 +16,13 @@ D:\Media Centre\Movies\
     Movie Title (2024)\
       Movie Title (2024).mkv
   3D\
-    Movie Title (2024) {edition-3D SBS}\
-      Movie Title (2024) {edition-3D SBS}.mkv
+    Movie Title (2024)\
+      Movie Title (2024).mkv
 D:\Media Centre\TV Shows\
   ... unchanged ...
 ```
 
-Keeping 1080p and 2160p in separate physical roots preserves an uncomplicated future split between the two Radarr instances. Plex can combine equivalent cuts as versions. A materially different cut, including 3D, should be represented as an edition using Plex's `{edition-...}` naming.
+Keeping 1080p and 2160p in separate physical roots preserves an uncomplicated future split between the two Radarr instances. Plex can combine equivalent cuts as versions. The 3D collection stays physically separate. Existing edition labels are preserved, but the planner does not invent a 3D edition or SBS label from the user's unverified layout assumption.
 
 ## Prerequisites
 
@@ -206,9 +206,59 @@ Before reviewing reconciliation results, confirm the library-enumeration table s
 
 The Plex and TMDB tokens are sent only as request headers and are never written to output or cache files. Do not place a token in `plexBaseUrl`. This phase performs no media operations, Plex metadata edits, scans, downloads or changes to Radarr, Sonarr, Bazarr, Docker or any other service.
 
-## Phase 2: proposed migration plan
+## Phase 2: reconciled migration plan
 
-After reviewing the inventory, generate a proposal:
+The reconciled planner consumes `plex-reconciled-inventory.json`; it does not repeat filename matching. Confirmed TMDB title, year and ID determine the proposed movie folder. Every input video receives a `Ready`, `Review` or `Blocked` row, and associated subtitle destinations remain nested in the JSON manifest. The planner reads source metadata and existence only. It never moves, copies, renames or deletes files and never calls Plex, Radarr or Docker.
+
+1. Copy the local planning files:
+
+```powershell
+Copy-Item .\reconciled-migration.config.example.json .\reconciled-migration.config.json
+Copy-Item .\migration-overrides.example.csv .\migration-overrides.csv
+```
+
+2. Confirm `targetMoviesRoot` is `D:\Media Centre\Movies`, output remains outside all media roots, and set the override row's `SourcePath` to the exact existing 3D `Toy Story 3D.mkv` path. That exact source alone is assigned **Toy Story (1995), TMDB 862**. The standard Toy Story 3 record is untouched.
+3. Run the offline planning test:
+
+```powershell
+.\scripts\Test-ReconciledMigrationPlanning.ps1
+```
+
+4. Plan against the latest successful Plex reconciliation:
+
+```powershell
+$reconciliation = Get-ChildItem D:\Downloads\Media-Inventory\plex-reconciliation-*\plex-reconciled-inventory.json |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1
+
+$plexReview = Join-Path $reconciliation.Directory.FullName 'plex-reconciliation-review.csv'
+
+.\scripts\New-ReconciledMigrationPlan.ps1 `
+  -ReconciledInventoryPath $reconciliation.FullName `
+  -ConfigPath .\reconciled-migration.config.json `
+  -OverridesPath .\migration-overrides.csv `
+  -PlexReviewPath $plexReview
+```
+
+The source override is mandatory once supplied: an unmatched or duplicate override path terminates planning. `PlexReviewPath` lets the planner compare unmatched Plex parts with inventory paths using ordinal, NFC, NFD and punctuation-normalized forms. CSV input is explicitly read as UTF-8 so the Blackadder's Christmas Carol path can be assessed without losing apostrophes or other Unicode characters.
+
+Each timestamped `reconciled-migration-plan-*` directory contains:
+
+- `migration-manifest.json` and `.csv`: all source videos, authoritative identity, Plex details, target class/path, subtitle plan, status and reasons.
+- `migration-exceptions.csv` and `.md`: only `Review` and `Blocked` decisions.
+- `cross-version-groups.csv`: 1080p, 2160p and 3D variants grouped by reconciled TMDB ID, with duplicate-version and multiple-cut flags.
+- `plex-path-analysis.csv`: exact and Unicode-normalized Plex/inventory path comparisons, including unmatched filename candidates.
+- `preflight.json` and `.md`: source presence, existing destinations, source size and observed target-drive capacity.
+- `rollback-manifest.json` and `.csv`: proposed reverse paths, expected size and existing hash evidence. This is guidance, not an executable rollback.
+- `plex-transition-plan.md`: staged Plex location changes, pilot validation, metadata/history preservation and rollback guidance.
+
+The 3D rows record the user-reported “probably SBS” statement as an assumption only. Unresolved identities are blocked. Plex/TMDB conflicts, wrong source collections, uncertain quality, duplicate versions and multiple cuts remain explicit review items. Destination paths are compared case-insensitively, including subtitle paths, and any collision or existing destination blocks the affected row.
+
+There is intentionally no migration executor in this phase.
+
+## Legacy inventory-only planner
+
+The earlier filename/inventory planner remains available for fixture compatibility, but it is not the production planning path now that Plex reconciliation exists:
 
 ```powershell
 $inventory = Get-ChildItem D:\Downloads\Media-Inventory\inventory-*\media-inventory.json |
@@ -319,6 +369,7 @@ The fixture test creates a disposable library beneath the operating system temp 
 .\scripts\Test-MediaPlanning.ps1
 .\scripts\Test-MetadataEnrichment.ps1
 .\scripts\Test-PlexMetadataReconciliation.ps1
+.\scripts\Test-ReconciledMigrationPlanning.ps1
 ```
 
-Each test cleans up only its own uniquely named temporary fixture. The metadata and Plex reconciliation suites use offline fixtures and do not require credentials or network access.
+Each test cleans up only its own uniquely named temporary fixture. The metadata, Plex reconciliation and reconciled migration suites use offline fixtures and do not require credentials or network access.

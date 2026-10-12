@@ -1,0 +1,10 @@
+{
+  "targetMoviesRoot": "D:\\Media Centre\\Movies",
+  "qualityFolders": {
+    "1080p": "1080p",
+    "2160p": "2160p",
+    "3D": "3D"
+  },
+  "threeDAssumption": "User reports the existing 3D collection is probably side-by-side (SBS); this has not been technically verified.",
+  "outputDirectory": "D:\\Downloads\\Media-Inventory"
+}
