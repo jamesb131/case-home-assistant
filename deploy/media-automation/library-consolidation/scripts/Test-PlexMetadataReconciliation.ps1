@@ -118,6 +118,9 @@ try {
 
     $secret = "fixture-token-must-not-be-persisted"
     [Environment]::SetEnvironmentVariable("CASE_TEST_PLEX_TOKEN", $secret)
+    $enumeration = & $scriptPath -ConfigPath $configPath -PlexTokenEnvironmentVariable "CASE_TEST_PLEX_TOKEN" -PlexFixturePath $plexFixturePath -PlexEnumerationOnly
+    Assert-True -Condition ($enumeration.Mode -eq 'PlexEnumerationOnly' -and $enumeration.MovieLibraryCount -eq 3 -and $enumeration.PlexMovieRecordCount -eq 8) -Message "enumeration-only mode needs no inventory and returns every movie record"
+    Assert-True -Condition (-not (Test-Path -LiteralPath $outputRoot)) -Message "enumeration-only mode produces no reconciliation reports"
     $result = & $scriptPath -EnrichedInventoryPath $inventoryPath -ConfigPath $configPath -PlexTokenEnvironmentVariable "CASE_TEST_PLEX_TOKEN" -PlexFixturePath $plexFixturePath -TmdbFixturePath $tmdbFixturePath
     foreach ($path in @($result.ReconciledJson, $result.ReconciledCsv, $result.SummaryMarkdown, $result.ReviewCsv, $result.CrossVersionGroupsCsv)) {
         Assert-True -Condition (Test-Path -LiteralPath $path) -Message "required output exists: $([System.IO.Path]::GetFileName($path))"

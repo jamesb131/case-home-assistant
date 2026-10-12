@@ -168,7 +168,17 @@ $env:TMDB_READ_TOKEN = $tmdbCredential.GetNetworkCredential().Password
 Remove-Variable secureTmdbToken, tmdbCredential
 ```
 
-6. Reconcile the newest enriched inventory:
+6. Verify Plex enumeration before doing any TMDB work or creating reports:
+
+```powershell
+.\scripts\New-PlexReconciledInventory.ps1 `
+  -ConfigPath .\plex-reconciliation.config.json `
+  -PlexEnumerationOnly
+```
+
+This diagnostic logs each section, request offset, requested page size, HTTP status, Plex-reported total, parsed count and any response-shape skip reason. It never prints the token or authenticated URL. It must finish with every expected movie library and matching reported/retrieved totals; an unknown total, empty non-empty library, repeated page or truncated response terminates the run. The diagnostic does not require an enriched inventory, call TMDB or create reconciliation reports.
+
+7. Reconcile the newest enriched inventory:
 
 ```powershell
 $enrichedInventory = Get-ChildItem D:\Downloads\Media-Inventory\metadata-enrichment-*\enriched-media-inventory.json |
@@ -183,7 +193,7 @@ Remove-Item Env:PLEX_TOKEN
 Remove-Item Env:TMDB_READ_TOKEN
 ```
 
-Each run creates `plex-reconciliation-<timestamp>` containing:
+Each full reconciliation run creates `plex-reconciliation-<timestamp>` containing:
 
 - `plex-reconciled-inventory.json` and `.csv`: reconciled TMDB identity, source, Plex identifiers, library, rating key and both original paths.
 - `plex-reconciliation-summary.md`: counts resolved through Plex TMDB, Plex IMDb, prior enrichment and unresolved items, plus per-library Plex-reported records, records retrieved, media parts and inventory paths matched.
