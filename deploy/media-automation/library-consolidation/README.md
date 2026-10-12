@@ -130,7 +130,7 @@ Review all `Ambiguous`, `Unmatched`, `ApiError` and uncertain-3D rows before usi
 
 Plex reconciliation treats an existing Plex movie match as the preferred identity only when a Plex media part maps uniquely to an inventory file by normalized absolute path. Titles never establish identity. This lets a path-linked Plex TMDB ID resolve an item that filename enrichment marked ambiguous while keeping duplicate mappings and genuine conflicts visible. Plex explains how to retrieve a local server token in [Finding an authentication token](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/).
 
-The script uses only Plex `GET` requests. It discovers movie sections, reads their contents in pages with `includeGuids=1`, and requests individual item metadata when the section response lacks external IDs or media parts. Plex documents token headers, paths and container pagination in the [Plex Media Server API](https://developer.plex.tv/pms/). IMDb-only Plex matches are resolved with TMDB's read-only [`/find` workflow](https://developer.themoviedb.org/docs/finding-data), using the same cache directory as Phase 1b.
+The script uses only Plex `GET` requests. It discovers every movie section, reads each section independently in pages with `includeGuids=1`, and requests individual item metadata when the section response lacks external IDs or media parts. Pagination is sent through both Plex container headers and query parameters for compatibility. Every section is checked against Plex's reported `totalSize`; repeated pages, incorrect offsets, truncated responses and early empty pages stop the run before a reconciliation report can be produced. Plex documents token headers, paths and container pagination in the [Plex Media Server API](https://developer.plex.tv/pms/). IMDb-only Plex matches are resolved with TMDB's read-only [`/find` workflow](https://developer.themoviedb.org/docs/finding-data), using the same cache directory as Phase 1b.
 
 1. Copy the example configuration to the ignored local filename:
 
@@ -186,11 +186,13 @@ Remove-Item Env:TMDB_READ_TOKEN
 Each run creates `plex-reconciliation-<timestamp>` containing:
 
 - `plex-reconciled-inventory.json` and `.csv`: reconciled TMDB identity, source, Plex identifiers, library, rating key and both original paths.
-- `plex-reconciliation-summary.md`: counts resolved through Plex TMDB, Plex IMDb, prior enrichment and unresolved items.
+- `plex-reconciliation-summary.md`: counts resolved through Plex TMDB, Plex IMDb, prior enrichment and unresolved items, plus per-library Plex-reported records, records retrieved, media parts and inventory paths matched.
 - `plex-reconciliation-review.csv`: exceptions only, including conflicts, duplicate path mappings, missing IDs, unresolved inventory and Plex parts absent from the inventory.
 - `plex-cross-version-groups.csv`: groups based on reconciled TMDB IDs while preserving 1080p, 2160p and 3D classifications.
 
 Identification sources are `PlexTMDB`, `PlexIMDb`, `TMDBEnrichment` and `Unresolved`. A unique path-linked Plex identity is authoritative even when it conflicts with the prior filename result, but the conflict remains in the exception report. Multiple Plex rating keys for one file are never allowed to override the previous identity. A 3D item remains a 3D variant; reconciliation does not infer that it is a separate Plex edition or cut.
+
+Before reviewing reconciliation results, confirm the library-enumeration table shows every expected movie section and that `Plex reported` equals `Records retrieved` for each one. The JSON output includes the same data in `LibraryDiagnostics`, along with the total `InventoryFilesMatchedToPlex`. A mismatch is a failed run, not a warning, so partial Plex retrieval cannot silently inflate the manual-review queue.
 
 The Plex and TMDB tokens are sent only as request headers and are never written to output or cache files. Do not place a token in `plexBaseUrl`. This phase performs no media operations, Plex metadata edits, scans, downloads or changes to Radarr, Sonarr, Bazarr, Docker or any other service.
 

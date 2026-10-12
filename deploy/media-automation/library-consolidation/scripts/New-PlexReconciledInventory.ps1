@@ -31,6 +31,15 @@ function Get-ObjectProperty {
     return $property.Value
 }
 
+function Get-PlexCollectionItems {
+    param([AllowNull()][object]$Container, [string[]]$PropertyNames)
+    foreach ($propertyName in $PropertyNames) {
+        $value = Get-ObjectProperty $Container $propertyName $null
+        if ($null -ne $value) { return @($value) }
+    }
+    return @()
+}
+
 function Get-StableHash {
     param([string]$Value)
     $sha = [System.Security.Cryptography.SHA256]::Create()
@@ -144,7 +153,10 @@ function Get-PlexContainer {
         if ($FixtureKind -eq 'SectionPage') {
             $sectionItems = @(Get-ObjectProperty (Get-ObjectProperty $Fixture 'sectionItems') "$FixtureKey" @())
             $page = @($sectionItems | Select-Object -Skip $Offset -First $PageSize)
-            return [pscustomobject]@{ Metadata = $page; size = @($page).Count; totalSize = @($sectionItems).Count; offset = $Offset }
+            $reportedTotals = Get-ObjectProperty $Fixture 'sectionReportedTotals' $null
+            $reportedTotal = if ($reportedTotals) { Get-ObjectProperty $reportedTotals "$FixtureKey" @($sectionItems).Count } else { @($sectionItems).Count }
+            $metadata = if ((Get-ObjectProperty $Fixture 'scalarSingleItemResponses' $false) -and @($page).Count -eq 1) { $page[0] } else { $page }
+            return [pscustomobject]@{ Metadata = $metadata; size = @($page).Count; totalSize = $reportedTotal; offset = $Offset }
         }
         if ($FixtureKind -eq 'Metadata') {
             $details = Get-ObjectProperty $Fixture 'details'
@@ -153,7 +165,12 @@ function Get-PlexContainer {
         }
     }
     $headers = @{ 'X-Plex-Token' = $Token; Accept = 'application/json'; 'X-Plex-Container-Start' = "$Offset"; 'X-Plex-Container-Size' = "$PageSize" }
-    $response = Invoke-JsonGet -Uri "$($BaseUrl.TrimEnd('/'))$PathAndQuery" -Headers $headers -Retries $Retries
+    $requestPath = $PathAndQuery
+    if ($FixtureKind -eq 'SectionPage') {
+        $separator = if ($requestPath.Contains('?')) { '&' } else { '?' }
+        $requestPath = "${requestPath}${separator}X-Plex-Container-Start=$Offset&X-Plex-Container-Size=$PageSize"
+    }
+    $response = Invoke-JsonGet -Uri "$($BaseUrl.TrimEnd('/'))$requestPath" -Headers $headers -Retries $Retries
     return Get-ObjectProperty $response 'MediaContainer' $response
 }
 
@@ -268,28 +285,61 @@ $runDirectory = Join-Path $outputDirectory ("plex-reconciliation-{0}" -f (Get-Da
 New-Item -ItemType Directory -Path $runDirectory -Force | Out-Null
 
 $sectionsContainer = Get-PlexContainer -BaseUrl $plexBaseUrl -PathAndQuery '/library/sections' -Token $plexToken -Fixture $plexFixture -FixtureKind 'Sections' -FixtureKey $null -PageSize $pageSize -Offset 0 -Retries $MaxRetries
-$movieSections = @(Get-ObjectProperty $sectionsContainer 'Directory' @() | Where-Object { "$(Get-ObjectProperty $_ 'type' '')" -eq 'movie' })
+$movieSections = @(Get-PlexCollectionItems -Container $sectionsContainer -PropertyNames @('Directory') | Where-Object { "$(Get-ObjectProperty $_ 'type' '')" -eq 'movie' })
+if (@($movieSections).Count -eq 0) { throw 'Plex returned no movie libraries. Reconciliation cannot continue.' }
 $plexMovies = @()
+$libraryDiagnostics = @()
 foreach ($section in $movieSections) {
     $sectionKey = "$(Get-ObjectProperty $section 'key' '')"
     $sectionTitle = "$(Get-ObjectProperty $section 'title' '')"
+    if ([string]::IsNullOrWhiteSpace($sectionKey)) { throw "Plex returned a movie library without a section key: $sectionTitle" }
     $offset = 0
-    $hasMore = $true
+    $reportedTotal = $null
+    $sectionMovies = @()
+    $seenRatingKeys = @{}
+    $pageNumber = 0
     do {
+        $pageNumber++
+        if ($pageNumber -gt 10000) { throw "Plex pagination exceeded the safety limit for library '$sectionTitle' (section $sectionKey)." }
         $container = Get-PlexContainer -BaseUrl $plexBaseUrl -PathAndQuery "/library/sections/$sectionKey/all?type=1&includeGuids=1" -Token $plexToken -Fixture $plexFixture -FixtureKind 'SectionPage' -FixtureKey $sectionKey -PageSize $pageSize -Offset $offset -Retries $MaxRetries
-        $pageItems = @(Get-ObjectProperty $container 'Metadata' @())
+        $pageItems = @(Get-PlexCollectionItems -Container $container -PropertyNames @('Metadata', 'Video'))
+        $returned = @($pageItems).Count
+        $responseOffsetValue = Get-ObjectProperty $container 'offset' $null
+        if ($null -ne $responseOffsetValue -and [int]$responseOffsetValue -ne $offset) {
+            throw "Incomplete Plex enumeration for library '$sectionTitle' (section $sectionKey): requested offset $offset but Plex returned offset $responseOffsetValue."
+        }
+        $responseSizeValue = Get-ObjectProperty $container 'size' $null
+        if ($null -ne $responseSizeValue -and [int]$responseSizeValue -ne $returned) {
+            throw "Incomplete Plex enumeration for library '$sectionTitle' (section $sectionKey): Plex reported page size $responseSizeValue but $returned records were parsed."
+        }
+        $totalValue = Get-ObjectProperty $container 'totalSize' $null
+        if ($null -ne $totalValue) {
+            if ($null -eq $reportedTotal) { $reportedTotal = [int]$totalValue }
+            elseif ([int]$totalValue -ne $reportedTotal) { throw "Plex changed the reported total for library '$sectionTitle' (section $sectionKey) from $reportedTotal to $totalValue during pagination." }
+        }
+        if ($returned -eq 0) {
+            if ($null -ne $reportedTotal -and $offset -lt $reportedTotal) {
+                throw "Incomplete Plex enumeration for library '$sectionTitle' (section $sectionKey): Plex reported $reportedTotal records but returned an empty page at offset $offset."
+            }
+            break
+        }
         foreach ($listMovie in $pageItems) {
             $movie = $listMovie
             $listTitle = "$(Get-ObjectProperty $listMovie 'title' '')"
             $listYear = Get-ReleaseYear (Get-ObjectProperty $listMovie 'year')
             $detailLookupError = $null
             $ratingKey = "$(Get-ObjectProperty $movie 'ratingKey' '')"
+            if ([string]::IsNullOrWhiteSpace($ratingKey)) { throw "Plex returned a movie without a rating key in library '$sectionTitle' (section $sectionKey) at offset $offset." }
+            if ($seenRatingKeys.ContainsKey($ratingKey)) {
+                throw "Incomplete Plex enumeration for library '$sectionTitle' (section $sectionKey): rating key $ratingKey was returned more than once. Plex may have repeated a page."
+            }
+            $seenRatingKeys[$ratingKey] = $true
             $externalIds = Get-PlexExternalIds $movie
             $partPaths = @(Get-PlexPartPaths $movie)
             if ($ratingKey -and ((@($externalIds.TmdbIds).Count -eq 0 -and @($externalIds.ImdbIds).Count -eq 0) -or @($partPaths).Count -eq 0)) {
                 try {
                     $detailContainer = Get-PlexContainer -BaseUrl $plexBaseUrl -PathAndQuery "/library/metadata/${ratingKey}?includeGuids=1" -Token $plexToken -Fixture $plexFixture -FixtureKind 'Metadata' -FixtureKey $ratingKey -PageSize 1 -Offset 0 -Retries $MaxRetries
-                    $details = @(Get-ObjectProperty $detailContainer 'Metadata' @())
+                    $details = @(Get-PlexCollectionItems -Container $detailContainer -PropertyNames @('Metadata', 'Video'))
                     if (@($details).Count -eq 1) {
                         $movie = $details[0]
                         $detailIds = Get-PlexExternalIds $movie
@@ -303,7 +353,7 @@ foreach ($section in $movieSections) {
                 }
                 catch { $detailLookupError = $_.Exception.Message }
             }
-            $plexMovies += [pscustomobject]@{
+            $sectionMovies += [pscustomobject]@{
                 RatingKey = $ratingKey
                 LibraryKey = $sectionKey
                 LibraryTitle = $sectionTitle
@@ -316,11 +366,26 @@ foreach ($section in $movieSections) {
                 DetailLookupError = $detailLookupError
             }
         }
-        $returned = @($pageItems).Count
         $offset += $returned
-        $totalValue = Get-ObjectProperty $container 'totalSize' $null
-        $hasMore = if ($null -ne $totalValue) { $offset -lt [int]$totalValue } else { $returned -eq $pageSize }
-    } while ($returned -gt 0 -and $hasMore)
+        if ($null -ne $reportedTotal -and $offset -gt $reportedTotal) {
+            throw "Incomplete Plex enumeration for library '$sectionTitle' (section $sectionKey): retrieved $offset records, exceeding Plex's reported total of $reportedTotal."
+        }
+        $hasMore = if ($null -ne $reportedTotal) { $offset -lt $reportedTotal } else { $returned -eq $pageSize }
+    } while ($hasMore)
+    if ($null -ne $reportedTotal -and @($sectionMovies).Count -ne $reportedTotal) {
+        throw "Incomplete Plex enumeration for library '$sectionTitle' (section $sectionKey): Plex reported $reportedTotal records but $(@($sectionMovies).Count) were retrieved."
+    }
+    $sectionPartCount = 0
+    foreach ($sectionMovie in @($sectionMovies)) { $sectionPartCount += @($sectionMovie.PartPaths).Count }
+    $plexMovies += @($sectionMovies)
+    $libraryDiagnostics += [pscustomobject]@{
+        SectionKey = $sectionKey
+        LibraryTitle = $sectionTitle
+        PlexReportedRecords = $reportedTotal
+        RecordsRetrieved = @($sectionMovies).Count
+        MediaPartsRetrieved = $sectionPartCount
+        PathsMatchedToInventory = 0
+    }
 }
 
 $plexPartsByPath = @{}
@@ -341,6 +406,16 @@ foreach ($item in $items) {
     $key = if (Test-AbsolutePortablePath $inventoryPath) { ConvertTo-PathKey $inventoryPath } else { "invalid::$((Get-ObjectProperty $item 'InventoryId' ''))" }
     if (-not $inventoryItemsByPath.ContainsKey($key)) { $inventoryItemsByPath[$key] = @() }
     $inventoryItemsByPath[$key] = @($inventoryItemsByPath[$key]) + $item
+}
+
+foreach ($diagnostic in $libraryDiagnostics) {
+    $matchedPathKeys = @(
+        $allPlexParts |
+            Where-Object { $_.Movie.LibraryKey -eq $diagnostic.SectionKey -and $inventoryItemsByPath.ContainsKey($_.InventoryPathKey) } |
+            ForEach-Object { $_.InventoryPathKey } |
+            Select-Object -Unique
+    )
+    $diagnostic.PathsMatchedToInventory = @($matchedPathKeys).Count
 }
 
 $reconciledItems = @()
@@ -516,6 +591,8 @@ $document = [ordered]@{
     PlexMovieLibraryCount = @($movieSections).Count
     PlexMovieRecordCount = @($plexMovies).Count
     PlexMediaPartCount = @($allPlexParts).Count
+    InventoryFilesMatchedToPlex = @($reconciledItems | Where-Object PlexPathMatchCount -eq 1).Count
+    LibraryDiagnostics = $libraryDiagnostics
     Items = $reconciledItems
 }
 
@@ -553,6 +630,7 @@ $summary.Add("- Inventory items: $($document.ItemCount)")
 $summary.Add("- Plex movie libraries discovered: $($document.PlexMovieLibraryCount)")
 $summary.Add("- Plex movie records read: $($document.PlexMovieRecordCount)")
 $summary.Add("- Plex media parts read: $($document.PlexMediaPartCount)")
+$summary.Add("- Inventory files path-matched to Plex: $($document.InventoryFilesMatchedToPlex)")
 $summary.Add("- Resolved from Plex TMDB IDs: $($document.PlexTmdbCount)")
 $summary.Add("- Resolved from Plex IMDb IDs through TMDB: $($document.PlexImdbCount)")
 $summary.Add("- Retained from filename-based TMDB enrichment: $($document.TmdbEnrichmentCount)")
@@ -562,6 +640,15 @@ $summary.Add("- Total exception rows, including unmatched Plex parts: $($documen
 $summary.Add("- Cross-version TMDB groups: $($document.CrossVersionGroupCount)")
 $summary.Add('')
 $summary.Add('Plex identification was accepted only when a Plex rating key linked uniquely to an inventory file by normalized path. Titles were not used for identity. Existing collection, resolution and 3D classifications were preserved.')
+$summary.Add('')
+$summary.Add('## Library enumeration')
+$summary.Add('')
+$summary.Add('| Section | Library | Plex reported | Records retrieved | Media parts | Paths matched to inventory |')
+$summary.Add('| --- | --- | ---: | ---: | ---: | ---: |')
+foreach ($diagnostic in $libraryDiagnostics) {
+    $reported = if ($null -eq $diagnostic.PlexReportedRecords) { 'Unknown' } else { "$($diagnostic.PlexReportedRecords)" }
+    $summary.Add("| $(Escape-Markdown $diagnostic.SectionKey) | $(Escape-Markdown $diagnostic.LibraryTitle) | $reported | $($diagnostic.RecordsRetrieved) | $($diagnostic.MediaPartsRetrieved) | $($diagnostic.PathsMatchedToInventory) |")
+}
 $issueCounts = @($reviewRows | ForEach-Object { @($_.Issues -split ';' | Where-Object { $_ }) } | Group-Object | Sort-Object Count -Descending)
 if (@($issueCounts).Count -gt 0) {
     $summary.Add('')

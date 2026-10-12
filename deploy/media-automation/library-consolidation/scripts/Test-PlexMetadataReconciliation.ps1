@@ -40,6 +40,7 @@ try {
     $inventoryPath = Join-Path $fixtureRoot "enriched-media-inventory.json"
     $configPath = Join-Path $fixtureRoot "plex-reconciliation.config.json"
     $plexFixturePath = Join-Path $fixtureRoot "plex-fixture.json"
+    $incompletePlexFixturePath = Join-Path $fixtureRoot "plex-fixture-incomplete.json"
     $tmdbFixturePath = Join-Path $fixtureRoot "tmdb-fixture.json"
     $outputRoot = Join-Path $fixtureRoot "reports"
     $cacheRoot = Join-Path $fixtureRoot "tmdb-cache"
@@ -70,7 +71,7 @@ try {
 
     $imdbListRecord = New-PlexMovie "2" "IMDb Only" 2002 @("plex://movie/local-imdb-only") @("/plex/movies/IMDb Only.mkv")
     $plexMovies = @(
-        (New-PlexMovie "1" "Ambiguous Corrected" 2001 @("tmdb://101") @("/plex/movies/temporary/../Ambiguous.mkv")),
+        (New-PlexMovie "1" "Ambiguous Corrected" 2001 @("tmdb://101") @("/plex/movies/temporary/../Ambiguous.mkv", "/plex/movies/Ambiguous.mkv")),
         $imdbListRecord,
         (New-PlexMovie "3" "Missing IDs" 2004 @() @("/plex/movies/Missing IDs.mkv")),
         (New-PlexMovie "4" "Conflict Corrected" 2006 @("tmdb://606") @("/plex/movies/Conflict.mkv")),
@@ -80,14 +81,26 @@ try {
         (New-PlexMovie "8" "Unresolved" 2008 @("tmdb://808") @("/plex/movies/Wrong Location.mkv"))
     )
     $imdbDetail = New-PlexMovie "2" "IMDb Only" 2002 @("imdb://tt0000202") @("/plex/movies/IMDb Only.mkv")
-    [ordered]@{
+    $plexFixture = [ordered]@{
         sections = @(
-            [ordered]@{ key = "1"; type = "movie"; title = "Movies" },
-            [ordered]@{ key = "2"; type = "show"; title = "TV Shows" }
+            [ordered]@{ key = "7"; type = "movie"; title = "Movies" },
+            [ordered]@{ key = "8"; type = "movie"; title = "Movies 4K" },
+            [ordered]@{ key = "9"; type = "movie"; title = "Movies 3D" },
+            [ordered]@{ key = "10"; type = "show"; title = "TV Shows" }
         )
-        sectionItems = [ordered]@{ "1" = $plexMovies; "2" = @((New-PlexMovie "tv-1" "Not a movie" 2020 @() @("/plex/tv/show.mkv"))) }
+        sectionItems = [ordered]@{
+            "7" = @($plexMovies[0..5])
+            "8" = @($plexMovies[7])
+            "9" = @($plexMovies[6])
+            "10" = @((New-PlexMovie "tv-1" "Not a movie" 2020 @() @("/plex/tv/show.mkv")))
+        }
+        scalarSingleItemResponses = $true
         details = [ordered]@{ "2" = $imdbDetail }
-    } | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $plexFixturePath -Encoding UTF8
+    }
+    $plexFixture | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $plexFixturePath -Encoding UTF8
+    $incompleteFixture = $plexFixture | ConvertTo-Json -Depth 30 | ConvertFrom-Json
+    $incompleteFixture | Add-Member -NotePropertyName sectionReportedTotals -NotePropertyValue ([pscustomobject]@{ "7" = 7; "8" = 1; "9" = 1 })
+    $incompleteFixture | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $incompletePlexFixturePath -Encoding UTF8
     [ordered]@{
         find = [ordered]@{
             "tt0000202" = [ordered]@{ movie_results = @([ordered]@{ id = 202; title = "IMDb Resolved"; release_date = "2002-02-02" }) }
@@ -114,6 +127,14 @@ try {
     $document = $documentText | ConvertFrom-Json
     Assert-True -Condition ($documentText -notmatch [regex]::Escape($secret)) -Message "Plex token is not persisted in output"
     Assert-True -Condition ($document.PlexTmdbCount -eq 3 -and $document.PlexImdbCount -eq 1) -Message "Plex TMDB and IMDb matches are counted"
+    Assert-True -Condition ($document.PlexMovieLibraryCount -eq 3 -and $document.PlexMovieRecordCount -eq 8) -Message "all movie libraries and every paginated record are accumulated"
+    Assert-True -Condition ($document.PlexMediaPartCount -eq 9) -Message "multiple media parts on one movie are counted"
+    $libraryDiagnostics = @($document.LibraryDiagnostics)
+    Assert-True -Condition ($libraryDiagnostics.Count -eq 3) -Message "per-library diagnostics cover all movie sections"
+    $standardDiagnostic = @($libraryDiagnostics | Where-Object SectionKey -eq '7')[0]
+    Assert-True -Condition ($standardDiagnostic.PlexReportedRecords -eq 6 -and $standardDiagnostic.RecordsRetrieved -eq 6 -and $standardDiagnostic.MediaPartsRetrieved -eq 7 -and $standardDiagnostic.PathsMatchedToInventory -eq 5) -Message "multi-page library diagnostics report records, parts and path matches"
+    $fourKDiagnostic = @($libraryDiagnostics | Where-Object SectionKey -eq '8')[0]
+    Assert-True -Condition ($fourKDiagnostic.PlexReportedRecords -eq 1 -and $fourKDiagnostic.RecordsRetrieved -eq 1) -Message "single-item Plex responses remain enumerable under StrictMode"
 
     $plexTmdb = $document.Items | Where-Object InventoryId -eq "plex-tmdb"
     $plexImdb = $document.Items | Where-Object InventoryId -eq "plex-imdb"
@@ -142,6 +163,13 @@ try {
     Assert-True -Condition (@($group101).Count -eq 2) -Message "reconciled TMDB IDs drive cross-version grouping"
     Assert-True -Condition (@($group101.Variant | Sort-Object -Unique).Count -eq 2) -Message "1080p and 3D remain distinct variants without edition assumptions"
     Assert-True -Condition ((Get-FileHash -LiteralPath $inventoryPath -Algorithm SHA256).Hash -eq $inventoryHash) -Message "source enriched inventory remains unchanged"
+
+    $incompleteEnumerationFailed = $false
+    try {
+        & $scriptPath -EnrichedInventoryPath $inventoryPath -ConfigPath $configPath -PlexTokenEnvironmentVariable "CASE_TEST_PLEX_TOKEN" -PlexFixturePath $incompletePlexFixturePath -TmdbFixturePath $tmdbFixturePath | Out-Null
+    }
+    catch { $incompleteEnumerationFailed = [bool]($_.Exception.Message -match "Incomplete Plex enumeration.*reported 7 records.*empty page") }
+    Assert-True -Condition $incompleteEnumerationFailed -Message "an incomplete Plex library fails clearly instead of producing a partial report"
 
     Write-Host "Plex metadata reconciliation fixture checks passed."
 }
