@@ -258,7 +258,163 @@ The 3D rows record the user-reported “probably SBS” statement as an assumpti
 
 Historical discovery warnings such as a missing year in the original filename, a root-level file, several videos sharing the old collection root, or a quality classification consistent with the measured resolution are informational once reconciliation provides a confirmed TMDB identity and canonical year. They remain in the manifest for traceability but do not hold an otherwise unambiguous plan. A validated exact source-path override similarly resolves the identity conflict it addresses while retaining the original disagreement as an informational audit entry.
 
-There is intentionally no migration executor in this phase.
+Phase 2 remains planning-only; generating its reports never changes media.
+
+## Phase 3: controlled migration execution
+
+Phase 3 consumes `migration-manifest.json` exactly as written. It selects only rows whose status is `Ready`, uses their existing destination paths, and leaves every `Review` and `Blocked` source untouched. It does not recalculate titles, years, identities, classifications or paths.
+
+The workflow is deliberately split into four commands:
+
+- `Invoke-ReconciledMigration.ps1` defaults to a read-only dry run. `-Execute` or `-Resume` is required to move approved files.
+- `Test-ReconciledMigrationResult.ps1` verifies destination files, source absence, journal completion and continued presence of excluded source files.
+- `Undo-ReconciledMigration.ps1` defaults to a rollback dry run. Its `-Execute` mode restores only journal-confirmed operations in reverse order.
+- `Test-MigrationExecutor.ps1` exercises collisions, source changes, interrupted sidecar moves, resume, excluded files, verification and rollback beneath a disposable temp directory.
+
+No command removes empty source folders or changes Plex, Radarr, Bazarr, Docker, qBittorrent or VPN configuration. Same-volume file moves are used for individual files. A movie plus its sidecars is **not** an atomic multi-file operation; sidecars are moved first and the video last, with each operation durably journaled.
+
+### Mandatory Plex preparation
+
+Do not execute until every item below has been completed and independently checked:
+
+1. Locate the native Windows Plex Media Server application-data directory. Confirm the proposed backup contains `Plug-in Support\Databases\com.plexapp.plugins.library.db`, `Metadata`, and `Media`.
+2. Treat the 10 October 2026 backup as unverified until its contents and readability have been checked. Take a fresh full application-data backup while Plex is completely stopped.
+3. Record the original paths, section names and settings for **Movies**, **Movies 4K**, and **Movies 3D**.
+4. In Plex, disable **Empty trash automatically after every scan**.
+5. Temporarily disable automatic library scans, scheduled scans, partial scans and automatic metadata activity that could race the move.
+6. Stop Plex Media Server completely and confirm its server/scanner processes have exited.
+7. Stop Radarr, Radarr 4K, Bazarr and any downloader, import script or other process able to write to the movie or download folders.
+8. Keep the backup, migration approval bundle and operation journal on reliable storage. A Plex application-data backup protects Plex metadata; it does **not** back up the movie files themselves.
+
+The executor blocks if it can detect Plex running. Process detection and backup consistency cannot be guaranteed on every Windows installation, so execution also requires explicit `-PlexBackupVerified`, `-PlexStoppedAcknowledged`, and `-MediaWritersStoppedAcknowledged` switches. These are acknowledgements, not automated proof.
+
+### Dry run and readiness gate
+
+From `deploy\media-automation\library-consolidation` on the Windows PC:
+
+```powershell
+$plan = Get-ChildItem D:\Downloads\Media-Inventory\reconciled-migration-plan-*\migration-manifest.json |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1
+
+$executionRoot = Join-Path 'D:\Downloads\Media-Inventory' ("migration-execution-{0}" -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+
+$dryRun = .\scripts\Invoke-ReconciledMigration.ps1 `
+  -ManifestPath $plan.FullName `
+  -OutputDirectory $executionRoot
+
+$dryRun
+```
+
+The dry run hashes the manifest and every media file, validates every Ready source, captures sidecar size/hash evidence, checks case-insensitive destination collisions, refuses existing destinations and cross-volume moves, and records size/hash evidence for all excluded files while keeping them outside the operation set. Depending on disk speed, hashing approximately 1.35 TiB may take a long time; do not interrupt it merely because progress is slow.
+
+Review all of these before approving execution:
+
+- `migration-dry-run.md` and `migration-dry-run.csv`
+- `migration-preflight.csv` with no failed checks
+- `migration-excluded-items.csv`, containing all 14 Review/Blocked items from the current plan
+- `plex-library-transition-mapping.md` and `.csv`
+- `migration-approval.json`, which must say `ApprovedForExecution: true`
+
+The Plex transition report distinguishes moves within an existing library from moves crossing a library boundary. Any Ready `CrossLibraryBoundary` or `UnknownLibraryBoundary` row fails readiness and requires a separate handling decision. The executor will not assume Plex can preserve identity across libraries.
+
+Execution is also refused if the manifest, excluded set, transition report or approved operation set changes after the dry run.
+
+### Execute, resume and verify
+
+After completing the Plex preparation checklist and reviewing a passing dry run:
+
+```powershell
+$approval = Join-Path $executionRoot 'migration-approval.json'
+$journal = Join-Path $executionRoot 'migration-execution-journal.ndjson'
+
+.\scripts\Invoke-ReconciledMigration.ps1 `
+  -ManifestPath $plan.FullName `
+  -Execute `
+  -ApprovalPath $approval `
+  -JournalPath $journal `
+  -PlexBackupVerified `
+  -PlexStoppedAcknowledged `
+  -MediaWritersStoppedAcknowledged
+```
+
+If PowerShell or Windows is interrupted, do not rerun `-Execute`. Inspect the append-only journal, keep Plex and writers stopped, then resume the same approved operation set:
+
+```powershell
+.\scripts\Invoke-ReconciledMigration.ps1 `
+  -ManifestPath $plan.FullName `
+  -Resume `
+  -ApprovalPath $approval `
+  -JournalPath $journal `
+  -PlexBackupVerified `
+  -PlexStoppedAcknowledged `
+  -MediaWritersStoppedAcknowledged
+```
+
+Resume accepts only two safe states: the approved source exists and destination does not, or the source is absent and the destination matches the approved evidence. Both-existing and both-missing states stop the run.
+
+Run post-migration verification before starting Plex or changing any Plex path:
+
+```powershell
+.\scripts\Test-ReconciledMigrationResult.ps1 `
+  -ManifestPath $plan.FullName `
+  -ApprovalPath $approval `
+  -JournalPath $journal `
+  -OutputDirectory $executionRoot
+```
+
+Review `post-migration-verification.md`, `post-migration-verification.csv`, and `post-migration-excluded-verification.csv`. A PASS proves approved filesystem and journal state only; Plex metadata still needs manual validation.
+
+Also retain `migration-execution-journal.ndjson` and `migration-execution-summary.md`. The journal is append-only and is the authoritative resume/rollback record; do not edit, truncate or recreate it.
+
+### Phase A Plex transition
+
+Do not consolidate libraries in Phase A. Retain all three libraries and every original configured location. With automatic trash emptying still disabled, add only:
+
+- **Movies**: `D:\Media Centre\Movies\1080p`
+- **Movies 4K**: `D:\Media Centre\Movies\2160p`
+- **Movies 3D**: `D:\Media Centre\Movies\3D`
+
+Start Plex and scan one existing library at a time. Validate matches, rating keys where observable, watched status, posters, collections, external IDs, versions, editions, subtitles and playback before moving to the next library. The 14 Review/Blocked files remain at their original paths and remain visible because the original locations are retained. Do not remove those locations or empty Plex trash while any excluded file remains there.
+
+The 3D SBS classification remains a user-reported assumption. Do not create Plex edition labels from it without technical verification. Library consolidation is a later Phase B operation after the file migration and metadata behaviour have been accepted.
+
+### Rollback and Plex recovery
+
+First perform a rollback dry run:
+
+```powershell
+.\scripts\Undo-ReconciledMigration.ps1 `
+  -ManifestPath $plan.FullName `
+  -ApprovalPath $approval `
+  -JournalPath $journal `
+  -OutputDirectory $executionRoot
+```
+
+With Plex and media writers stopped, execute the rollback only after reviewing `rollback-preflight.csv` and `rollback-report.md`:
+
+```powershell
+.\scripts\Undo-ReconciledMigration.ps1 `
+  -ManifestPath $plan.FullName `
+  -ApprovalPath $approval `
+  -JournalPath $journal `
+  -Execute `
+  -OutputDirectory $executionRoot `
+  -PlexStoppedAcknowledged `
+  -MediaWritersStoppedAcknowledged
+```
+
+If Plex treats moved files as deleted, creates duplicates, loses watched state/posters/collections, or groups versions incorrectly:
+
+1. Stop Plex immediately.
+2. Do not empty trash, remove old library locations or run further scans.
+3. Stop Radarr, Bazarr and all other media writers.
+4. Dry-run and then execute rollback for every journal-confirmed move.
+5. If metadata remains damaged, restore the stopped-state Plex database and full application-data backup, including `Metadata` and `Media`.
+6. Restart Plex with the original three libraries and original paths only.
+7. Verify library counts, matches, watched history, posters, collections and playback before enabling scans or writers.
+
+Rollback does not delete newly created empty target directories and does not touch Plex. A Plex backup cannot restore missing movie files; the media rollback journal is therefore essential.
 
 ## Legacy inventory-only planner
 
@@ -276,17 +432,7 @@ $inventory = Get-ChildItem D:\Downloads\Media-Inventory\inventory-*\media-invent
 
 This creates JSON, CSV, Markdown and a manual-review queue. Every source receives a proposed destination, classification, action and confidence. Colliding target paths are marked `Hold`; the planner never overwrites or resolves them automatically.
 
-There is intentionally no migration executor yet. Build it only after the inventory and plan have been reviewed and approved. Its minimum design requirements are:
-
-- Dry-run is the default and execution requires an explicit approval switch.
-- Append-only operation log with source, destination, sizes, hashes and outcome.
-- Restartable and idempotent: completed operations are recognized, not repeated.
-- Preflight free-space checks and source/destination filesystem checks.
-- Copy, verify size and hash, then remove source only after successful verification.
-- Never overwrite an existing file; collisions stop in a manual queue.
-- Move the video and its approved subtitle sidecars as one logical operation.
-- Preserve source until verification and retain a rollback manifest.
-- Do not delete duplicates automatically, even when hashes match.
+The controlled executor does not accept this legacy inventory-only plan. It requires the authoritative reconciled manifest produced by `New-ReconciledMigrationPlan.ps1` and the Phase 3 dry-run approval workflow above.
 
 ## Naming and subtitles
 
@@ -311,7 +457,7 @@ Plex notes:
 
 References: [movie naming](https://support.plex.tv/articles/naming-and-organizing-your-movie-media-files/), [multiple editions](https://support.plex.tv/articles/multiple-editions/), [local subtitles](https://support.plex.tv/articles/200471133-adding-local-subtitles-to-your-media/).
 
-## Phase 3: Plex pilot
+## Manual Plex pilot after Phase A
 
 Do not start with the full library. Choose a representative, approved set:
 
@@ -328,7 +474,7 @@ Pilot acceptance checks:
 
 - Each movie matches the correct title and year.
 - 1080p and 2160p of the same cut appear as selectable versions.
-- 3D and other cuts appear as clearly named editions.
+- 3D remains in its dedicated location; no edition label is inferred from the unverified SBS assumption.
 - Existing watched status and metadata remain acceptable.
 - English subtitles are discoverable and correctly labelled.
 - Direct play/transcode behavior is understood on the main clients.
@@ -367,13 +513,14 @@ No row in this table is an instruction to change production now. Each change nee
 
 ## Self-test
 
-The fixture test creates a disposable library beneath the operating system temp directory, inventories it, creates a plan and verifies every source hash, length, path and timestamp is unchanged:
+The fixture suites create disposable libraries beneath the operating-system temp directory. They cover inventory, matching, planning and the controlled executor lifecycle without touching production media:
 
 ```powershell
 .\scripts\Test-MediaPlanning.ps1
 .\scripts\Test-MetadataEnrichment.ps1
 .\scripts\Test-PlexMetadataReconciliation.ps1
 .\scripts\Test-ReconciledMigrationPlanning.ps1
+.\scripts\Test-MigrationExecutor.ps1
 ```
 
 Each test cleans up only its own uniquely named temporary fixture. The metadata, Plex reconciliation and reconciled migration suites use offline fixtures and do not require credentials or network access.

@@ -49,6 +49,10 @@ temp/
 # Secrets
 secrets/
 
+# Local media migration execution artifacts
+deploy/media-automation/library-consolidation/migration-readiness-*/
+deploy/media-automation/library-consolidation/migration-execution-*/
+
 
 # Python virtual envs
 .venv/
