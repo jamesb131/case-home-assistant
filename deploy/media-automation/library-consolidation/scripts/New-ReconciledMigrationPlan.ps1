@@ -71,6 +71,21 @@ function Write-CsvSafe {
     else { $Header | Set-Content -LiteralPath $Path -Encoding UTF8 }
 }
 
+function Test-MediaHealthWarning {
+    param([AllowNull()][string]$Reason)
+    return [bool]($Reason -match '(?i)ffprobe|malformed media|stream data|video dimensions are unavailable')
+}
+
+function Test-QualityMismatchWarning {
+    param([AllowNull()][string]$Reason)
+    return [bool]($Reason -match '(?i)resolution does not match|resolution appears 4k|wrong (?:source )?collection|quality mismatch')
+}
+
+function Test-IdentityConflictIssue {
+    param([AllowNull()][string]$Issue)
+    return [bool]($Issue -in @('PlexTmdbConflict', 'MultiplePlexTmdbIds', 'MultiplePlexImdbIds', 'DuplicatePlexFileMappings'))
+}
+
 if (-not (Test-Path -LiteralPath $ReconciledInventoryPath -PathType Leaf)) { throw "Reconciled inventory not found: $ReconciledInventoryPath" }
 if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) { throw "Migration planning configuration not found: $ConfigPath" }
 if ($OverridesPath -and -not (Test-Path -LiteralPath $OverridesPath -PathType Leaf)) { throw "Migration override file not found: $OverridesPath" }
@@ -131,6 +146,9 @@ foreach ($item in $items) {
     $sourceKey = ConvertTo-PathKey $sourcePath
     $originalEnriched = Get-ObjectProperty $item 'OriginalEnrichedItem'
     $source = Get-ObjectProperty $originalEnriched 'OriginalInventoryItem'
+    $informationalWarnings = @()
+    $historicalInventoryWarnings = @()
+    $mediaHealthWarnings = @()
     $reviewReasons = @()
     $blockedReasons = @()
     $assumptions = @()
@@ -166,7 +184,7 @@ foreach ($item in $items) {
     elseif ($resolutionClass -in @('1080p', '2160p')) { $classification = $resolutionClass }
     elseif ($collectionHint -in @('1080p', '2160p')) {
         $classification = $collectionHint
-        $reviewReasons += 'Quality classification relies on the source collection hint'
+        $informationalWarnings += 'Quality classification relies on the source collection hint because measured resolution is unavailable'
     }
     else { $blockedReasons += 'Target quality could not be classified' }
 
@@ -175,15 +193,36 @@ foreach ($item in $items) {
     if ($collectionHint -eq '3D' -and $classification -ne '3D') { $reviewReasons += 'File from the 3D source collection was classified outside 3D' }
 
     foreach ($issue in @(Get-ObjectProperty $item 'ReviewIssues' @())) {
-        if ($issue -eq 'Unverified3DLayout' -and $classification -eq '3D') { continue }
+        if ($issue -eq 'Unverified3DLayout' -and $classification -eq '3D') {
+            $informationalWarnings += 'Reconciliation audit: 3D layout remains technically unverified'
+            continue
+        }
         if ($issue -eq 'Unresolved') { $blockedReasons += 'Reconciled identity remains unresolved' }
         elseif ($issue -eq 'DuplicateInventoryPath') { $blockedReasons += 'Duplicate source path in reconciled inventory' }
-        elseif ($issue -eq 'PlexTmdbConflict') { $reviewReasons += 'Plex and prior TMDB identifications conflict' }
-        else { $reviewReasons += "Reconciliation: $issue" }
+        elseif (Test-IdentityConflictIssue $issue) {
+            if ($overrideApplied) { $informationalWarnings += "Override audit: reconciliation issue '$issue' was resolved by the validated exact source-path override" }
+            elseif ($issue -eq 'PlexTmdbConflict') { $reviewReasons += 'Plex and prior TMDB identifications conflict' }
+            else { $reviewReasons += "Reconciliation identity conflict: $issue" }
+        }
+        else { $informationalWarnings += "Reconciliation audit: $issue" }
     }
     foreach ($reason in @(Get-ObjectProperty $source 'ReviewReasons' @())) {
-        if ($classification -eq '3D' -and "$reason" -match '(?i)3D layout') { continue }
-        $reviewReasons += "Inventory: $reason"
+        $historicalInventoryWarnings += "$reason"
+        if (Test-MediaHealthWarning "$reason") { $mediaHealthWarnings += "$reason"; continue }
+        if ("$reason" -match '(?i)sha-256 failed') { $reviewReasons += "Integrity evidence unavailable: $reason"; continue }
+        if (Test-QualityMismatchWarning "$reason") {
+            $informationalWarnings += "Inventory quality audit: $reason; migration status uses the current measured-resolution comparison"
+            continue
+        }
+        if ($classification -eq '3D' -and "$reason" -match '(?i)3D layout') {
+            $informationalWarnings += "Inventory audit: $reason"
+            continue
+        }
+        if ("$reason" -match '(?i)release year could not be inferred' -and $tmdbId -and "$year" -match '^\d{4}$') {
+            $informationalWarnings += "Inventory audit: $reason; canonical year $year is confirmed by reconciliation"
+            continue
+        }
+        $informationalWarnings += "Inventory audit: $reason"
     }
 
     $safeTitle = ConvertTo-SafeName $title
@@ -275,6 +314,10 @@ foreach ($item in $items) {
         Width = Get-ObjectProperty $source 'Width'
         Height = Get-ObjectProperty $source 'Height'
         HdrFormat = Get-ObjectProperty $source 'HdrFormat'
+        ProbeStatus = Get-ObjectProperty $source 'ProbeStatus'
+        ProbeTimedOut = [bool](Get-ObjectProperty $source 'ProbeTimedOut' $false)
+        ProbeStderrLineCount = Get-ObjectProperty $source 'ProbeStderrLineCount' 0
+        ProbeStderrSummary = Get-ObjectProperty $source 'ProbeStderrSummary'
         ExistingEdition = $edition
         ThreeDFormat = Get-ObjectProperty $item 'ThreeDFormat'
         DestinationFolder = $destinationFolder
@@ -282,6 +325,9 @@ foreach ($item in $items) {
         DestinationExists = $destinationExists
         SubtitlePlans = $subtitlePlans
         Assumptions = @($assumptions | Select-Object -Unique)
+        HistoricalInventoryWarnings = @($historicalInventoryWarnings | Select-Object -Unique)
+        InformationalWarnings = @($informationalWarnings | Select-Object -Unique)
+        MediaHealthWarnings = @($mediaHealthWarnings | Select-Object -Unique)
         ReviewReasons = @($reviewReasons | Select-Object -Unique)
         BlockedReasons = @($blockedReasons | Select-Object -Unique)
         PathAnalysis = $pathAnalysis
@@ -354,6 +400,31 @@ foreach ($planItem in $planItems) {
     if ($planItem.Status -ne 'Ready') { $planItem.ProposedAction = 'Hold' }
 }
 
+$readyCount = @($planItems | Where-Object Status -eq 'Ready').Count
+$reviewCount = @($planItems | Where-Object Status -eq 'Review').Count
+$blockedCount = @($planItems | Where-Object Status -eq 'Blocked').Count
+$exceptionCount = $reviewCount + $blockedCount
+if (($readyCount + $reviewCount + $blockedCount) -ne @($planItems).Count) { throw 'Status counts do not reconcile with the full migration manifest.' }
+$collisionRows = @($collisionGroups | ForEach-Object {
+    $collisionKey = $_.Name
+    $_.Group | ForEach-Object {
+        [pscustomobject]@{
+            CollisionKey = $collisionKey; DestinationVideoPath = $_.DestinationVideoPath; InventoryId = $_.InventoryId; SourcePath = $_.SourcePath
+            SourceCollection = $_.SourceCollection; Classification = $_.Classification; TmdbMovieId = $_.TmdbMovieId; CanonicalTitle = $_.CanonicalTitle
+            CanonicalReleaseYear = $_.CanonicalReleaseYear; ExistingEdition = $_.ExistingEdition; Width = $_.Width; Height = $_.Height; SizeBytes = $_.SizeBytes
+            Sha256 = $_.Sha256; PlexRatingKey = $_.PlexRatingKey; PlexLibrary = $_.PlexLibrary
+            Disposition = 'Hold for evidence-based review; do not merge, overwrite, arbitrarily rename or re-identify'
+        }
+    }
+})
+$mediaHealthRows = @($planItems | Where-Object { @($_.MediaHealthWarnings).Count -gt 0 } | ForEach-Object {
+    [pscustomobject]@{
+        InventoryId = $_.InventoryId; SourcePath = $_.SourcePath; CanonicalTitle = $_.CanonicalTitle; Status = $_.Status
+        ProbeStatus = $_.ProbeStatus; ProbeTimedOut = $_.ProbeTimedOut; ProbeStderrLineCount = $_.ProbeStderrLineCount; ProbeStderrSummary = $_.ProbeStderrSummary
+        Warnings = ($_.MediaHealthWarnings -join '; ')
+    }
+})
+
 $requiredBytes = [int64]0
 foreach ($planItem in $planItems) { $requiredBytes += [int64]$planItem.SizeBytes }
 $targetDriveFreeBytes = $null
@@ -384,10 +455,10 @@ $rollbackRows = @($planItems | ForEach-Object {
 
 $generatedAt = (Get-Date).ToUniversalTime().ToString('o')
 $manifest = [ordered]@{
-    SchemaVersion = 1; GeneratedAtUtc = $generatedAt; Tool = 'New-ReconciledMigrationPlan.ps1'; PlanningOnly = $true
+    SchemaVersion = 2; GeneratedAtUtc = $generatedAt; Tool = 'New-ReconciledMigrationPlan.ps1'; PlanningOnly = $true
     SourceReconciledInventory = $resolvedInventoryPath; SourceSha256 = (Get-FileHash -LiteralPath $resolvedInventoryPath -Algorithm SHA256).Hash
-    TargetMoviesRoot = $targetRoot; ItemCount = @($planItems).Count; ReadyCount = @($planItems | Where-Object Status -eq 'Ready').Count
-    ReviewCount = @($planItems | Where-Object Status -eq 'Review').Count; BlockedCount = @($planItems | Where-Object Status -eq 'Blocked').Count
+    TargetMoviesRoot = $targetRoot; ItemCount = @($planItems).Count; ReadyCount = $readyCount
+    ReviewCount = $reviewCount; BlockedCount = $blockedCount; ExceptionCount = $exceptionCount
     CollisionGroupCount = @($collisionGroups).Count; CrossVersionGroupCount = @($versionGroups | Where-Object Count -gt 1).Count
     Preflight = $preflight; Items = $planItems
 }
@@ -398,6 +469,10 @@ $summaryPath = Join-Path $runDirectory 'planning-summary.md'
 $exceptionCsv = Join-Path $runDirectory 'migration-exceptions.csv'
 $exceptionMarkdown = Join-Path $runDirectory 'migration-exceptions.md'
 $groupsCsv = Join-Path $runDirectory 'cross-version-groups.csv'
+$collisionCsv = Join-Path $runDirectory 'destination-collisions.csv'
+$collisionMarkdown = Join-Path $runDirectory 'destination-collisions.md'
+$mediaHealthCsv = Join-Path $runDirectory 'media-health.csv'
+$mediaHealthMarkdown = Join-Path $runDirectory 'media-health.md'
 $pathAnalysisCsv = Join-Path $runDirectory 'plex-path-analysis.csv'
 $preflightJson = Join-Path $runDirectory 'preflight.json'
 $preflightMarkdown = Join-Path $runDirectory 'preflight.md'
@@ -412,14 +487,21 @@ $manifestRows = @($planItems | ForEach-Object {
         TmdbMovieId = $_.TmdbMovieId; CanonicalTitle = $_.CanonicalTitle; CanonicalReleaseYear = $_.CanonicalReleaseYear; IdentificationSource = $_.IdentificationSource
         PlexRatingKey = $_.PlexRatingKey; PlexLibrary = $_.PlexLibrary; CrossVersionGroupId = $_.CrossVersionGroupId; ExistingEdition = $_.ExistingEdition
         SubtitleCount = @($_.SubtitlePlans).Count; OverrideApplied = $_.OverrideApplied; DestinationCollision = $_.DestinationCollision; DuplicateVersion = $_.DuplicateVersion
-        MultipleCut = $_.MultipleCut; Assumptions = ($_.Assumptions -join '; '); ReviewReasons = ($_.ReviewReasons -join '; '); BlockedReasons = ($_.BlockedReasons -join '; ')
+        MultipleCut = $_.MultipleCut; Assumptions = ($_.Assumptions -join '; '); HistoricalInventoryWarnings = ($_.HistoricalInventoryWarnings -join '; ')
+        InformationalWarnings = ($_.InformationalWarnings -join '; '); MediaHealthWarnings = ($_.MediaHealthWarnings -join '; ')
+        ReviewReasons = ($_.ReviewReasons -join '; '); BlockedReasons = ($_.BlockedReasons -join '; ')
     }
 })
-$manifestHeader = '"InventoryId","Status","SourcePath","DestinationVideoPath","Classification","TmdbMovieId","CanonicalTitle","CanonicalReleaseYear","IdentificationSource","PlexRatingKey","PlexLibrary","CrossVersionGroupId","ExistingEdition","SubtitleCount","OverrideApplied","DestinationCollision","DuplicateVersion","MultipleCut","Assumptions","ReviewReasons","BlockedReasons"'
+$manifestHeader = '"InventoryId","Status","SourcePath","DestinationVideoPath","Classification","TmdbMovieId","CanonicalTitle","CanonicalReleaseYear","IdentificationSource","PlexRatingKey","PlexLibrary","CrossVersionGroupId","ExistingEdition","SubtitleCount","OverrideApplied","DestinationCollision","DuplicateVersion","MultipleCut","Assumptions","HistoricalInventoryWarnings","InformationalWarnings","MediaHealthWarnings","ReviewReasons","BlockedReasons"'
 Write-CsvSafe -Rows $manifestRows -Path $manifestCsv -Header $manifestHeader
 $exceptionRows = @($manifestRows | Where-Object Status -ne 'Ready')
 Write-CsvSafe -Rows $exceptionRows -Path $exceptionCsv -Header $manifestHeader
+if (@($exceptionRows).Count -ne $exceptionCount) { throw 'Exception rows do not reconcile with Review plus Blocked counts.' }
+$writtenExceptionCount = @(Import-Csv -LiteralPath $exceptionCsv).Count
+if ($writtenExceptionCount -ne $exceptionCount) { throw "Written exception CSV contains $writtenExceptionCount rows; expected $exceptionCount." }
 Write-CsvSafe -Rows $crossVersionRows -Path $groupsCsv -Header '"GroupId","TmdbMovieId","CanonicalTitle","InventoryId","Classification","ExistingEdition","SourcePath","DestinationVideoPath","GroupVariants","DuplicateVersion","MultipleCut"'
+Write-CsvSafe -Rows $collisionRows -Path $collisionCsv -Header '"CollisionKey","DestinationVideoPath","InventoryId","SourcePath","SourceCollection","Classification","TmdbMovieId","CanonicalTitle","CanonicalReleaseYear","ExistingEdition","Width","Height","SizeBytes","Sha256","PlexRatingKey","PlexLibrary","Disposition"'
+Write-CsvSafe -Rows $mediaHealthRows -Path $mediaHealthCsv -Header '"InventoryId","SourcePath","CanonicalTitle","Status","ProbeStatus","ProbeTimedOut","ProbeStderrLineCount","ProbeStderrSummary","Warnings"'
 $pathRows = @($planItems | ForEach-Object {
     [pscustomobject]@{ InventoryId = $_.InventoryId; CanonicalTitle = $_.CanonicalTitle; InventoryPath = $_.PathAnalysis.InventoryPath; PlexPath = $_.PathAnalysis.PlexPath; OrdinalIgnoreCaseEqual = $_.PathAnalysis.OrdinalIgnoreCaseEqual; FormCEqual = $_.PathAnalysis.FormCEqual; FormDEqual = $_.PathAnalysis.FormDEqual; ContainsReplacementCharacter = $_.PathAnalysis.ContainsReplacementCharacter; CandidateUnmatchedPlexPaths = ($_.PathAnalysis.CandidateUnmatchedPlexPaths -join ';'); CandidateMatchBasis = $_.PathAnalysis.CandidateMatchBasis; CsvReadEncoding = $_.PathAnalysis.CsvReadEncoding }
 })
@@ -437,7 +519,9 @@ $summary.Add("- Source videos: $($manifest.ItemCount)")
 $summary.Add("- Ready: $($manifest.ReadyCount)")
 $summary.Add("- Review: $($manifest.ReviewCount)")
 $summary.Add("- Blocked: $($manifest.BlockedCount)")
+$summary.Add("- Exceptions: $($manifest.ExceptionCount) (must equal Review + Blocked)")
 $summary.Add("- Destination collision groups: $($manifest.CollisionGroupCount)")
+$summary.Add("- Files with media-health warnings: $(@($mediaHealthRows).Count)")
 $summary.Add("- Cross-version groups: $($manifest.CrossVersionGroupCount)")
 $summary.Add("- Planned source size: $($preflight.PlannedSourceGiB) GiB")
 $summary.Add('')
@@ -446,6 +530,8 @@ $summary.Add('')
 $summary.Add('- Ready: confirmed identity, classifiable destination and no detected conflict.')
 $summary.Add('- Review: a plan exists, but a Plex/TMDB conflict, collection mismatch, duplicate version, cut distinction or other explicit reason requires a decision.')
 $summary.Add('- Blocked: identity/destination is incomplete, a source is missing, an overwrite would occur or destinations collide.')
+$summary.Add('- Informational warnings: historical inventory observations retained for audit only; they do not change migration status.')
+$summary.Add('- Media-health warnings: ffprobe and stream-health findings reported separately; they do not change migration status by themselves.')
 $summary | Set-Content -LiteralPath $summaryPath -Encoding UTF8
 
 $exceptionReport = [Collections.Generic.List[string]]::new()
@@ -458,6 +544,33 @@ foreach ($planItem in @($planItems | Where-Object Status -ne 'Ready')) {
     $exceptionReport.Add("| $($planItem.Status) | $(Escape-Markdown $planItem.SourcePath) | $(Escape-Markdown $planItem.DestinationVideoPath) | $(Escape-Markdown ($reasons -join '; ')) |")
 }
 $exceptionReport | Set-Content -LiteralPath $exceptionMarkdown -Encoding UTF8
+
+$collisionReport = [Collections.Generic.List[string]]::new()
+$collisionReport.Add('# Destination collision evidence')
+$collisionReport.Add('')
+$collisionReport.Add('Planning only. Every participant remains blocked; this report does not merge, overwrite, rename or assign a different identity.')
+$collisionReport.Add('')
+$collisionReport.Add('| Destination | TMDB | Title | Source | Class | Dimensions | Size bytes | Hash evidence |')
+$collisionReport.Add('| --- | --- | --- | --- | --- | --- | ---: | --- |')
+foreach ($row in $collisionRows) {
+    $hashEvidence = if ($row.Sha256) { $row.Sha256 } else { 'Not available' }
+    $collisionReport.Add("| $(Escape-Markdown $row.DestinationVideoPath) | $($row.TmdbMovieId) | $(Escape-Markdown $row.CanonicalTitle) ($($row.CanonicalReleaseYear)) | $(Escape-Markdown $row.SourcePath) | $($row.Classification) | $($row.Width)x$($row.Height) | $($row.SizeBytes) | $(Escape-Markdown $hashEvidence) |")
+}
+if (@($collisionRows).Count -eq 0) { $collisionReport.Add('| None |  |  |  |  |  |  |  |') }
+$collisionReport | Set-Content -LiteralPath $collisionMarkdown -Encoding UTF8
+
+$mediaHealthReport = [Collections.Generic.List[string]]::new()
+$mediaHealthReport.Add('# Media health observations')
+$mediaHealthReport.Add('')
+$mediaHealthReport.Add('These historical probe findings are retained for follow-up but do not make an otherwise unambiguous migration plan Review or Blocked.')
+$mediaHealthReport.Add('')
+$mediaHealthReport.Add('| Source | Canonical movie | Probe status | Stderr summary | Planning status | Warnings |')
+$mediaHealthReport.Add('| --- | --- | --- | --- | --- | --- |')
+foreach ($row in $mediaHealthRows) {
+    $mediaHealthReport.Add("| $(Escape-Markdown $row.SourcePath) | $(Escape-Markdown $row.CanonicalTitle) | $(Escape-Markdown $row.ProbeStatus) | $(Escape-Markdown $row.ProbeStderrSummary) | $($row.Status) | $(Escape-Markdown $row.Warnings) |")
+}
+if (@($mediaHealthRows).Count -eq 0) { $mediaHealthReport.Add('| None |  |  |  |  |  |') }
+$mediaHealthReport | Set-Content -LiteralPath $mediaHealthMarkdown -Encoding UTF8
 
 $preflightReport = @(
     '# Migration preflight', '', 'Planning only; rerun every check immediately before any separately approved execution.', '',
@@ -490,6 +603,7 @@ Write-Host 'Planning only. No files were moved, copied, renamed or deleted, and 
 [pscustomobject]@{
     OutputDirectory = $runDirectory; ManifestJson = $manifestJson; ManifestCsv = $manifestCsv; SummaryMarkdown = $summaryPath
     ExceptionCsv = $exceptionCsv; ExceptionMarkdown = $exceptionMarkdown; CrossVersionGroupsCsv = $groupsCsv; PathAnalysisCsv = $pathAnalysisCsv
+    CollisionCsv = $collisionCsv; CollisionMarkdown = $collisionMarkdown; MediaHealthCsv = $mediaHealthCsv; MediaHealthMarkdown = $mediaHealthMarkdown
     PreflightJson = $preflightJson; PreflightMarkdown = $preflightMarkdown; RollbackJson = $rollbackJson; RollbackCsv = $rollbackCsv
-    PlexTransitionMarkdown = $plexTransitionPath; ItemCount = @($planItems).Count; ReadyCount = $manifest.ReadyCount; ReviewCount = $manifest.ReviewCount; BlockedCount = $manifest.BlockedCount
+    PlexTransitionMarkdown = $plexTransitionPath; ItemCount = @($planItems).Count; ReadyCount = $manifest.ReadyCount; ReviewCount = $manifest.ReviewCount; BlockedCount = $manifest.BlockedCount; ExceptionCount = $manifest.ExceptionCount
 }

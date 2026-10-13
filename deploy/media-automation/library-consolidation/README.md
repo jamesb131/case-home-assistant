@@ -244,15 +244,19 @@ The source override is mandatory once supplied: an unmatched or duplicate overri
 
 Each timestamped `reconciled-migration-plan-*` directory contains:
 
-- `migration-manifest.json` and `.csv`: all source videos, authoritative identity, Plex details, target class/path, subtitle plan, status and reasons.
+- `migration-manifest.json` and `.csv`: all source videos, authoritative identity, Plex details, target class/path, subtitle plan, status, historical inventory warnings, informational warnings, review reasons and blocked reasons.
 - `migration-exceptions.csv` and `.md`: only `Review` and `Blocked` decisions.
 - `cross-version-groups.csv`: 1080p, 2160p and 3D variants grouped by reconciled TMDB ID, with duplicate-version and multiple-cut flags.
+- `destination-collisions.csv` and `.md`: evidence for every source targeting the same case-insensitive destination. Participants remain blocked; the planner never merges, overwrites, arbitrarily renames or changes identity.
+- `media-health.csv` and `.md`: ffprobe, malformed-stream and related media-health observations. These remain visible without automatically changing migration status.
 - `plex-path-analysis.csv`: exact and Unicode-normalized Plex/inventory path comparisons, including unmatched filename candidates.
 - `preflight.json` and `.md`: source presence, existing destinations, source size and observed target-drive capacity.
 - `rollback-manifest.json` and `.csv`: proposed reverse paths, expected size and existing hash evidence. This is guidance, not an executable rollback.
 - `plex-transition-plan.md`: staged Plex location changes, pilot validation, metadata/history preservation and rollback guidance.
 
-The 3D rows record the user-reported “probably SBS” statement as an assumption only. Unresolved identities are blocked. Plex/TMDB conflicts, wrong source collections, uncertain quality, duplicate versions and multiple cuts remain explicit review items. Destination paths are compared case-insensitively, including subtitle paths, and any collision or existing destination blocks the affected row.
+The 3D rows record the user-reported “probably SBS” statement as an assumption only. Unresolved identities are blocked. Plex/TMDB conflicts, measured-resolution/source-collection mismatches, duplicate versions and multiple cuts remain explicit review items. Destination paths are compared case-insensitively, including subtitle paths, and any collision or existing destination blocks the affected row.
+
+Historical discovery warnings such as a missing year in the original filename, a root-level file, several videos sharing the old collection root, or a quality classification consistent with the measured resolution are informational once reconciliation provides a confirmed TMDB identity and canonical year. They remain in the manifest for traceability but do not hold an otherwise unambiguous plan. A validated exact source-path override similarly resolves the identity conflict it addresses while retaining the original disagreement as an informational audit entry.
 
 There is intentionally no migration executor in this phase.
 

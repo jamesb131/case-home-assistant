@@ -14,7 +14,8 @@ function New-PlanFixtureItem {
     param(
         [string]$Id, [string]$Path, [AllowNull()][object]$TmdbId, [string]$Title, [AllowNull()][object]$Year,
         [string]$CollectionHint, [string]$Resolution, [string]$PlexLibrary, [string]$RatingKey,
-        [string[]]$Issues = @(), [string]$Edition = '', [object[]]$Subtitles = @(), [string[]]$InventoryReasons = @()
+        [string[]]$Issues = @(), [string]$Edition = '', [object[]]$Subtitles = @(), [string[]]$InventoryReasons = @(),
+        [string]$ProbeStatus = 'Completed'
     )
     $file = Get-Item -LiteralPath $Path
     return [pscustomobject]@{
@@ -27,7 +28,7 @@ function New-PlanFixtureItem {
             OriginalInventoryItem = [pscustomobject]@{
                 Extension = $file.Extension; SizeBytes = [int64]$file.Length; Sha256 = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash
                 Width = if ($Resolution -eq '2160p') { 3840 } else { 1920 }; Height = if ($Resolution -eq '2160p') { 2160 } else { 1080 }
-                HdrFormat = $null; ExternalSubtitles = $Subtitles; ReviewReasons = $InventoryReasons
+                HdrFormat = $null; ExternalSubtitles = $Subtitles; ReviewReasons = $InventoryReasons; ProbeStatus = $ProbeStatus
             }
         }
     }
@@ -62,10 +63,12 @@ try {
     $directorPath = New-FixtureFile '1080p/Film Director.mkv'
     $theatricalPath = New-FixtureFile '1080p/Film Theatrical.mkv'
     $conflictPath = New-FixtureFile '1080p/Conflicted.mkv'
+    $ordinaryPath = New-FixtureFile '1080p/Ordinary Root Movie.mkv'
+    $probeWarningPath = New-FixtureFile '1080p/Probe Warning Movie.mkv'
 
     $matrixSubtitle = [pscustomobject]@{ Path = $subtitlePath; Extension = '.srt'; Language = 'en'; Forced = $true; SDH = $false }
     $items = @(
-        (New-PlanFixtureItem 'toy-3d' $toy3dPath 862 'Toy Story 3' 2010 '3D' '1080p' 'Movies 3D' '1' @() '3D'),
+        (New-PlanFixtureItem 'toy-3d' $toy3dPath 10193 'Toy Story 3' 2010 '3D' '1080p' 'Movies 3D' '1' @('PlexTmdbConflict') '3D'),
         (New-PlanFixtureItem 'toy-3' $toy3Path 10193 'Toy Story 3' 2010 '1080p' '1080p' 'Movies' '2'),
         (New-PlanFixtureItem 'matrix-1080' $matrix1080Path 603 'The Matrix' 1999 '1080p' '1080p' 'Movies' '3' @() '' @($matrixSubtitle)),
         (New-PlanFixtureItem 'matrix-2160' $matrix2160Path 603 'The Matrix' 1999 '2160p' '2160p' 'Movies 4K' '4'),
@@ -76,7 +79,9 @@ try {
         (New-PlanFixtureItem 'wrong-quality' $wrongQualityPath 800 'Actually 4K' 2020 '1080p' '2160p' 'Movies' '8'),
         (New-PlanFixtureItem 'director' $directorPath 900 'Two Cuts' 2001 '1080p' '1080p' 'Movies' '9' @() 'Director''s Cut'),
         (New-PlanFixtureItem 'theatrical' $theatricalPath 900 'Two Cuts' 2001 '1080p' '1080p' 'Movies' '10' @() 'Theatrical Cut'),
-        (New-PlanFixtureItem 'conflict' $conflictPath 1000 'Conflicted' 2002 '1080p' '1080p' 'Movies' '11' @('PlexTmdbConflict'))
+        (New-PlanFixtureItem 'conflict' $conflictPath 1000 'Conflicted' 2002 '1080p' '1080p' 'Movies' '11' @('PlexTmdbConflict')),
+        (New-PlanFixtureItem 'ordinary-root' $ordinaryPath 1100 'Ordinary Root Movie' 2003 '1080p' '1080p' 'Movies' '12' @() '' @() @('Video is stored directly in the collection root', 'Multiple video files share this folder', 'Release year could not be inferred', 'Quality based on source collection hint', 'Resolution does not match the 2160p collection hint')),
+        (New-PlanFixtureItem 'probe-warning' $probeWarningPath 1200 'Probe Warning Movie' 2004 '1080p' '1080p' 'Movies' '13' @() '' @() @('ffprobe reported malformed media stream data: Invalid NAL unit size') 'CompletedWithStreamErrors')
     )
     ($items | Where-Object InventoryId -eq 'blackadder').PlexOriginalFilePath = ''
 
@@ -100,14 +105,15 @@ try {
     Get-ChildItem -LiteralPath $sourceRoot -File -Recurse | ForEach-Object { $sourceHashes[$_.FullName] = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
     $result = & $scriptPath -ReconciledInventoryPath $inventoryPath -ConfigPath $configPath -OverridesPath $overridePath -PlexReviewPath $plexReviewPath
 
-    foreach ($path in @($result.ManifestJson, $result.ManifestCsv, $result.SummaryMarkdown, $result.ExceptionCsv, $result.ExceptionMarkdown, $result.CrossVersionGroupsCsv, $result.PathAnalysisCsv, $result.PreflightJson, $result.PreflightMarkdown, $result.RollbackJson, $result.RollbackCsv, $result.PlexTransitionMarkdown)) {
+    foreach ($path in @($result.ManifestJson, $result.ManifestCsv, $result.SummaryMarkdown, $result.ExceptionCsv, $result.ExceptionMarkdown, $result.CrossVersionGroupsCsv, $result.PathAnalysisCsv, $result.CollisionCsv, $result.CollisionMarkdown, $result.MediaHealthCsv, $result.MediaHealthMarkdown, $result.PreflightJson, $result.PreflightMarkdown, $result.RollbackJson, $result.RollbackCsv, $result.PlexTransitionMarkdown)) {
         Assert-True -Condition (Test-Path -LiteralPath $path -PathType Leaf) -Message "required planning output exists: $([IO.Path]::GetFileName($path))"
     }
     $manifest = Get-Content -LiteralPath $result.ManifestJson -Raw -Encoding UTF8 | ConvertFrom-Json
-    Assert-True -Condition ($manifest.PlanningOnly -and $manifest.ItemCount -eq 12) -Message 'planner includes every reconciled video and remains planning-only'
+    Assert-True -Condition ($manifest.PlanningOnly -and $manifest.ItemCount -eq 14) -Message 'planner includes every reconciled video and remains planning-only'
     $toy3d = $manifest.Items | Where-Object InventoryId -eq 'toy-3d'
     $toy3 = $manifest.Items | Where-Object InventoryId -eq 'toy-3'
     Assert-True -Condition ($toy3d.OverrideApplied -and $toy3d.TmdbMovieId -eq 862 -and $toy3d.CanonicalTitle -eq 'Toy Story' -and $toy3d.CanonicalReleaseYear -eq 1995) -Message 'exact source-path override corrects only the 3D Toy Story file'
+    Assert-True -Condition ($toy3d.Status -eq 'Ready' -and $toy3d.InformationalWarnings -match 'PlexTmdbConflict') -Message 'validated override clears its identity conflict while retaining the disagreement in the audit trail'
     Assert-True -Condition ($toy3.TmdbMovieId -eq 10193 -and -not $toy3.OverrideApplied) -Message 'standard Toy Story 3 identification is unchanged'
     Assert-True -Condition ($toy3d.Classification -eq '3D' -and $toy3d.Assumptions -contains 'Fixture user-reported SBS assumption; technically unverified.') -Message '3D SBS is recorded as an assumption rather than verified metadata'
     Assert-True -Condition ($toy3d.DestinationVideoPath -notmatch '\{edition-3D') -Message 'unverified 3D layout marker is not promoted to a Plex edition label'
@@ -120,11 +126,19 @@ try {
     Assert-True -Condition (($manifest.Items | Where-Object InventoryId -eq 'wrong-quality').Status -eq 'Review') -Message 'possible 4K content in the standard collection is flagged for review'
     Assert-True -Condition (@($manifest.Items | Where-Object { $_.InventoryId -in @('director', 'theatrical') -and $_.MultipleCut -and $_.Status -eq 'Review' }).Count -eq 2) -Message 'multiple cuts remain separate and require review'
     Assert-True -Condition (($manifest.Items | Where-Object InventoryId -eq 'conflict').Status -eq 'Review') -Message 'Plex/TMDB conflict is not silently accepted as ready'
+    $ordinary = $manifest.Items | Where-Object InventoryId -eq 'ordinary-root'
+    Assert-True -Condition ($ordinary.Status -eq 'Ready' -and @($ordinary.HistoricalInventoryWarnings).Count -eq 5 -and @($ordinary.ReviewReasons).Count -eq 0) -Message 'root-level, shared-folder, stale-quality and missing-filename-year history is informational after current validation'
+    $probeWarning = $manifest.Items | Where-Object InventoryId -eq 'probe-warning'
+    Assert-True -Condition ($probeWarning.Status -eq 'Ready' -and @($probeWarning.MediaHealthWarnings).Count -eq 1) -Message 'ffprobe stream warning is reported without automatically holding migration'
+    Assert-True -Condition (@(Import-Csv -LiteralPath $result.MediaHealthCsv | Where-Object InventoryId -eq 'probe-warning').Count -eq 1) -Message 'media-health report contains probe warning evidence'
+    Assert-True -Condition (@(Import-Csv -LiteralPath $result.CollisionCsv).Count -eq 2) -Message 'collision evidence report retains both conflicting source files'
+    Assert-True -Condition (($manifest.ReadyCount + $manifest.ReviewCount + $manifest.BlockedCount) -eq $manifest.ItemCount) -Message 'status counts reconcile with the full manifest'
+    Assert-True -Condition (@(Import-Csv -LiteralPath $result.ExceptionCsv).Count -eq ($manifest.ReviewCount + $manifest.BlockedCount)) -Message 'exception CSV count equals Review plus Blocked'
     $pathRows = @(Import-Csv -LiteralPath $result.PathAnalysisCsv)
     $blackadder = $pathRows | Where-Object InventoryId -eq 'blackadder'
     Assert-True -Condition ($blackadder.CandidateUnmatchedPlexPaths -match "Blackadder's Christmas Carol") -Message 'Unicode punctuation and UTF-8 Plex path mismatch is surfaced'
     $rollback = Get-Content -LiteralPath $result.RollbackJson -Raw -Encoding UTF8 | ConvertFrom-Json
-    Assert-True -Condition ($rollback.PlanningOnly -and @($rollback.Items).Count -eq 12) -Message 'rollback manifest covers every planned source'
+    Assert-True -Condition ($rollback.PlanningOnly -and @($rollback.Items).Count -eq 14) -Message 'rollback manifest covers every planned source'
     foreach ($path in $sourceHashes.Keys) {
         Assert-True -Condition ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -eq $sourceHashes[$path]) -Message "source remains unchanged: $([IO.Path]::GetFileName($path))"
     }
