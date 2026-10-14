@@ -215,9 +215,10 @@ The reconciled planner consumes `plex-reconciled-inventory.json`; it does not re
 ```powershell
 Copy-Item .\reconciled-migration.config.example.json .\reconciled-migration.config.json
 Copy-Item .\migration-overrides.example.csv .\migration-overrides.csv
+Copy-Item .\migration-exclusions.example.csv .\migration-exclusions.csv
 ```
 
-2. Confirm `targetMoviesRoot` is `D:\Media Centre\Movies`, output remains outside all media roots, and set the override row's `SourcePath` to the exact existing 3D `Toy Story 3D.mkv` path. That exact source alone is assigned **Toy Story (1995), TMDB 862**. The standard Toy Story 3 record is untouched.
+2. Confirm `targetMoviesRoot` is `D:\Media Centre\Movies`, output remains outside all media roots, and set the override row's `SourcePath` to the exact existing 3D `Toy Story 3D.mkv` path. That exact source alone is assigned **Toy Story (1995), TMDB 862**. The standard Toy Story 3 record is untouched. Confirm `migration-exclusions.csv` contains the exact source `D:\Media Centre\Movies\01 - Blackadder’s Christmas Carol.avi`; this row holds that file in place for later replacement.
 3. Run the offline planning test:
 
 ```powershell
@@ -237,14 +238,30 @@ $plexReview = Join-Path $reconciliation.Directory.FullName 'plex-reconciliation-
   -ReconciledInventoryPath $reconciliation.FullName `
   -ConfigPath .\reconciled-migration.config.json `
   -OverridesPath .\migration-overrides.csv `
+  -ExclusionsPath .\migration-exclusions.csv `
   -PlexReviewPath $plexReview
 ```
 
-The source override is mandatory once supplied: an unmatched or duplicate override path terminates planning. `PlexReviewPath` lets the planner compare unmatched Plex parts with inventory paths using ordinal, NFC, NFD and punctuation-normalized forms. CSV input is explicitly read as UTF-8 so the Blackadder's Christmas Carol path can be assessed without losing apostrophes or other Unicode characters.
+The source override and exclusion are mandatory once supplied: an unmatched or duplicate exact path terminates planning, and one path cannot be both overridden and excluded. An exclusion requires an audit reason, becomes `Blocked`/`Hold`, and is omitted from the future operation set without changing the source. `PlexReviewPath` lets the planner compare unmatched Plex parts with inventory paths using ordinal, NFC, NFD and punctuation-normalized forms. CSV input is explicitly read as UTF-8 so the Blackadder’s Christmas Carol path can be assessed without losing apostrophes or other Unicode characters. The manifest records the exclusion CSV SHA-256; subsequent dry-run approval independently fingerprints the regenerated manifest and excluded-file evidence.
+
+For the currently approved scope, confirm the regenerated plan before dry-run:
+
+```powershell
+$plan = Get-ChildItem D:\Downloads\Media-Inventory\reconciled-migration-plan-*\migration-manifest.json |
+  Sort-Object LastWriteTime -Descending |
+  Select-Object -First 1
+
+$planData = Get-Content -LiteralPath $plan.FullName -Raw -Encoding UTF8 | ConvertFrom-Json
+$planData.ReadyCount
+$planData.ExceptionCount
+@($planData.Items | Where-Object ExplicitlyExcluded | Select-Object SourcePath, Status, ProposedAction, ExclusionReason)
+```
+
+The expected values are 508 Ready and 15 exceptions. The sole explicit exclusion must be the exact Blackadder source path and must report `Blocked` and `Hold`.
 
 Each timestamped `reconciled-migration-plan-*` directory contains:
 
-- `migration-manifest.json` and `.csv`: all source videos, authoritative identity, Plex details, target class/path, subtitle plan, status, historical inventory warnings, informational warnings, review reasons and blocked reasons.
+- `migration-manifest.json` and `.csv`: all source videos, authoritative identity, Plex details, target class/path, subtitle plan, status, explicit-exclusion evidence, historical inventory warnings, informational warnings, review reasons and blocked reasons.
 - `migration-exceptions.csv` and `.md`: only `Review` and `Blocked` decisions.
 - `cross-version-groups.csv`: 1080p, 2160p and 3D variants grouped by reconciled TMDB ID, with duplicate-version and multiple-cut flags.
 - `destination-collisions.csv` and `.md`: evidence for every source targeting the same case-insensitive destination. Participants remain blocked; the planner never merges, overwrites, arbitrarily renames or changes identity.
@@ -312,11 +329,20 @@ Review all of these before approving execution:
 
 - `migration-dry-run.md` and `migration-dry-run.csv`
 - `migration-preflight.csv` with no failed checks
-- `migration-excluded-items.csv`, containing all 14 Review/Blocked items from the current plan
+- `migration-excluded-items.csv`, containing all 15 Review/Blocked items from the current plan, including the exact Blackadder exclusion
 - `plex-library-transition-mapping.md` and `.csv`
 - `migration-approval.json`, which must say `ApprovedForExecution: true`
 
 The Plex transition report distinguishes moves within an existing library from moves crossing a library boundary. Any Ready `CrossLibraryBoundary` or `UnknownLibraryBoundary` row fails readiness and requires a separate handling decision. The executor will not assume Plex can preserve identity across libraries.
+
+For the current approved scope, inspect the fresh approval evidence rather than editing it:
+
+```powershell
+$approval = Get-Content -LiteralPath $dryRun.ApprovalPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$approval | Select-Object ApprovedForExecution, ReadyItemCount, ExcludedItemCount, CrossLibraryReadyCount, UnknownLibraryReadyCount, ManifestSha256, ExcludedEvidenceDigest
+```
+
+Expected: `ApprovedForExecution=True`, `ReadyItemCount=508`, `ExcludedItemCount=15`, `CrossLibraryReadyCount=0`, and `UnknownLibraryReadyCount=0`. If any value differs, stop and review the generated reports; do not edit the approval file or hashes.
 
 Execution is also refused if the manifest, excluded set, transition report or approved operation set changes after the dry run.
 
@@ -375,7 +401,7 @@ Do not consolidate libraries in Phase A. Retain all three libraries and every or
 - **Movies 4K**: `D:\Media Centre\Movies\2160p`
 - **Movies 3D**: `D:\Media Centre\Movies\3D`
 
-Start Plex and scan one existing library at a time. Validate matches, rating keys where observable, watched status, posters, collections, external IDs, versions, editions, subtitles and playback before moving to the next library. The 14 Review/Blocked files remain at their original paths and remain visible because the original locations are retained. Do not remove those locations or empty Plex trash while any excluded file remains there.
+Start Plex and scan one existing library at a time. Validate matches, rating keys where observable, watched status, posters, collections, external IDs, versions, editions, subtitles and playback before moving to the next library. The 15 Review/Blocked files remain at their original paths and remain visible because the original locations are retained. Do not remove those locations or empty Plex trash while any excluded file remains there.
 
 The 3D SBS classification remains a user-reported assumption. Do not create Plex edition labels from it without technical verification. Library consolidation is a later Phase B operation after the file migration and metadata behaviour have been accepted.
 

@@ -9,4 +9,5 @@ plex-reconciliation.config.json
 plex-reconciliation-*/
 reconciled-migration.config.json
 migration-overrides.csv
+migration-exclusions.csv
 reconciled-migration-plan-*/

@@ -8,6 +8,8 @@ param(
 
     [string]$OverridesPath,
 
+    [string]$ExclusionsPath,
+
     [string]$PlexReviewPath,
 
     [string]$OutputDirectory
@@ -89,6 +91,7 @@ function Test-IdentityConflictIssue {
 if (-not (Test-Path -LiteralPath $ReconciledInventoryPath -PathType Leaf)) { throw "Reconciled inventory not found: $ReconciledInventoryPath" }
 if (-not (Test-Path -LiteralPath $ConfigPath -PathType Leaf)) { throw "Migration planning configuration not found: $ConfigPath" }
 if ($OverridesPath -and -not (Test-Path -LiteralPath $OverridesPath -PathType Leaf)) { throw "Migration override file not found: $OverridesPath" }
+if ($ExclusionsPath -and -not (Test-Path -LiteralPath $ExclusionsPath -PathType Leaf)) { throw "Migration exclusion file not found: $ExclusionsPath" }
 if ($PlexReviewPath -and -not (Test-Path -LiteralPath $PlexReviewPath -PathType Leaf)) { throw "Plex review file not found: $PlexReviewPath" }
 
 $resolvedInventoryPath = (Resolve-Path -LiteralPath $ReconciledInventoryPath).Path
@@ -133,6 +136,21 @@ if ($OverridesPath) {
     }
 }
 
+$exclusionsByPath = @{}
+if ($ExclusionsPath) {
+    $exclusionRows = @(Get-Content -LiteralPath $ExclusionsPath -Raw -Encoding UTF8 | ConvertFrom-Csv)
+    foreach ($exclusion in $exclusionRows) {
+        $sourcePath = "$($exclusion.SourcePath)".Trim()
+        $reason = "$($exclusion.Reason)".Trim()
+        $key = ConvertTo-PathKey $sourcePath
+        if (-not $key) { throw 'Every migration exclusion requires an exact SourcePath.' }
+        if (-not $reason) { throw "Migration exclusion requires a reason: $sourcePath" }
+        if ($exclusionsByPath.ContainsKey($key)) { throw "Duplicate migration exclusion for source path: $sourcePath" }
+        if ($overridesByPath.ContainsKey($key)) { throw "A source path cannot be both overridden and excluded: $sourcePath" }
+        $exclusionsByPath[$key] = $exclusion
+    }
+}
+
 $unmatchedPlexParts = @()
 if ($PlexReviewPath) {
     $plexReviewRows = @(Get-Content -LiteralPath $PlexReviewPath -Raw -Encoding UTF8 | ConvertFrom-Csv)
@@ -141,6 +159,7 @@ if ($PlexReviewPath) {
 
 $planItems = @()
 $seenOverridePaths = @{}
+$seenExclusionPaths = @{}
 foreach ($item in $items) {
     $sourcePath = "$(Get-ObjectProperty $item 'OriginalPath' '')"
     $sourceKey = ConvertTo-PathKey $sourcePath
@@ -159,6 +178,8 @@ foreach ($item in $items) {
     $identitySource = "$(Get-ObjectProperty $item 'IdentificationSource' '')"
     $overrideApplied = $false
     $overrideReason = $null
+    $explicitlyExcluded = $false
+    $exclusionReason = $null
     if ($overridesByPath.ContainsKey($sourceKey)) {
         $override = $overridesByPath[$sourceKey]
         $tmdbId = [int]$override.TmdbMovieId
@@ -168,6 +189,13 @@ foreach ($item in $items) {
         $overrideReason = "$($override.Reason)".Trim()
         $overrideApplied = $true
         $seenOverridePaths[$sourceKey] = $true
+    }
+    if ($exclusionsByPath.ContainsKey($sourceKey)) {
+        $exclusion = $exclusionsByPath[$sourceKey]
+        $exclusionReason = "$($exclusion.Reason)".Trim()
+        $explicitlyExcluded = $true
+        $seenExclusionPaths[$sourceKey] = $true
+        $blockedReasons += "Explicit exact-path exclusion: $exclusionReason"
     }
 
     if ($null -eq $tmdbId -or "$tmdbId" -notmatch '^\d+$' -or [int]$tmdbId -le 0) { $blockedReasons += 'No reconciled TMDB movie ID' }
@@ -303,6 +331,8 @@ foreach ($item in $items) {
         IdentificationSource = $identitySource
         OverrideApplied = $overrideApplied
         OverrideReason = $overrideReason
+        ExplicitlyExcluded = $explicitlyExcluded
+        ExclusionReason = $exclusionReason
         TmdbMovieId = $tmdbId
         CanonicalTitle = $title
         CanonicalReleaseYear = $year
@@ -343,8 +373,11 @@ foreach ($item in $items) {
 foreach ($overrideKey in $overridesByPath.Keys) {
     if (-not $seenOverridePaths.ContainsKey($overrideKey)) { throw "Migration override did not match any reconciled source path: $($overridesByPath[$overrideKey].SourcePath)" }
 }
+foreach ($exclusionKey in $exclusionsByPath.Keys) {
+    if (-not $seenExclusionPaths.ContainsKey($exclusionKey)) { throw "Migration exclusion did not match any reconciled source path: $($exclusionsByPath[$exclusionKey].SourcePath)" }
+}
 
-$collisionGroups = @($planItems | Where-Object DestinationVideoPath | Group-Object { (ConvertTo-PathKey $_.DestinationVideoPath) } | Where-Object Count -gt 1)
+$collisionGroups = @($planItems | Where-Object { -not $_.ExplicitlyExcluded -and $_.DestinationVideoPath } | Group-Object { (ConvertTo-PathKey $_.DestinationVideoPath) } | Where-Object Count -gt 1)
 foreach ($group in $collisionGroups) {
     foreach ($planItem in $group.Group) {
         $planItem.DestinationCollision = $true
@@ -354,6 +387,7 @@ foreach ($group in $collisionGroups) {
 
 $allDestinationRecords = @()
 foreach ($planItem in $planItems) {
+    if ($planItem.ExplicitlyExcluded) { continue }
     if ($planItem.DestinationVideoPath) { $allDestinationRecords += [pscustomobject]@{ Owner = $planItem; Path = $planItem.DestinationVideoPath; Kind = 'Video' } }
     foreach ($subtitlePlan in @($planItem.SubtitlePlans)) {
         if ($subtitlePlan.DestinationPath) { $allDestinationRecords += [pscustomobject]@{ Owner = $planItem; Path = $subtitlePlan.DestinationPath; Kind = 'Subtitle' } }
@@ -370,7 +404,7 @@ $versionGroups = @($planItems | Where-Object TmdbMovieId | Group-Object TmdbMovi
 $crossVersionRows = @()
 foreach ($group in $versionGroups) {
     $variants = @($group.Group.Classification | Sort-Object -Unique)
-    $classGroups = @($group.Group | Group-Object Classification)
+    $classGroups = @($group.Group | Where-Object { -not $_.ExplicitlyExcluded } | Group-Object Classification)
     foreach ($classGroup in $classGroups) {
         if ($classGroup.Count -gt 1) {
             $editions = @($classGroup.Group.ExistingEdition | Where-Object { $_ } | Sort-Object -Unique)
@@ -457,6 +491,8 @@ $generatedAt = (Get-Date).ToUniversalTime().ToString('o')
 $manifest = [ordered]@{
     SchemaVersion = 2; GeneratedAtUtc = $generatedAt; Tool = 'New-ReconciledMigrationPlan.ps1'; PlanningOnly = $true
     SourceReconciledInventory = $resolvedInventoryPath; SourceSha256 = (Get-FileHash -LiteralPath $resolvedInventoryPath -Algorithm SHA256).Hash
+    SourceExclusions = if ($ExclusionsPath) { (Resolve-Path -LiteralPath $ExclusionsPath).Path } else { $null }
+    SourceExclusionsSha256 = if ($ExclusionsPath) { (Get-FileHash -LiteralPath $ExclusionsPath -Algorithm SHA256).Hash } else { $null }
     TargetMoviesRoot = $targetRoot; ItemCount = @($planItems).Count; ReadyCount = $readyCount
     ReviewCount = $reviewCount; BlockedCount = $blockedCount; ExceptionCount = $exceptionCount
     CollisionGroupCount = @($collisionGroups).Count; CrossVersionGroupCount = @($versionGroups | Where-Object Count -gt 1).Count
@@ -486,13 +522,14 @@ $manifestRows = @($planItems | ForEach-Object {
         InventoryId = $_.InventoryId; Status = $_.Status; SourcePath = $_.SourcePath; DestinationVideoPath = $_.DestinationVideoPath; Classification = $_.Classification
         TmdbMovieId = $_.TmdbMovieId; CanonicalTitle = $_.CanonicalTitle; CanonicalReleaseYear = $_.CanonicalReleaseYear; IdentificationSource = $_.IdentificationSource
         PlexRatingKey = $_.PlexRatingKey; PlexLibrary = $_.PlexLibrary; CrossVersionGroupId = $_.CrossVersionGroupId; ExistingEdition = $_.ExistingEdition
-        SubtitleCount = @($_.SubtitlePlans).Count; OverrideApplied = $_.OverrideApplied; DestinationCollision = $_.DestinationCollision; DuplicateVersion = $_.DuplicateVersion
+        SubtitleCount = @($_.SubtitlePlans).Count; OverrideApplied = $_.OverrideApplied; ExplicitlyExcluded = $_.ExplicitlyExcluded; ExclusionReason = $_.ExclusionReason
+        DestinationCollision = $_.DestinationCollision; DuplicateVersion = $_.DuplicateVersion
         MultipleCut = $_.MultipleCut; Assumptions = ($_.Assumptions -join '; '); HistoricalInventoryWarnings = ($_.HistoricalInventoryWarnings -join '; ')
         InformationalWarnings = ($_.InformationalWarnings -join '; '); MediaHealthWarnings = ($_.MediaHealthWarnings -join '; ')
         ReviewReasons = ($_.ReviewReasons -join '; '); BlockedReasons = ($_.BlockedReasons -join '; ')
     }
 })
-$manifestHeader = '"InventoryId","Status","SourcePath","DestinationVideoPath","Classification","TmdbMovieId","CanonicalTitle","CanonicalReleaseYear","IdentificationSource","PlexRatingKey","PlexLibrary","CrossVersionGroupId","ExistingEdition","SubtitleCount","OverrideApplied","DestinationCollision","DuplicateVersion","MultipleCut","Assumptions","HistoricalInventoryWarnings","InformationalWarnings","MediaHealthWarnings","ReviewReasons","BlockedReasons"'
+$manifestHeader = '"InventoryId","Status","SourcePath","DestinationVideoPath","Classification","TmdbMovieId","CanonicalTitle","CanonicalReleaseYear","IdentificationSource","PlexRatingKey","PlexLibrary","CrossVersionGroupId","ExistingEdition","SubtitleCount","OverrideApplied","ExplicitlyExcluded","ExclusionReason","DestinationCollision","DuplicateVersion","MultipleCut","Assumptions","HistoricalInventoryWarnings","InformationalWarnings","MediaHealthWarnings","ReviewReasons","BlockedReasons"'
 Write-CsvSafe -Rows $manifestRows -Path $manifestCsv -Header $manifestHeader
 $exceptionRows = @($manifestRows | Where-Object Status -ne 'Ready')
 Write-CsvSafe -Rows $exceptionRows -Path $exceptionCsv -Header $manifestHeader
@@ -520,6 +557,7 @@ $summary.Add("- Ready: $($manifest.ReadyCount)")
 $summary.Add("- Review: $($manifest.ReviewCount)")
 $summary.Add("- Blocked: $($manifest.BlockedCount)")
 $summary.Add("- Exceptions: $($manifest.ExceptionCount) (must equal Review + Blocked)")
+$summary.Add("- Explicit exact-path exclusions: $(@($planItems | Where-Object ExplicitlyExcluded).Count)")
 $summary.Add("- Destination collision groups: $($manifest.CollisionGroupCount)")
 $summary.Add("- Files with media-health warnings: $(@($mediaHealthRows).Count)")
 $summary.Add("- Cross-version groups: $($manifest.CrossVersionGroupCount)")
@@ -530,6 +568,7 @@ $summary.Add('')
 $summary.Add('- Ready: confirmed identity, classifiable destination and no detected conflict.')
 $summary.Add('- Review: a plan exists, but a Plex/TMDB conflict, collection mismatch, duplicate version, cut distinction or other explicit reason requires a decision.')
 $summary.Add('- Blocked: identity/destination is incomplete, a source is missing, an overwrite would occur or destinations collide.')
+$summary.Add('- Explicit exclusion: the exact source remains Blocked/Hold and is not part of the executable operation set.')
 $summary.Add('- Informational warnings: historical inventory observations retained for audit only; they do not change migration status.')
 $summary.Add('- Media-health warnings: ffprobe and stream-health findings reported separately; they do not change migration status by themselves.')
 $summary | Set-Content -LiteralPath $summaryPath -Encoding UTF8
@@ -592,7 +631,7 @@ $plexTransition = @(
     '4. Move only a separately approved pilot batch. Scan the existing library so Plex can associate the new paths while old locations remain available.',
     '5. Validate rating keys where possible, watched history, ratings, posters, collections, external IDs, versions, editions, subtitles and direct-play behavior.',
     '6. Keep 1080p and 2160p copies of the same TMDB movie as versions unless they are genuinely different cuts. Keep 3D physically separate; do not assign an edition merely from the unverified SBS assumption.',
-    '7. Correct mismatches manually before continuing. Do not proceed while the Blackadder path/encoding exception or any Plex/TMDB identity conflict remains unresolved.',
+    '7. Correct mismatches manually before continuing. Keep the explicitly excluded Blackadder source untouched, and do not proceed while any remaining Plex/TMDB identity conflict is unresolved.',
     '8. After all batches pass validation, remove old library locations. Empty trash only after a final backup and explicit sign-off.', '',
     'Rollback: stop scans and writers, use `rollback-manifest.json` to restore each verified destination to its recorded original path, then restore the Plex database/metadata backup if path association or item metadata was lost. Never run rollback from this planning output without a separately reviewed executor and operation log.'
 )

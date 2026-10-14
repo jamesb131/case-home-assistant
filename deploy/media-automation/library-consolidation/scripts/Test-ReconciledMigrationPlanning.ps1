@@ -97,13 +97,16 @@ try {
     $overridePath = Join-Path $fixtureRoot 'migration-overrides.csv'
     @([pscustomobject]@{ SourcePath = $toy3dPath; TmdbMovieId = 862; CanonicalTitle = 'Toy Story'; CanonicalReleaseYear = 1995; Reason = 'Explicit 3D source-path correction' }) |
         Export-Csv -LiteralPath $overridePath -NoTypeInformation -Encoding UTF8
+    $exclusionPath = Join-Path $fixtureRoot 'migration-exclusions.csv'
+    @([pscustomobject]@{ SourcePath = $blackadderPath; Reason = 'User-approved fixture exclusion; leave source untouched' }) |
+        Export-Csv -LiteralPath $exclusionPath -NoTypeInformation -Encoding UTF8
     $plexReviewPath = Join-Path $fixtureRoot 'plex-reconciliation-review.csv'
     @([pscustomobject]@{ InventoryId = ''; PlexOriginalFilePath = (Join-Path (Split-Path -Parent $blackadderPath) "Blackadder's Christmas Carol.mkv"); Issues = 'PlexPartNotInInventory' }) |
         Export-Csv -LiteralPath $plexReviewPath -NoTypeInformation -Encoding UTF8
 
     $sourceHashes = @{}
     Get-ChildItem -LiteralPath $sourceRoot -File -Recurse | ForEach-Object { $sourceHashes[$_.FullName] = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
-    $result = & $scriptPath -ReconciledInventoryPath $inventoryPath -ConfigPath $configPath -OverridesPath $overridePath -PlexReviewPath $plexReviewPath
+    $result = & $scriptPath -ReconciledInventoryPath $inventoryPath -ConfigPath $configPath -OverridesPath $overridePath -ExclusionsPath $exclusionPath -PlexReviewPath $plexReviewPath
 
     foreach ($path in @($result.ManifestJson, $result.ManifestCsv, $result.SummaryMarkdown, $result.ExceptionCsv, $result.ExceptionMarkdown, $result.CrossVersionGroupsCsv, $result.PathAnalysisCsv, $result.CollisionCsv, $result.CollisionMarkdown, $result.MediaHealthCsv, $result.MediaHealthMarkdown, $result.PreflightJson, $result.PreflightMarkdown, $result.RollbackJson, $result.RollbackCsv, $result.PlexTransitionMarkdown)) {
         Assert-True -Condition (Test-Path -LiteralPath $path -PathType Leaf) -Message "required planning output exists: $([IO.Path]::GetFileName($path))"
@@ -137,11 +140,27 @@ try {
     $pathRows = @(Import-Csv -LiteralPath $result.PathAnalysisCsv)
     $blackadder = $pathRows | Where-Object InventoryId -eq 'blackadder'
     Assert-True -Condition ($blackadder.CandidateUnmatchedPlexPaths -match "Blackadder's Christmas Carol") -Message 'Unicode punctuation and UTF-8 Plex path mismatch is surfaced'
+    $blackadderPlan = $manifest.Items | Where-Object InventoryId -eq 'blackadder'
+    Assert-True -Condition ($blackadderPlan.Status -eq 'Blocked' -and $blackadderPlan.ExplicitlyExcluded -and $blackadderPlan.ProposedAction -eq 'Hold') -Message 'exact-path exclusion keeps Blackadder outside the operation set'
+    Assert-True -Condition ($blackadderPlan.ExclusionReason -eq 'User-approved fixture exclusion; leave source untouched' -and $blackadderPlan.BlockedReasons -match 'Explicit exact-path exclusion') -Message 'exclusion reason is retained in the manifest audit trail'
+    Assert-True -Condition ($manifest.SourceExclusionsSha256 -eq (Get-FileHash -LiteralPath $exclusionPath -Algorithm SHA256).Hash) -Message 'manifest fingerprints the exact-path exclusion input'
     $rollback = Get-Content -LiteralPath $result.RollbackJson -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert-True -Condition ($rollback.PlanningOnly -and @($rollback.Items).Count -eq 14) -Message 'rollback manifest covers every planned source'
     foreach ($path in $sourceHashes.Keys) {
         Assert-True -Condition ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -eq $sourceHashes[$path]) -Message "source remains unchanged: $([IO.Path]::GetFileName($path))"
     }
+
+    $unmatchedExclusionPath = Join-Path $fixtureRoot 'migration-exclusions-unmatched.csv'
+    @([pscustomobject]@{ SourcePath = (Join-Path $sourceRoot '1080p/Not Present.mkv'); Reason = 'Fixture unmatched path' }) |
+        Export-Csv -LiteralPath $unmatchedExclusionPath -NoTypeInformation -Encoding UTF8
+    $unmatchedFailed = $false
+    try {
+        & $scriptPath -ReconciledInventoryPath $inventoryPath -ConfigPath $configPath -OverridesPath $overridePath -ExclusionsPath $unmatchedExclusionPath -PlexReviewPath $plexReviewPath | Out-Null
+    }
+    catch {
+        $unmatchedFailed = $_.Exception.Message -match 'Migration exclusion did not match any reconciled source path'
+    }
+    Assert-True -Condition $unmatchedFailed -Message 'an unmatched exclusion path terminates planning instead of silently changing scope'
     Write-Host 'Reconciled migration planning fixture checks passed.'
 }
 finally {
