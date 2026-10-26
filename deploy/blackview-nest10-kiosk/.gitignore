@@ -1,0 +1,9 @@
+.cache/
+artifacts/*
+!artifacts/README.md
+!artifacts/.gitkeep
+!artifacts/artifacts.local.env.example
+output/
+probe-output/
+*.img
+*.img.xz

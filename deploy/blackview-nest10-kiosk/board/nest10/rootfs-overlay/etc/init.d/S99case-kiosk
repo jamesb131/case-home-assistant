@@ -1,0 +1,34 @@
+#!/bin/sh
+
+case "$1" in
+  start)
+    command -v cog >/dev/null 2>&1 || exit 0
+    config=/boot/case-kiosk.env
+    case_url="https://case.local/"
+    if [ -r "$config" ]; then
+      configured_url="$(sed -n 's/^CASE_URL=//p' "$config" | head -n 1)"
+      [ -z "$configured_url" ] || case_url="$configured_url"
+    fi
+
+    mkdir -p /run/user/0 /var/log
+    export XDG_RUNTIME_DIR=/run/user/0
+    echo "CASE kiosk: starting $case_url"
+    while true; do
+      cog --platform=drm "$case_url" >>/var/log/case-kiosk.log 2>&1
+      echo 'CASE kiosk: browser stopped; retrying in 2 seconds' >>/var/log/case-kiosk.log
+      sleep 2
+    done &
+    echo $! >/run/case-kiosk.pid
+    ;;
+  stop)
+    killall cog 2>/dev/null || true
+    if [ -r /run/case-kiosk.pid ]; then
+      kill "$(cat /run/case-kiosk.pid)" 2>/dev/null || true
+      rm -f /run/case-kiosk.pid
+    fi
+    ;;
+  restart)
+    "$0" stop
+    "$0" start
+    ;;
+esac

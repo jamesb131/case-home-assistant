@@ -1,0 +1,3 @@
+# Project-specific packages are not required yet. Hardware support remains in
+# the kernel fragment and exact board device tree supplied during bring-up.
+

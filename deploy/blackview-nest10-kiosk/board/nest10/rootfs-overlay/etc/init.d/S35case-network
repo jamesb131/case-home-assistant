@@ -1,0 +1,31 @@
+#!/bin/sh
+
+case "$1" in
+  start)
+    config=/boot/case-kiosk.env
+    [ -r "$config" ] || exit 0
+
+    wifi_ssid="$(sed -n 's/^WIFI_SSID=//p' "$config" | head -n 1)"
+    wifi_psk="$(sed -n 's/^WIFI_PSK=//p' "$config" | head -n 1)"
+    wifi_if=""
+    for interface_path in /sys/class/net/wlan*; do
+      [ -e "$interface_path" ] || continue
+      wifi_if="${interface_path##*/}"
+      break
+    done
+    [ -n "$wifi_if" ] || { echo 'CASE kiosk: no Wi-Fi interface detected'; exit 0; }
+    [ -n "$wifi_ssid" ] && [ "$wifi_ssid" != replace-me ] || { echo 'CASE kiosk: Wi-Fi is not configured'; exit 0; }
+    [ -n "$wifi_psk" ] && [ "$wifi_psk" != replace-me ] || { echo 'CASE kiosk: Wi-Fi PSK is not configured'; exit 0; }
+
+    mkdir -p /run/wpa_supplicant
+    wpa_passphrase "$wifi_ssid" "$wifi_psk" >/run/wpa_supplicant.conf
+    chmod 0600 /run/wpa_supplicant.conf
+    ip link set "$wifi_if" up
+    wpa_supplicant -B -i "$wifi_if" -c /run/wpa_supplicant.conf
+    udhcpc -b -q -i "$wifi_if" -p "/run/udhcpc.$wifi_if.pid"
+    ;;
+  stop)
+    killall udhcpc 2>/dev/null || true
+    killall wpa_supplicant 2>/dev/null || true
+    ;;
+esac
