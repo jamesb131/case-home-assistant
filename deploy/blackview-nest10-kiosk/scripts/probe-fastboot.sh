@@ -18,7 +18,14 @@ printf '%s\n' "$devices" | grep -q '[[:space:]]fastboot$' || {
   echo "Captured: $timestamp"
   echo "$devices"
   echo 'Read-only fastboot getvars follow.'
-  for variable in product secure unlocked current-slot slot-count version-bootloader partition-type:boot partition-size:boot partition-type:dtbo partition-size:dtbo partition-type:vbmeta partition-size:vbmeta partition-type:super partition-size:super; do
+  for variable in \
+    product secure unlocked current-slot slot-count version-bootloader \
+    has-slot:boot has-slot:dtbo has-slot:vbmeta has-slot:vendor_boot has-slot:super \
+    partition-size:boot_a partition-size:boot_b \
+    partition-size:dtbo_a partition-size:dtbo_b \
+    partition-size:vbmeta_a partition-size:vbmeta_b \
+    partition-size:vendor_boot_a partition-size:vendor_boot_b \
+    partition-size:super max-download-size; do
     echo "--- $variable ---"
     fastboot getvar "$variable" 2>&1 || true
   done

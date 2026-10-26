@@ -14,6 +14,21 @@ NEST 10 DTS or firmware image did not locate a public board port, verified stock
 firmware, custom ROM or recovery image. Absence from search is not proof that no
 vendor package exists, so Blackview/iFrameo support remains the best source.
 
+A read-only Fastboot probe of the physical unit reported:
+
+- Product: `evb_px30`
+- Bootloader: `U-Boot 2017.09`
+- Secure: `yes`
+- Unlocked: `no`
+- Current slot: `a`
+- Slot count: `2`
+- Super partition: 2400 MiB
+
+The vendor Fastboot implementation returned `U-Boot` as the partition type for
+several unrelated Android partitions and reported the same 44.586 MiB size for
+unsuffixed `boot` and `dtbo` queries. Those responses are treated as unreliable;
+the probe now asks slot-aware A/B partition names instead.
+
 The FCC filing is public under FCC ID `2BSW8-NEST10`; its internal-photograph
 exhibit may reveal PCB labels, radio module and UART candidates:
 

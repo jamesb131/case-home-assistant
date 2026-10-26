@@ -21,8 +21,12 @@ if ($LASTEXITCODE -ne 0 -or -not ($Devices -match "\sfastboot\s*$")) {
 }
 $Variables = @(
     "product", "secure", "unlocked", "current-slot", "slot-count", "version-bootloader",
-    "partition-type:boot", "partition-size:boot", "partition-type:dtbo", "partition-size:dtbo",
-    "partition-type:vbmeta", "partition-size:vbmeta", "partition-type:super", "partition-size:super"
+    "has-slot:boot", "has-slot:dtbo", "has-slot:vbmeta", "has-slot:vendor_boot", "has-slot:super",
+    "partition-size:boot_a", "partition-size:boot_b",
+    "partition-size:dtbo_a", "partition-size:dtbo_b",
+    "partition-size:vbmeta_a", "partition-size:vbmeta_b",
+    "partition-size:vendor_boot_a", "partition-size:vendor_boot_b",
+    "partition-size:super", "max-download-size"
 )
 
 $Lines = [System.Collections.Generic.List[string]]::new()
