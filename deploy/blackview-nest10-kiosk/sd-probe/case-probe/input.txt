@@ -1,0 +1,6 @@
+CASE NEST10 SD PROBE MARKER
+
+If this text also appears in uboot-ran.txt, the factory U-Boot loaded and ran
+the harmless SD scan probe. The probe did not contain a kernel, device tree,
+Rockchip loader, root filesystem, internal-flash command or persistent
+environment write.
