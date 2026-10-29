@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 
 import { API_BASE, API_TOKEN, apiFetch } from "./config";
+import HalloweenDecor from "./HalloweenDecor";
+import { HALLOWEEN_START, HALLOWEEN_END, isHalloweenActive } from "./halloween";
 
 const PERSON_THEMES = {
   James: {
@@ -351,6 +353,25 @@ function selectCaseVoice() {
 
 function App() {
   const [activePage, setActivePage] = useState("Home");
+  const [halloweenActive, setHalloweenActive] = useState(isHalloweenActive);
+  useEffect(() => {
+    let timer;
+    const sync = () => {
+      clearTimeout(timer);
+      const now = Date.now();
+      setHalloweenActive(isHalloweenActive(now));
+      const next = now < HALLOWEEN_START ? HALLOWEEN_START : HALLOWEEN_END;
+      if (now < next) timer = setTimeout(sync, Math.min(next - now, 2147483647));
+    };
+    sync();
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, []);
   const isMobile = useIsMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -1806,7 +1827,7 @@ function App() {
 
   return (
     <div
-      className="appShell"
+      className={`appShell${activePage === "Home" && halloweenActive ? " halloweenHome" : ""}`}
       style={{
         minHeight: "100vh",
         background: "#f4f6f8",
@@ -2058,6 +2079,7 @@ function App() {
           >
             <div className="homePrimaryColumn" style={isMobile ? undefined : { gridColumn: "1 / span 9", minWidth: 0 }}>
               <section style={{ marginBottom: "18px" }}>
+                {halloweenActive && <HalloweenDecor />}
                 <h1 style={{ margin: 0, fontSize: "32px", lineHeight: 1.1 }}>
                   {greeting()}
                 </h1>

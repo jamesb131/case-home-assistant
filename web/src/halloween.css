@@ -1,0 +1,60 @@
+.appShell.halloweenHome {
+  background: radial-gradient(ellipse at top right, #e5d8ee, transparent 55%), #fff0df !important;
+}
+
+.halloweenHome .homeDashboardGrid .card {
+  background: #fffaf3;
+  border-color: #e9c6a4;
+  box-shadow: 0 10px 30px #48244512;
+}
+
+.halloweenHome .homePrimaryColumn > section:first-child {
+  position: relative;
+  min-height: 138px;
+  padding: 30px 165px 26px 28px;
+  border-radius: 22px;
+  background: linear-gradient(115deg, #342039, #57305c);
+  color: #fff2df;
+  overflow: hidden;
+}
+
+.halloweenHome .homePrimaryColumn > section:first-child > div:not(.halloweenDecor) {
+  color: #e6cee7 !important;
+}
+
+.halloweenDecor { pointer-events: none; }
+.halloweenWeb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 110px;
+  stroke: #eedcf4;
+  stroke-width: 1;
+  opacity: 0.2;
+}
+.halloweenPumpkin {
+  position: absolute;
+  right: 25px;
+  top: 4px;
+  width: 115px;
+  filter: drop-shadow(0 0 14px #ff922b30);
+}
+.halloweenLabel {
+  position: absolute;
+  right: 21px;
+  bottom: 15px;
+  color: #ffd299;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+@media (max-width: 600px) {
+  .halloweenHome .homePrimaryColumn > section:first-child {
+    padding: 24px 115px 24px 20px;
+    min-height: 130px;
+  }
+  .halloweenPumpkin { width: 90px; right: 12px; top: 10px; }
+  .halloweenLabel { right: 10px; font-size: 10px; bottom: 16px; }
+  .halloweenWeb { width: 80px; }
+}
