@@ -86,4 +86,4 @@ jobs:
           echo "Building images: $unique_targets"
 
       - name: Build and push images
-        run: scripts/build-ha-images.sh push "${{ steps.images.outputs.targets }} internet-monitor"
+        run: scripts/build-ha-images.sh push "${{ steps.images.outputs.targets }}"
