@@ -1,5 +1,28 @@
 import { useEffect, useRef, useState } from "react";
 import Hls from "hls.js";
+import {
+  CalendarDays,
+  Baby,
+  ChevronLeft,
+  ChevronRight,
+  Cloud,
+  CloudRain,
+  Coffee,
+  Expand,
+  Home,
+  ListChecks,
+  Mic,
+  Newspaper,
+  PanelTop,
+  Shield,
+  Sun,
+  Sunrise,
+  Sunset,
+  Umbrella,
+  Video,
+  Wind,
+  Zap,
+} from "lucide-react";
 
 import { API_BASE, API_TOKEN, apiFetch } from "./config";
 
@@ -9,42 +32,42 @@ const PERSON_THEMES = {
     soft: "#fee2e2",
     border: "#fecaca",
     text: "#991b1b",
-    emoji: "👨",
+    emoji: "J",
   },
   Chris: {
     primary: "#a855f7",
     soft: "#f3e8ff",
     border: "#d8b4fe",
     text: "#7e22ce",
-    emoji: "👩",
+    emoji: "C",
   },
   Leo: {
     primary: "#2563eb",
     soft: "#dbeafe",
     border: "#93c5fd",
     text: "#1d4ed8",
-    emoji: "🐢",
+    emoji: "L",
   },
   Benny: {
     primary: "#16a34a",
     soft: "#dcfce7",
     border: "#86efac",
     text: "#15803d",
-    emoji: "🌿",
+    emoji: "B",
   },
   Event: {
     primary: "#f59e0b",
     soft: "#fef3c7",
     border: "#fde68a",
     text: "#92400e",
-    emoji: "🗓",
+    emoji: "E",
   },
   School: {
     primary: "#ef4444",
     soft: "#fee2e2",
     border: "#fecaca",
     text: "#991b1b",
-    emoji: "🏫",
+    emoji: "S",
   },
   Unassigned: {
     primary: "#64748b",
@@ -260,9 +283,9 @@ function greeting() {
 }
 
 function weatherIcon(day) {
-  if ((day.rain_probability || 0) >= 40) return "🌧️";
-  if ((day.rain_probability || 0) >= 15) return "🌦️";
-  return "☀️";
+  if ((day.rain_probability || 0) >= 40) return <CloudRain aria-hidden="true" />;
+  if ((day.rain_probability || 0) >= 15) return <Cloud aria-hidden="true" />;
+  return <Sun aria-hidden="true" />;
 }
 
 function weatherAccent(day) {
@@ -1767,22 +1790,23 @@ function App() {
     speaking: "Speaking",
   }[assistantPhase] || assistantStatusText;
   const navItems = [
-    ["⌂", "Home"],
-    ["🗓", "Planner"],
-    ["🧒", "Kids"],
-    ["📝", "Lists"],
-    ["⚡", "Energy"],
-    ["☕", "IoT"],
-    ["☁", "Weather"],
-    ["📰", "News"],
-    ["🛡", "Security"],
-    ["🌐", "Internet"],
-    ["📹", "Cameras"],
+    [Home, "Home"],
+    [CalendarDays, "Planner"],
+    [Baby, "Kids"],
+    [ListChecks, "Lists"],
+    [Zap, "Energy"],
+    [Coffee, "IoT"],
+    [Cloud, "Weather"],
+    [Newspaper, "News"],
+    [Shield, "Security"],
+    [PanelTop, "Internet"],
+    [Video, "Cameras"],
   ];
   const systemStatusItems = buildSystemStatusItems(systemStatus);
 
   return (
     <div
+      className="appShell"
       style={{
         minHeight: "100vh",
         background: "#f4f6f8",
@@ -1899,7 +1923,7 @@ function App() {
                       : "transparent",
                 }}
               >
-                <span>{icon}</span>
+                <CaseIcon icon={icon} />
                 <span>{item}</span>
               </div>
               ))}
@@ -1908,6 +1932,7 @@ function App() {
         </aside>
 
         <main
+          className="caseMain"
           style={{
             flex: 1,
             position: "relative",
@@ -1983,7 +2008,7 @@ function App() {
                     color: isListening ? "white" : "white",
                   }}
                 >
-                  🎤
+                  <Mic size={20} aria-hidden="true" />
                 </span>
                 {isListening ? "Listening..." : "Press to talk to CASE"}
               </button>
@@ -2016,13 +2041,14 @@ function App() {
                       fontWeight: 800,
                     }}
                   >
-                    {icon}
+                    <CaseIcon icon={icon} />
                   </button>
                 ))}
               </div>
             </section>
           )}
           <div
+            className="homeDashboardGrid"
             style={{
               display: "grid",
               gridTemplateColumns: isMobile ? "1fr" : "repeat(12, minmax(0, 1fr))",
@@ -2030,7 +2056,7 @@ function App() {
               alignItems: "start",
             }}
           >
-            <div style={isMobile ? undefined : { gridColumn: "1 / span 9", minWidth: 0 }}>
+            <div className="homePrimaryColumn" style={isMobile ? undefined : { gridColumn: "1 / span 9", minWidth: 0 }}>
               <section style={{ marginBottom: "18px" }}>
                 <h1 style={{ margin: 0, fontSize: "32px", lineHeight: 1.1 }}>
                   {greeting()}
@@ -2045,6 +2071,7 @@ function App() {
               </section>
 
               <section
+                className="homeContentGrid"
                 style={{
                   display: "grid",
                   gridTemplateColumns: isMobile
@@ -2058,13 +2085,13 @@ function App() {
                 <div style={{ display: "grid", gap: isMobile ? "18px" : "16px", gridColumn: isMobile ? undefined : "1 / span 6", minWidth: 0 }}>
                 {weather && (
                   <div
-                    className="card"
+                    className="card weatherHomeCard"
                   >
                     <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1.2fr", gap: "20px" }}>
                       <div>
                         <div className="muted">Perth forecast</div>
                         <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-                          <div style={{ fontSize: "48px" }}>☀️</div>
+                          <div className="currentWeatherIcon"><Sun aria-hidden="true" /></div>
                           <div>
                             <div style={{ fontSize: "40px", fontWeight: 900, lineHeight: 1 }}>
                               {Math.round(weather.current.temperature_2m)}°
@@ -2089,10 +2116,10 @@ function App() {
                           gap: isMobile ? "10px" : 0,
                         }}
                       >
-                        <InfoMini icon="↗" label="Sunrise" value={formatTime(weather.sunrise)} />
-                        <InfoMini icon="↘" label="Sunset" value={formatTime(weather.sunset)} />
+                        <InfoMini icon={<Sunrise aria-hidden="true" />} label="Sunrise" value={formatTime(weather.sunrise)} />
+                        <InfoMini icon={<Sunset aria-hidden="true" />} label="Sunset" value={formatTime(weather.sunset)} />
                         <InfoMini
-                          icon="💨"
+                          icon={<Wind aria-hidden="true" />}
                           label="Wind"
                           value={`${Math.round(weather.current.wind_speed_10m)} km/h`}
                         />
@@ -2123,7 +2150,7 @@ function App() {
                             <div style={{ fontWeight: 800, marginBottom: isMobile ? "2px" : "6px" }}>
                               {new Date(day.date).toLocaleDateString([], { weekday: "short" })}
                             </div>
-                            <div style={{ fontSize: isMobile ? "22px" : "26px", marginBottom: "2px" }}>{weatherIcon(day)}</div>
+                            <div className="forecastWeatherIcon" style={{ fontSize: isMobile ? "22px" : "26px", marginBottom: "2px" }}>{weatherIcon(day)}</div>
                           </div>
                           <div>
                             <div style={{ fontWeight: 900, fontSize: isMobile ? "19px" : "20px" }}>
@@ -2134,8 +2161,8 @@ function App() {
                             </div>
                           </div>
 
-                          <div className="tiny" style={{ marginTop: "5px" }}>
-                            💧 {day.rain_probability}%
+                          <div className="tiny rainProbability" style={{ marginTop: "5px" }}>
+                            <Umbrella size={12} aria-hidden="true" /> {day.rain_probability}%
                           </div>
                         </div>
                       ))}
@@ -2357,6 +2384,7 @@ function App() {
 
             {!isMobile && (
             <aside
+              className="homeSidebar"
               style={{
                 gridColumn: "10 / span 3",
                 display: "flex",
@@ -2854,7 +2882,7 @@ function App() {
                     : "Speak to CASE"
               }
             >
-              🎤
+              <Mic size={20} aria-hidden="true" />
             </button>
 
             <button
@@ -3220,6 +3248,131 @@ function App() {
           background: #22c55e;
         }
 
+        .currentWeatherIcon,
+        .forecastWeatherIcon,
+        .rainProbability,
+        .infoMiniIcon {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .currentWeatherIcon,
+        .forecastWeatherIcon {
+          color: #f59e0b;
+        }
+
+        .currentWeatherIcon svg {
+          width: 46px;
+          height: 46px;
+          stroke-width: 1.8;
+        }
+
+        .forecastWeatherIcon svg {
+          width: 25px;
+          height: 25px;
+          margin: 0 auto;
+        }
+
+        .rainProbability {
+          gap: 3px;
+        }
+
+        @media (min-width: 821px) and (max-width: 1100px),
+          (min-width: 821px) and (max-height: 650px) {
+          .caseMain {
+            padding: 14px 16px !important;
+          }
+
+          .topCaseNav {
+            top: 14px !important;
+            right: 16px !important;
+            gap: 6px !important;
+          }
+
+          .topCaseNav > div,
+          .topCaseNav nav {
+            gap: 4px !important;
+          }
+
+          .topNavIconButton {
+            width: 34px !important;
+            height: 34px !important;
+            border-radius: 10px !important;
+          }
+
+          .topNavIconButton svg {
+            width: 16px;
+            height: 16px;
+          }
+
+          .compactAskCase {
+            width: 205px !important;
+            min-width: 205px !important;
+            max-width: 205px !important;
+            flex-basis: 205px !important;
+            padding: 6px 8px !important;
+            border-radius: 12px !important;
+          }
+
+          .compactAskCase .voiceOrb {
+            width: 34px !important;
+            height: 34px !important;
+            flex-basis: 34px !important;
+          }
+
+          .compactAskCase .assistantStatusPill {
+            padding: 3px 5px !important;
+            font-size: 8px !important;
+          }
+
+          .homeDashboardGrid,
+          .homeContentGrid {
+            gap: 10px !important;
+          }
+
+          .homePrimaryColumn > section:first-child {
+            margin-bottom: 12px !important;
+          }
+
+          .homePrimaryColumn > section:first-child h1 {
+            font-size: 27px !important;
+          }
+
+          .homePrimaryColumn > section:first-child > div {
+            margin-top: 4px !important;
+            font-size: 13px !important;
+          }
+
+          .card {
+            padding: 12px;
+            border-radius: 14px;
+          }
+
+          .weatherHomeCard > div:first-child {
+            gap: 10px !important;
+          }
+
+          .weatherHomeCard .currentWeatherIcon svg {
+            width: 34px;
+            height: 34px;
+          }
+
+          .weatherHomeCard .forecastWeatherIcon svg {
+            width: 20px;
+            height: 20px;
+          }
+
+          .homeEnergyFlowCard {
+            padding: 12px;
+          }
+
+          .homeSidebar {
+            margin-top: 58px !important;
+            gap: 10px !important;
+          }
+        }
+
         @media (max-width: 820px) {
           .card {
             border-radius: 18px;
@@ -3268,6 +3421,10 @@ function App() {
       `}</style>
     </div>
   );
+}
+
+function CaseIcon({ icon: Icon, size = 19 }) {
+  return <Icon size={size} strokeWidth={2.2} aria-hidden="true" />;
 }
 
 function TopNavigation({
@@ -3351,7 +3508,7 @@ function TopNavigation({
                 fontWeight: 900,
               }}
             >
-              ⛶
+              <Expand size={20} aria-hidden="true" />
             </button>
           )}
         </>
@@ -3400,7 +3557,7 @@ function TopNavigation({
                 placeItems: "center",
               }}
               >
-                {icon}
+                <CaseIcon icon={icon} />
               </button>
             </div>
           ))}
@@ -3427,7 +3584,7 @@ function TopNavigation({
               placeItems: "center",
             }}
           >
-            ⛶
+            <Expand size={20} aria-hidden="true" />
           </button>
         )}
         <CompactAskCase
@@ -3459,6 +3616,7 @@ function CompactAskCase({
 }) {
   return (
     <section
+      className="compactAskCase"
       style={{
         width,
         minWidth: "260px",
@@ -3552,7 +3710,7 @@ function CompactAskCase({
                 : "Speak to CASE"
           }
         >
-          🎤
+          <Mic size={21} aria-hidden="true" />
         </button>
       </div>
     </section>
@@ -3847,7 +4005,7 @@ function getSelectedGaggimateProfile(profiles, activeProfileLabel) {
 function InfoMini({ icon, label, value }) {
   return (
     <div style={{ minWidth: 0, textAlign: "center" }}>
-      <div style={{ fontSize: "17px", marginBottom: "5px", color: "#f59e0b" }}>{icon}</div>
+      <div className="infoMiniIcon" style={{ fontSize: "17px", marginBottom: "5px", color: "#f59e0b" }}>{icon}</div>
       <div className="muted">{label}</div>
       <div style={{ fontWeight: 800 }}>{value}</div>
     </div>
@@ -4152,13 +4310,13 @@ function MusicHomeCard() {
               }}
             >
               <button className="quietLinkButton" onClick={() => changeStation(-1)} aria-label="Previous radio station">
-                ←
+                <ChevronLeft size={17} aria-hidden="true" />
               </button>
               <div className="tiny" style={{ fontWeight: 900, textAlign: "center", minWidth: "34px" }}>
                 {stationIndex + 1} / {RADIO_STATIONS.length}
               </div>
               <button className="quietLinkButton" onClick={() => changeStation(1)} aria-label="Next radio station">
-                →
+                <ChevronRight size={17} aria-hidden="true" />
               </button>
             </div>
           </div>
@@ -7413,7 +7571,7 @@ function WeatherPage({
         <section className="card">
           <div className="muted">Right now</div>
           <div style={{ display: "flex", alignItems: "center", gap: "16px", marginTop: "10px" }}>
-            <div style={{ fontSize: "52px" }}>☀️</div>
+            <div className="currentWeatherIcon"><Sun aria-hidden="true" /></div>
             <div>
               <div style={{ fontSize: "44px", fontWeight: 950, lineHeight: 1 }}>
                 {Math.round(weather.current.temperature_2m)}°
@@ -7428,9 +7586,9 @@ function WeatherPage({
         <section className="card">
           <div className="muted">Sun and wind</div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: "10px", marginTop: "14px" }}>
-            <InfoMini icon="↗" label="Sunrise" value={formatTime(weather.sunrise)} />
-            <InfoMini icon="↘" label="Sunset" value={formatTime(weather.sunset)} />
-            <InfoMini icon="💨" label="Wind" value={`${Math.round(weather.current.wind_speed_10m)} km/h`} />
+            <InfoMini icon={<Sunrise aria-hidden="true" />} label="Sunrise" value={formatTime(weather.sunrise)} />
+            <InfoMini icon={<Sunset aria-hidden="true" />} label="Sunset" value={formatTime(weather.sunset)} />
+            <InfoMini icon={<Wind aria-hidden="true" />} label="Wind" value={`${Math.round(weather.current.wind_speed_10m)} km/h`} />
           </div>
         </section>
       </div>
